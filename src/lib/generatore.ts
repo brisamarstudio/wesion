@@ -272,3 +272,46 @@ export async function genera(sistema: string, utente: string): Promise<EsitoGene
       'Controlla le chiavi in .env e la spia "generatore".'
   );
 }
+
+/**
+ * Come `genera`, ma pretende un oggetto JSON.
+ *
+ * Serve per gli articoli, che non sono solo un corpo: hanno titolo, sommario e
+ * categoria, e chiederli in tre chiamate separate costerebbe tre volte tanto e
+ * darebbe tre pezzi che non si parlano — un titolo che promette una cosa e un
+ * corpo che ne racconta un'altra.
+ *
+ * ⚠️ NON SI USA `response_format: json_object`. Lo accettano quasi tutti, ma non
+ * tutti allo stesso modo, e un anello che lo rifiuta cadrebbe con un 400 —
+ * esattamente il guasto silenzioso che ci è già costato sei post su diciotto il
+ * 27/08/2026. Meglio chiederlo nel prompt e ripulire qui: funziona su tutti.
+ */
+export async function generaJson<T>(
+  sistema: string,
+  utente: string,
+  valido: (x: unknown) => x is T
+): Promise<{ dato: T; modello: string; ms: number }> {
+  const esito = await genera(sistema, utente);
+
+  // I modelli imbustano volentieri il JSON in un blocco di codice, e a volte ci
+  // mettono una frase davanti. Si prende dalla prima graffa all'ultima.
+  const grezzo = esito.testo.replace(/```json/gi, '').replace(/```/g, '');
+  const inizio = grezzo.indexOf('{');
+  const fine = grezzo.lastIndexOf('}');
+  if (inizio === -1 || fine <= inizio) {
+    throw new Error(`${esito.modello} non ha restituito un oggetto JSON: ${esito.testo.slice(0, 160)}`);
+  }
+
+  let dato: unknown;
+  try {
+    dato = JSON.parse(grezzo.slice(inizio, fine + 1));
+  } catch (errore: unknown) {
+    throw new Error(`${esito.modello} ha restituito JSON rotto: ${errore instanceof Error ? errore.message : errore}`);
+  }
+
+  if (!valido(dato)) {
+    throw new Error(`${esito.modello} ha restituito un JSON con i campi sbagliati.`);
+  }
+
+  return { dato, modello: esito.modello, ms: esito.ms };
+}

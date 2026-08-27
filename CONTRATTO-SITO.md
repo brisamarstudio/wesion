@@ -172,15 +172,36 @@ CREATE TABLE IF NOT EXISTS articoli (
 
 ---
 
-## Cosa NON fa ancora Wesion
+## Da dove arriva quello che ti mandiamo
 
-Genera il **testo** di un articolo, ma non ancora il resto della scheda: titolo, sommario,
-categoria e slug oggi non li scrive nessuno — vanno messi a mano nel `contenuto` della bozza,
-oppure va esteso il generatore perché li produca insieme al corpo.
+Wesion genera **tutta la scheda in una chiamata sola**: titolo, sommario, categoria e corpo
+insieme. Chiederli separatamente darebbe pezzi che non si parlano — un titolo che promette
+una cosa e un corpo che ne racconta un'altra.
 
-E l'**immagine di copertina** non c'è: i post del menù hanno la foto della lavagna, un
-articolo no. `upload.php` su Ergonet accetta già file da qualsiasi cliente col campo
-`cliente`, quindi la strada esiste; manca chi ci carichi sopra qualcosa.
+| Campo | Come nasce |
+|---|---|
+| `titolo` | generato, massimo 70 caratteri (oltre, Google lo taglia nei risultati) |
+| `sommario` | generato, massimo 160. Se il modello lo salta, si prende l'inizio del corpo |
+| `categoria` | scelta **da un elenco configurato per quel cliente**, non inventata |
+| `corpo` | 400-700 parole, testo semplice con gli a capo |
+| `slug` | calcolato dal titolo **una volta sola**, alla prima generazione |
+| `immagine` | caricata a mano su `media.mywebby.it`, dalla consolle |
 
-Finché mancano, un articolo esce con titolo e slug di ripiego (`articolo-<id>`) — che è
-brutto in un URL e resta lì per sempre, perché lo slug è la chiave.
+Le categorie si scrivono nella scheda del cliente, separate da virgola. Servono: un blog con
+quindici categorie da un pezzo ciascuna non raggruppa niente, e le etichette non si
+riordinano a posteriori senza cambiare gli URL che le usano.
+
+> ⚠️ **Lo slug non si ricalcola mai.** Sta in `contenuto.slug` e rigenerare la bozza lo
+> lascia com'è (`COALESCE` in SQL, apposta). Il titolo si corregge quanto si vuole:
+> l'indirizzo resta quello. È la stessa ragione della regola 1 qui sopra, vista dall'altra
+> parte del filo.
+
+### Cosa resta a carico di una persona
+
+Il modello **inventa i dettagli di contorno**, sempre. Provato il 27/08/2026: da «farina di
+un molino di Zinasco» ha scritto «il grano viene macinato a pietra» e «una crosta di pane più
+croccante» — la macinatura e il pane non stanno in nessun fatto.
+
+Nessuno di questi è un errore che un controllo automatico possa vedere: sono frasi corrette,
+fluenti, plausibili. Per questo un articolo si legge prima di approvarlo, e per questo il
+bottone che pubblica è di una persona.

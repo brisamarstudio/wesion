@@ -426,6 +426,13 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                       value={config('blog').site_blog_page ?? ''}
                       onChange={(v) => cambiaServizio('blog', { site_blog_page: v })}
                     />
+                    <TextInput
+                      label="Categorie"
+                      description="Separate da virgola. Il generatore sceglie fra queste invece di inventarne una nuova a ogni articolo: un blog con quindici categorie da un pezzo ciascuna non raggruppa niente."
+                      placeholder="Ristorazione, SEO, Prezzi & Budget, Consigli"
+                      value={config('blog').categorie ?? ''}
+                      onChange={(v) => cambiaServizio('blog', { categorie: v })}
+                    />
                   </VStack>
                 ) : null}
               </VStack>

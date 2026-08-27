@@ -22,6 +22,7 @@
 
 import { query } from './db';
 import { controllaBozza } from './controlloTesto';
+import { scriviArticolo } from './articolo';
 import { genera } from './generatore';
 import { leggiMateria, type Materia } from './materia';
 import { DIVIETI_BASE, REGOLE_CRITICHE, SISTEMA_COPYWRITER } from './regolePost';
@@ -34,6 +35,26 @@ interface BozzaDaScrivere {
   tipo: string;
   stato: string;
   contenuto: Record<string, unknown>;
+}
+
+/**
+ * Le categorie che il blog di questo cliente usa gia'.
+ *
+ * Si passano al generatore perche' scelga fra quelle invece di inventarne una
+ * nuova a ogni articolo: un blog con quindici categorie da un pezzo ciascuna
+ * non raggruppa niente, e le etichette non si possono riordinare a posteriori
+ * senza cambiare gli URL che le usano.
+ */
+async function categorieBlog(aziendaId: number): Promise<string[]> {
+  const [riga] = await query<{ categorie: string | null }>(
+    `SELECT config->>'categorie' AS categorie
+       FROM wesion.servizio WHERE azienda_id = $1 AND tipo = 'blog'`,
+    [aziendaId]
+  );
+  return String(riga?.categorie ?? '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
 }
 
 /** Tutto cio' che il cliente ci ha confermato, in una lista piatta. */
@@ -122,6 +143,57 @@ export async function scriviBozza(bozzaId: number): Promise<EsitoScrittura> {
   }
 
   const materia = await leggiMateria(bozza.azienda_id);
+
+  /**
+   * Un articolo non è un post lungo: ha una scheda.
+   *
+   * Titolo, sommario, categoria e slug si generano INSIEME al corpo, in una
+   * chiamata sola: chiederli separatamente darebbe pezzi che non si parlano —
+   * un titolo che promette una cosa e un corpo che ne racconta un'altra.
+   *
+   * ⚠️ Lo slug si scrive UNA VOLTA e poi non si tocca: è la chiave con cui il
+   * sito riconosce l'articolo. Ricalcolarlo dal titolo a ogni correzione
+   * creerebbe un secondo articolo online, lasciando il primo lì per sempre.
+   */
+  if (bozza.tipo === 'articolo') {
+    const c = bozza.contenuto;
+    const categorie = await categorieBlog(bozza.azienda_id);
+    const art = await scriviArticolo(
+      {
+        azienda: bozza.azienda,
+        citta: bozza.citta,
+        angolo: String(c.angolo ?? 'Racconta questo fatto in modo concreto e utile.'),
+        titoloLavorazione: c.titolo ? String(c.titolo) : undefined,
+        fatto: c.fatto ? String(c.fatto) : undefined,
+        categorie,
+      },
+      materia
+    );
+
+    const avvisiArt = controllaBozza(bozza.tipo, art.corpo, fattiVeri(materia));
+
+    await query(
+      `UPDATE wesion.bozza
+          SET contenuto = contenuto || jsonb_build_object(
+                'testo', $2::text, 'titolo', $3::text, 'sommario', $4::text,
+                'categoria', $5::text,
+                -- COALESCE: se lo slug c'e' gia' si tiene quello. Rigenerare una
+                -- bozza non deve poter cambiare l'indirizzo di un articolo.
+                'slug', COALESCE(contenuto->>'slug', $6::text)),
+              avvisi = $7::jsonb, modello = $8, stato = 'attesa_approvazione'
+        WHERE id = $1 AND stato = 'vuota'`,
+      [bozzaId, art.corpo, art.titolo, art.sommario, art.categoria, art.slug, JSON.stringify(avvisiArt), art.modello]
+    );
+
+    return {
+      bozzaId,
+      testo: art.corpo,
+      modello: art.modello,
+      ms: art.ms,
+      avvisiGravi: avvisiArt.filter((a) => a.gravita === 'grave').length,
+    };
+  }
+
   const esito = await genera(SISTEMA_COPYWRITER, prompt(bozza, materia));
 
   /**

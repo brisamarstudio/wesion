@@ -270,6 +270,49 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                 <Banner key={`a${i}`} status="warning" title="Forse" description={a.messaggio} />
               ))}
 
+              {/* ── La scheda dell'articolo ──────────────────────────────
+                  Un articolo non e' un post lungo: titolo, sommario e categoria
+                  sono quello che si legge nell'elenco del blog e nei risultati
+                  di ricerca, e vanno corretti come il corpo.
+
+                  ⚠️ Lo SLUG si mostra ma non si modifica. E' la chiave con cui
+                  il sito riconosce l'articolo: cambiarlo dopo la prima
+                  pubblicazione non rinomina niente, crea un SECONDO articolo e
+                  lascia il primo online per sempre. */}
+              {selezionata.tipo === 'articolo' ? (
+                <VStack gap={3}>
+                  <TextInput
+                    label="Titolo"
+                    description="Massimo 70 caratteri: oltre, Google lo taglia nei risultati."
+                    value={String(selezionata.contenuto.titolo ?? '')}
+                    isDisabled
+                    disabledMessage="Si corregge rigenerando: per ora l'articolo si modifica dal corpo."
+                  />
+                  <TextInput
+                    label="Sommario"
+                    description="Quello che si legge sotto il titolo nell'elenco. Massimo 160 caratteri."
+                    value={String(selezionata.contenuto.sommario ?? '')}
+                    isDisabled
+                    disabledMessage="Si corregge rigenerando."
+                  />
+                  <HStack gap={3} align="center">
+                    {selezionata.contenuto.categoria ? (
+                      <Badge variant="blue" label={String(selezionata.contenuto.categoria)} />
+                    ) : (
+                      <Text type="supporting">senza categoria</Text>
+                    )}
+                    <Text type="supporting">
+                      indirizzo: /blog/{String(selezionata.contenuto.slug ?? '—')}
+                    </Text>
+                    {selezionata.contenuto.foto ? (
+                      <Text type="supporting">copertina: sì</Text>
+                    ) : (
+                      <Text type="supporting">senza copertina</Text>
+                    )}
+                  </HStack>
+                </VStack>
+              ) : null}
+
               {/* Il testo e' modificabile finche' la bozza e' decidibile. Dopo
                   resta leggibile ma fermo: correggere un post gia' pubblicato
                   qui non lo cambierebbe su Google, direbbe solo una bugia. */}
