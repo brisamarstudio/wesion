@@ -1,11 +1,60 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 27/08/2026.*
+*Ultimo aggiornamento: 27/08/2026, sera.*
 
 Se apri questo progetto adesso, **leggi solo questo file**. Dice cos'è, a che punto è,
 e le cose non ovvie che altrimenti ti costano un'ora ciascuna.
 
 ---
+
+
+## 0. Se riprendi adesso, leggi questo
+
+Il software e' completo end-to-end: campagna -> lead -> audit -> cliente ->
+piano -> testi -> approvazione -> pubblicazione. **Manca il collaudo vero**, che
+non e' mai stato fatto tutto insieme: fino a qui si e' provato pezzo per pezzo
+mentre si costruiva, che e' un altro sport.
+
+### Il collaudo da fare, in ordine
+
+1. `PASSWORD='...' npm run utente -- --email tu@mywebby.it --nome Mariano`
+2. Entrare da `/entra`, e verificare che senza cookie nessuna pagina si apra
+3. Un cliente NUOVO creato dalla sua scheda: settore, voce, fatti, servizi —
+   tutto dalla pagina, zero SQL. E' l'unico modo di provare l'onboarding.
+4. Piano del mese -> scrivi i testi -> consolle -> approva
+5. Il router: `npm run router`, foto finta al webhook, `SI`, e il giro
+6. Le spie, con lo scenario dentro una transazione annullata
+7. `docker build` di tutte e due le immagini
+
+### Cosa c'e' ancora in tabella
+
+Un cliente di prova, **Trattoria La Fenice (prova)** (slug `zzz-piano-fenice`),
+con 8 fatti veri e 18 post di dicembre gia' scritti. Serviva a misurare il
+generatore. Si cancella con:
+
+```sql
+DELETE FROM wesion.evento WHERE azienda_id = (SELECT id FROM wesion.azienda WHERE slug='zzz-piano-fenice');
+DELETE FROM wesion.azienda WHERE slug='zzz-piano-fenice';
+```
+
+### La catena dei generatori, misurata
+
+| | Tempo | Costo | Note |
+|---|---|---|---|
+| `groq/openai/gpt-oss-120b` | **1,4s** | gratis | il migliore dei provati |
+| `groq/qwen/qwen3.6-27b` | ~1s | gratis | vuole `reasoning_effort: 'none'`, non 'low' |
+| `zai/glm-4.5-air` | ~15s | forfait | ottima rete, troppo lenta per essere prima |
+| `openrouter/gemini-2.5-flash` | — | **a consumo** | ultima spiaggia, e serve per l'OCR |
+
+Scartati: `glm-4.6` (100 secondi per una risposta vuota, spende tutto in
+ragionamento), `glm-4.5-flash` (41 secondi).
+
+**Da provare quando si potra':** Nara (`router.bynara.id`, 7M token al giorno,
+15 req/min, nessuna scadenza). La chiave c'e' ed e' valida, ma l'account
+risponde `403 telegram_required`: va collegato un account Telegram su
+`/settings`. Non e' in catena e non e' nel playbook finche' non la si vede
+rispondere — un fornitore aggiunto senza averlo misurato e' un anello che si
+scopre rotto il giorno che serve.
 
 ## 1. Cos'è
 
