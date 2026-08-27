@@ -46,7 +46,22 @@ export function Telaio({
       sideNav={
         <SideNav
           header={<SideNavHeading heading="Wesion" subheading="MyWebby" headingHref="/aziende" />}
-          resizable={{ defaultWidth: 256, minWidth: 200, maxWidth: 360, autoSaveId: 'wesion-nav' }}
+          /**
+           * ⚠️ NIENTE `autoSaveId`, ed e' voluto (27/08/2026).
+           *
+           * In Astryx 0.1.9 la larghezza salvata si legge dentro l'inizializzatore
+           * di `useState`, cioe' al primo render del client. Sul server
+           * `localStorage` non esiste e viene fuori `defaultWidth`; nel browser
+           * viene fuori il valore salvato. Appena qualcuno trascina la barra una
+           * volta, i due non combaciano piu' e React se ne lamenta a ogni pagina.
+           *
+           * E non era nemmeno una perdita: React non corregge gli attributi
+           * discordanti in idratazione («this won't be patched up»), quindi teneva
+           * comunque la larghezza del server. La barra si ridimensiona ancora, ma
+           * non si ricorda fra un caricamento e l'altro — che e' quello che gia'
+           * succedeva, solo senza l'errore in console.
+           */
+          resizable={{ defaultWidth: 256, minWidth: 200, maxWidth: 360 }}
         >
           {VOCI.map((v) => (
             <SideNavItem

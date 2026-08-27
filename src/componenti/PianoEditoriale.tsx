@@ -34,6 +34,7 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { giornoRoma } from '@/lib/quando';
 
 export interface ClientePiano {
   id: number;
@@ -99,7 +100,19 @@ function giorno(iso: string): string {
 export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
   const router = useRouter();
   const parametriUrl = useSearchParams();
-  const adesso = new Date();
+  /**
+   * ⚠️ Il mese di partenza si chiede a ROMA, non alla macchina.
+   *
+   * `new Date().getMonth()` usa il fuso di chi esegue: il PC in ufficio e'
+   * Europe/Rome, il server e' UTC. Il 31 agosto alle 23:30 a Roma in UTC e'
+   * ancora agosto, quindi il server disegnava un mese e il browser un altro —
+   * prima un errore di idratazione, e subito dopo la cosa peggiore: il piano
+   * aperto sul mese sbagliato proprio la sera in cui si programma quello dopo.
+   *
+   * `giornoRoma` da' 'AAAA-MM-GG' in ora italiana da tutte e due le parti, e le
+   * due parti tornano a dire la stessa cosa.
+   */
+  const [annoOggi, meseOggi] = giornoRoma(new Date()).split('-');
 
   // `?cliente=` arriva dalla scheda: chi ci clicca vuole quel cliente, non il
   // primo dell'elenco.
@@ -108,8 +121,8 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
     (richiesto && clienti.some((c) => String(c.id) === richiesto) ? richiesto : null) ??
       (clienti[0] ? String(clienti[0].id) : '')
   );
-  const [mese, setMese] = useState<string>(String(adesso.getMonth() + 1));
-  const [anno, setAnno] = useState<string>(String(adesso.getFullYear()));
+  const [mese, setMese] = useState<string>(String(Number(meseOggi)));
+  const [anno, setAnno] = useState<string>(annoOggi);
   /**
    * Vuoto = «quanti ne servono per tenere 4 a settimana».
    *
