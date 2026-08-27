@@ -1,98 +1,133 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 27/08/2026, sera.*
+*Ultimo aggiornamento: 27/08/2026, fine giornata. 19 commit, 10.636 righe.*
 
-Se apri questo progetto adesso, **leggi solo questo file**. Dice cos'è, a che punto è,
-e le cose non ovvie che altrimenti ti costano un'ora ciascuna.
+Se apri questo progetto adesso, **leggi solo questo file**.
 
 ---
 
+## 0. In due righe
 
-## 0. Se riprendi adesso, leggi questo
+Wesion sostituisce `leadgen-italia`, `mywebby-automations` e `gbp-autoposter` con un
+programma solo. **Il software e' completo**: campagna -> lead -> audit -> cliente -> voce ->
+piano -> testi -> approvazione -> pubblicazione. **Niente e' deployato e niente e' mai
+uscito davvero** (`pubblicazioni: 0`). I tre vecchi girano ancora, intatti.
 
-Il software e' completo end-to-end: campagna -> lead -> audit -> cliente ->
-piano -> testi -> approvazione -> pubblicazione. **Manca il collaudo vero**, che
-non e' mai stato fatto tutto insieme: fino a qui si e' provato pezzo per pezzo
-mentre si costruiva, che e' un altro sport.
+```
+npm run dev      ->  http://localhost:3015   (NON 3000: quella e' di gbp-autoposter)
+npm run router   ->  il router WhatsApp, su 172.17.0.1:3010
+npm run cliente  ->  prepara un cliente da riga di comando
+npm run utente   ->  crea un accesso alla dashboard
+```
 
-### Come si pubblica sul sito di un cliente
+## 1. IL TODO, in ordine
 
-Wesion **non scrive mai** sul database di un sito. Gli manda un POST firmato col segreto
-di quel cliente, e il sito scrive sul proprio. Due endpoint distinti con due segreti
-distinti — `x-menu-secret` per il menu, `x-blog-secret` per il blog — perche' sono
-superfici con rischi diversi: il menu cambia venti righe che c'erano gia', un articolo
-crea contenuto indicizzabile con un URL suo.
+### Adesso — sblocca tutto il resto
 
-Il contratto completo, con l'endpoint Astro da incollare e le tre regole che il sito deve
-rispettare, sta in **`CONTRATTO-SITO.md`**. Le tre in breve: lo slug lo manda Wesion (se lo
-genera il sito dal titolo, correggere una parola crea un doppione e il vecchio resta
-online); pubblicare due volte deve AGGIORNARE, non duplicare; il segreto si confronta a
-tempo costante.
+1. **Provare il router con WAHA vero.** E' l'unica cosa mai vista funzionare end-to-end.
+   Serve: copiare le variabili dal `.env` di `mywebby-automations` su Oracle
+   (`WAHA_API_KEY`, `MEDIA_UPLOAD_TOKEN`, i tre `GBP_*`) — **copiarle, non rigenerarle**:
+   rigenerare il refresh token di Google romperebbe il vecchio router mentre gira.
 
-mywebby.it qui dentro e' un cliente come gli altri, e non e' un vezzo di simmetria: e' il
-motivo per cui una modifica al percorso di pubblicazione la si prova per primi su di noi.
+2. **Il primo endpoint blog su un sito vero.** Il contratto e' in `CONTRATTO-SITO.md`, con
+   l'endpoint Astro pronto da incollare. **Farlo per primo su mywebby.it**: se sbagliamo,
+   sbagliamo su di noi.
 
-### Il collaudo da fare, in ordine
+3. **Configurare un cliente vero** dalla sua scheda (`/aziende/[id]`), non in SQL.
 
-1. `PASSWORD='...' npm run utente -- --email tu@mywebby.it --nome Mariano`
-2. Entrare da `/entra`, e verificare che senza cookie nessuna pagina si apra
-3. Un cliente NUOVO creato dalla sua scheda: settore, voce, fatti, servizi —
-   tutto dalla pagina, zero SQL. E' l'unico modo di provare l'onboarding.
-4. Piano del mese -> scrivi i testi -> consolle -> approva
-5. Il router: `npm run router`, foto finta al webhook, `SI`, e il giro
-6. Le spie, con lo scenario dentro una transazione annullata
-7. `docker build` di tutte e due le immagini
+### Poi — deploy
 
-### Cosa c'e' ancora in tabella
+4. Router su **Oracle** (ARM: l'immagine si costruisce LI'), dashboard su **Contabo**.
+   Dettagli e trappole in §14.
 
-Un cliente di prova, **Trattoria La Fenice (prova)** (slug `zzz-piano-fenice`),
-con 8 fatti veri e 18 post di dicembre gia' scritti. Serviva a misurare il
-generatore. Si cancella con:
+### Quando serve — non blocca
+
+5. **Arricchimento social (FB/IG)**: non fatto perche' serve sapere quali API usa il tuo
+   vecchio — token, permessi, se passa da Graph o da scraping. E' una decisione tua.
+6. **La chat** e **sync Instagram**: non ho capito che lavoro fanno nel giro quotidiano.
+7. **OAuth Google/Facebook dalla dashboard**: oggi il refresh token sta nel `.env`.
+   Serve solo per collegare account nuovi senza toccare il server.
+8. **Il look**: Wesion usa il tema neutro di Astryx (sobrio, accento blu). La Master Suite
+   e' nera con accenti viola. Si cambia con `astryx theme`, ma e' una scelta di identita'
+   e va presa apposta.
+
+## 2. Cosa c'e' in tabella adesso
+
+| | |
+|---|---|
+| aziende | 76 prospect · **1 cliente** (finto) |
+| bozze | 19, tutte da approvare |
+| audit | 36 · campagne 2 · utenti 1 |
+| **pubblicazioni** | **0 — niente e' mai uscito** |
+
+Il cliente finto e' **Trattoria La Fenice (prova)**, slug `zzz-piano-fenice`: 8 fatti veri,
+18 post di dicembre + 1 articolo. Serviva a misurare. Si cancella con:
 
 ```sql
 DELETE FROM wesion.evento WHERE azienda_id = (SELECT id FROM wesion.azienda WHERE slug='zzz-piano-fenice');
 DELETE FROM wesion.azienda WHERE slug='zzz-piano-fenice';
 ```
 
-### La voce: perche' i post non suonano da agenzia
+⚠️ L'utente `mywebbyit@gmail.com` ha una **password provvisoria** messa da me. Cambiarla:
+`PASSWORD='...' npm run utente -- --email mywebbyit@gmail.com`
 
-Il pezzo piu' prezioso portato da gbp-autoposter, e quello con dentro la lezione
-piu' cara. Sta in `src/lib/voce.ts` e `analizzaVoce.ts`.
+## 3. Le pagine
 
-**Tre destini diversi, non uno.** Fino al 25/07/2026 il vecchio impacchettava
-tutto — origine, voce, parole sue, recensioni — sotto un unico "sfondo, non
-citare". Il modello obbediva alla lettera e le spegneva tutte e tre: la voce
-arrivava al prompt, ma imbavagliata, e i post uscivano intercambiabili. Adesso:
-lo SFONDO non si cita davvero, le RECENSIONI si usano (unica fonte verificata da
-terzi), le ISTRUZIONI vanno in fondo, dove il modello guarda per ultimo.
+| | |
+|---|---|
+| `/calendario` | **la vista della mattina**: cosa esce questa settimana su tutti i clienti |
+| `/campagne` | scraping per citta' e categoria; la riga apre la lista filtrata |
+| `/aziende` | l'imbuto: raggruppato per campagna, filtri, Chiama/WhatsApp/Maps, gancio copiabile |
+| `/aziende/[id]` | la scheda: chi e', come parla, cosa e' vero, cosa gli facciamo, il mese |
+| `/piano` | l'anteprima del mese, e cosa e' gia' programmato |
+| `/bozze` | la consolle: si corregge e si approva |
+| `/spie` | guasti, silenzi, impianto |
+| `/insights` | dove si e' fermato il lavoro |
 
-**Tre domande separate per ricavarla.** Ognuna vede solo la sua fonte: la voce
-dalla descrizione della scheda e dal materiale incollato, `apprezzato` solo dalle
-recensioni, i fatti da sito e descrizione. Il sito NON entra nella domanda sulla
-voce: l'ha scritto un'agenzia. Mettendoli insieme, su una prova vera, fra le
-"parole sue" erano usciti "prodotti impeccabili" e "soddisfazione totale".
+## 4. Le cose non ovvie, tutte in un posto
 
-**Analizza non salva.** Propone, si guarda, si accetta cio' che torna. Quella
-roba finisce in ogni post per mesi.
+**Wesion sta sulla 3015.** La 3000 e' di gbp-autoposter. Mezz'ora di prove e' finita contro
+l'applicazione sbagliata: il sintomo era un redirect a `/login` invece che a `/entra`.
 
-### La catena dei generatori, misurata
+**Dentro `router/` gli import relativi vogliono l'estensione `.ts`** — lo esegue Node con
+`--experimental-strip-types`, non Next. E i file di `src/lib` che il router carica (`waha`,
+`gbp`, `ocr`, `sito`, `db`, `normalizza`, `leggiSito`) non devono avere import relativi
+senza estensione, o l'avvio si rompe.
 
-Cinque anelli, misurati tutti sullo stesso prompt. Dettagli e trappole nel
-playbook, §"I generatori di testo".
+**Mai un backtick dentro un commento SQL** in un template literal: chiude la stringa.
+Sbagliato tre volte in un giorno. Il controllo:
+`grep -rn '^\s*--.*`' src router --include=*.ts --include=*.tsx`
 
-| | Tempo | Costo | Note |
-|---|---|---|---|
-| `groq/openai/gpt-oss-120b` | **1,4s** | gratis | il piu' veloce |
-| `groq/qwen/qwen3.6-27b` | ~1s | gratis | vuole `reasoning_effort: 'none'`, non 'low' |
-| `nara/minimax-m3-free` | 8,5s | gratis | il testo migliore. Solo i modelli `-free`; vuole un canale Telegram |
-| `zai/glm-4.5-air` | ~15s | forfait | ottima rete, troppo lenta per essere prima |
-| `openrouter/gemini-2.5-flash` | — | **a consumo** | ultima spiaggia, e serve per l'OCR |
+**`password.ts` e `sessione.ts` sono separati apposta.** Il middleware gira su Edge, dove
+`node:crypto` non esiste: importarlo di la' fa fallire la build.
 
-Scartati, col motivo: `glm-4.6` (100 secondi per una risposta VUOTA),
-`glm-4.5-flash` (41s), `tencent-hy3-free` (vuota), `qwen-3.8-max-free` (41s),
-`mimo-v2.5-free` (402 payment_required).
+**Le date si confrontano con `giornoRoma()`**, mai con `toISOString().slice(0,10)`: su una
+mezzanotte italiana quest'ultimo da' il giorno prima, e le colonne timestamptz tornano come
+`Date` e non come stringhe. Insieme facevano dire "non esce niente" a una settimana piena.
 
-## 1. Cos'è
+**Gli id di Google non si digitano mai**: si leggono da Google (bottone nella scheda). E' la
+regola del guasto del 21/07/2026, e la prima versione di quella pagina la violava.
+
+## 5. La catena dei generatori, misurata
+
+| | Tempo | Costo |
+|---|---|---|
+| `groq/openai/gpt-oss-120b` | **1,4 s** | gratis |
+| `groq/qwen/qwen3.6-27b` | ~1 s | gratis — vuole `reasoning_effort: 'none'`, non 'low' |
+| `nara/minimax-m3-free` | 8,5 s | gratis — SOLO i modelli `-free`; dipende da un canale Telegram |
+| `zai/glm-4.5-air` | 15 s | forfait |
+| `openrouter/gemini-2.5-flash` | — | **a consumo**, ultima spiaggia + OCR |
+
+Scartati col motivo: `glm-4.6` (100 s per una risposta VUOTA), `glm-4.5-flash` (41 s),
+`tencent-hy3-free` (vuota), `qwen-3.8-max-free` (41 s), `mimo-v2.5-free` (402).
+
+**Il modello inventa sempre i dettagli di contorno.** Da "farina di un molino di Zinasco" ha
+scritto "il grano viene macinato a pietra" e "una crosta di pane". Non e' un errore che un
+controllo automatico possa vedere: e' per questo che l'ultimo bottone e' di una persona.
+
+---
+
+## 6. Cos'è Wesion
 
 **Wesion** — *WE* di myWEbby + *vision*, la visione d'insieme. È la regia unica che
 sostituisce tre strumenti separati:
@@ -105,7 +140,7 @@ sostituisce tre strumenti separati:
 
 **I vecchi girano ancora e non li abbiamo toccati.** Wesion cresce accanto, non sopra.
 
-## 2. L'idea che regge tutto
+## 7. L'idea che regge tutto
 
 I tre strumenti facevano **la stessa cosa con tre ingressi diversi**: prendono dei fatti
 veri su un'azienda, li trasformano in un messaggio per una persona, e aspettano che un
@@ -122,7 +157,7 @@ e da dove arriva il sì (un `SI` su WhatsApp / un click in dashboard).
 Vigevano diventa il cliente di cui pubblichi il menù cambiando `stato`, non ricopiando
 fra due database.
 
-## 3. Come si accende
+## 8. Come si accende
 
 ```
 npm run dev        →  http://localhost:3015
@@ -138,7 +173,7 @@ sposta. Non è pignoleria: il 27/08/2026 mezz'ora di prove è finita contro
 l'applicazione sbagliata, perché rispondeva sulla porta attesa e *sembrava* la nostra.
 Il sintomo era un redirect a `/login` invece che a `/entra`.
 
-## 4. Il database
+## 9. Il database
 
 Un solo Neon, **quello europeo** (`eu-central-1`), schema `wesion`, 14 tabelle.
 Il Neon americano di `mywebby-automations` è stato abbandonato di proposito.
@@ -167,7 +202,7 @@ su `172.17.0.1` e non è raggiungibile da internet — ed è una difesa già pag
 non si chiamano: la dashboard scrive `stato='approvata'`, il router legge, con un indice
 parziale proprio su quello stato. **Nessuna porta nuova su Oracle.**
 
-## 5. Le cinque cose che ti farebbero perdere un'ora
+## 10. Le cinque cose che ti farebbero perdere un'ora
 
 ### 5.1 Non serve nessun compilatore StyleX — finché non scrivi StyleX tu
 
@@ -224,56 +259,52 @@ TS 7 è il compilatore nuovo scritto in Go. Next 16.2.10 non lo riconosce e fall
 `The "id" argument must be of type string. Received undefined`, dicendo che TypeScript
 non è installato mentre è lì. **Serve la 5.x** (qui 5.9.3, come in gbp-autoposter).
 
-## 6. Cosa c'è adesso, cosa manca
+## 11. Cosa c'è adesso, cosa manca
 
-Fatto:
-- schema `wesion` completo e migrazione verificata
-- telaio: `AppShell` + `SideNav`, budget delle regioni fissato
-- **elenco aziende** con ricerca, pannello di dettaglio e audit su richiesta
-- **consolle bozze** (`/bozze`): la coda di tutto quello che sta per uscire, di
-  qualunque tipo, con correzione del testo prima di approvare e ricontrollo degli
-  avvisi mentre si scrive
-- **pannello spie** (`/spie`): dodici controlli divisi in guasti / silenzi / impianto,
-  con `dal` persistito in tabella perché "accesa da tre giorni" e "accesa adesso" sono
-  due urgenze diverse
-- **audit AI unificato** (`src/lib/audit.ts`): una sola copia, storico invece di
-  colonna sovrascritta, e un fallimento non inventa più un punteggio
-- **scraper Apify in Node** (`src/lib/apify.ts`): avvio e raccolta separati, identità
-  sul Place ID
-- **il router WhatsApp** (`router/`): menù del giorno da foto, comandi SI/NO/RIPRISTINA,
-  riconoscimento del mittente coi contatti, e il giro che raccoglie le approvazioni
-  fatte in dashboard
+*Questo capitolo è il dettaglio. Il riassunto in ordine di urgenza è in §1.*
 
-### Cosa è stato verificato davvero (27/08/2026)
+**C'è tutta la catena, dall'inizio alla fine:**
 
-Non "compila": `npm run build` passa, e le nove spie che si possono provare con una
-query sono state accese e spente una per una con uno scenario finto dentro una
-transazione annullata. Due non si accendevano ed **erano corrette**: quella del menù
-perché scatta dalle 11 (prima è presto, la lavagna si scrive tardi), quella della coda
-vuota perché l'azienda di prova una bozza in coda ce l'aveva. Provate a parte, si
-accendono; e quella del menù si spegne appena arriva la foto.
+| | |
+|---|---|
+| trovare | campagne Apify per città e categoria, identità sul Place ID |
+| qualificare | audit AI (storico, non colonna sovrascritta) + gancio da leggere al telefono |
+| capire chi è | `analizzaVoce`: voce, materiale apprezzato e fatti chiesti separatamente |
+| programmare | piano deterministico del mese, 4 a settimana, con `pubblica_at` |
+| scrivere | catena di generatori gratis-prima-a-pagamento-dopo |
+| controllare | `controlloTesto`: regole + ritiro degli avvisi già giustificati da un fatto |
+| **approvare** | consolle bozze, o `SI` su WhatsApp — **sempre una persona** |
+| pubblicare | GBP, sito del cliente (contratto), WhatsApp |
+| accorgersi | 12 spie, calendario su tutti i clienti, insights |
 
-Non è provato con dati veri, perché dati veri non ce ne sono ancora: il database ha 46
-prospect, zero clienti, zero servizi, zero bozze. La prima cosa che li produrrà è il
-router.
+Anche: login vero (`/entra`, Edge middleware), pagina campagne con la riga cliccabile,
+CRUD con protezione di quello che ha lavoro dentro, calendario settimanale, e il router
+WhatsApp completo (menù da foto, `SI`/`NO`/`RIPRISTINA`, giro delle approvazioni ogni 30s).
 
-Aperto, in ordine di quanto scotta:
+### Cosa è stato verificato davvero
 
-1. **Provare il router con WAHA vero.** Tutto quello che si può provare senza una
-   sessione WhatsApp è provato (sotto c'è cosa); quello che manca è una foto vera di
-   una lavagna vera. Il vecchio continua a girare finché non è successo.
-2. **Configurare i primi clienti** con `npm run cliente` (vedi §6-quater). Oggi in
-   tabella non c'è nessun servizio e nessun titolare, quindi il router non ha niente
-   da fare per nessuno.
-4. **Il piano editoriale** (`pianoEditoriale.ts`, `pilastri.ts`, `ricorrenze.ts` in
-   gbp-autoposter): è quello che crea le bozze `origine='piano'`, cioè l'altro ingresso
-   della consolle.
-5. **Autenticazione**: la tabella `utente` c'è, la pagina di login no. Finché manca,
-   `approvata_da` vale `'dashboard'` — vedi la costante in `api/bozze/[id]/route.ts`.
-6. **Nessuna pagina per le campagne**: le rotte `/api/campagne` ci sono e funzionano,
-   l'interfaccia per lanciarle no. Oggi si chiamano con `curl`.
+`npm run build` passa. Le nove spie provabili con una query sono state accese e spente una
+per una, con uno scenario finto dentro una transazione annullata. Due non si accendevano ed
+**erano corrette**: quella del menù scatta dalle 11 (prima è presto, la lavagna si scrive
+tardi), quella della coda vuota perché l'azienda di prova una bozza ce l'aveva.
 
-## 6-bis. Il router
+I generatori sono stati misurati uno per uno (§5), e il piano è stato costruito davvero: 18
+post di dicembre più un articolo, su un cliente finto, partendo da 8 fatti veri.
+
+### Cosa NON è verificato — ed è la parte che conta
+
+- **il router con WAHA vero.** Mai. Nessuna foto di lavagna vera è mai entrata.
+- **una pubblicazione vera.** `pubblicazioni: 0`. Né su GBP, né su un sito.
+- **il contratto sito** (`CONTRATTO-SITO.md`) su un sito che esiste.
+- **il collaudo intero di fila**, dalla campagna alla pubblicazione, in una volta sola.
+
+### Non costruito, e apposta
+
+Aspettano una decisione di Mariano, non del codice: arricchimento social FB/IG (serve sapere
+quali API usa il tool vecchio), la chat, il sync Instagram, l'OAuth Google dalla dashboard.
+Vedi §1.
+
+## 12. Il router
 
 ```
 npm run router     # node --experimental-strip-types router/index.ts
@@ -331,7 +362,7 @@ del playbook.
 sito o una scheda Google, e la risoluzione di un LID — servono WAHA acceso e un cliente
 configurato.
 
-## 6-quater. Preparare un cliente
+## 13. Preparare un cliente
 
 ```bash
 npm run cliente -- --mostra                    # chi è configurato adesso
@@ -366,7 +397,7 @@ Google settimane dopo.
 Una pagina in dashboard che faccia lo stesso non c'è ancora: quando arriverà, dovrà
 chiamare le stesse funzioni, non riscrivere le query.
 
-## 6-ter. Dove gira, e perché lì
+## 14. Dove gira, e perché lì
 
 Due immagini, due server. **Non serve nessun fornitore nuovo**: misurato il 27/08/2026,
 Oracle ha 162 GB liberi su 193 e 20 GB di RAM disponibili su 23; Contabo 82 GB liberi e
@@ -422,7 +453,7 @@ d'agenzia** e copre tutte le schede: sta solo qui), `NUMERI_AMMINISTRATORI` per 
 avvisi di lead caldo. Facoltative: `ROUTER_HOST`, `ROUTER_PORT`, `DRAFT_TTL_MINUTES`
 (15), `MAX_ITEMS` (12), `SECONDI_GIRO` (30).
 
-## 7. Il tono, se devi scrivere codice qui
+## 15. Il tono, se devi scrivere codice qui
 
 Come in `gbp-autoposter`: i commenti non dicono *cosa* fa il codice — quello si legge —
 ma **perché è così**, citando il giorno in cui la strada sbagliata è costata qualcosa.
