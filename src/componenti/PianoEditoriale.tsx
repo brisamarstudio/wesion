@@ -53,6 +53,16 @@ interface Slot {
   fattoId: number | null;
 }
 
+/** Uno slot GIA' in tabella, con lo stato in cui si trova adesso. */
+interface Programmato {
+  id: number;
+  stato: string;
+  pubblica_at: string;
+  titolo: string | null;
+  testo: string | null;
+  pubblicata: boolean;
+}
+
 interface Anteprima {
   anno: number;
   mese: number;
@@ -60,7 +70,20 @@ interface Anteprima {
   materiaSufficiente: boolean;
   slot: Slot[];
   avvisi: string[];
+  /** Cosa c'e' gia' in tabella per questo cliente e questo mese. */
+  esistenti: Programmato[];
 }
+
+/** Lo stato di uno slot programmato, detto a chi guarda il calendario. */
+const STATO: Record<string, { testo: string; colore: 'neutral' | 'warning' | 'blue' | 'green' | 'red' }> = {
+  vuota: { testo: 'da scrivere', colore: 'neutral' },
+  generata: { testo: 'scritta', colore: 'blue' },
+  attesa_approvazione: { testo: 'da approvare', colore: 'warning' },
+  approvata: { testo: 'approvata, non ancora uscita', colore: 'blue' },
+  pubblicata: { testo: 'pubblicata', colore: 'green' },
+  rifiutata: { testo: 'rifiutata', colore: 'neutral' },
+  scaduta: { testo: 'scaduta', colore: 'red' },
+};
 
 const MESI = [
   'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
@@ -225,6 +248,46 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                   />
                 ) : null}
 
+                {/* ── COSA E' GIA' PROGRAMMATO ─────────────────────────────
+                    ⚠️ Mancava, e la mancanza si vedeva: l'anteprima diceva
+                    "18 slot" senza dire che diciotto c'erano gia'. Chi
+                    guardava non sapeva se stava costruendo il piano o
+                    rileggendo quello di ieri — due situazioni opposte con lo
+                    stesso schermo davanti. */}
+                {anteprima && anteprima.esistenti.length > 0 ? (
+                  <VStack gap={3}>
+                    <HStack gap={3} align="center" wrap="wrap">
+                      <Heading level={3}>Già programmato</Heading>
+                      <Text color="secondary">
+                        {anteprima.esistenti.length} post ·{' '}
+                        {anteprima.esistenti.filter((e) => e.pubblicata).length} già usciti
+                      </Text>
+                    </HStack>
+                    <List hasDividers density="compact">
+                      {anteprima.esistenti.map((e) => {
+                        const st = STATO[e.stato] ?? { testo: e.stato, colore: 'neutral' as const };
+                        return (
+                          <ListItem
+                            key={e.id}
+                            label={e.titolo || (e.testo ?? '').slice(0, 70) || 'senza titolo'}
+                            description={e.testo ? undefined : 'il testo non c’è ancora'}
+                            startContent={
+                              <Text hasTabularNumbers color="secondary">
+                                {giorno(e.pubblica_at)}
+                              </Text>
+                            }
+                            endContent={<Badge variant={st.colore} label={st.testo} />}
+                          />
+                        );
+                      })}
+                    </List>
+                    <Text type="supporting">
+                      Ricostruire il piano sostituisce solo gli slot ancora «da scrivere». Quelli già scritti,
+                      approvati o usciti non si toccano.
+                    </Text>
+                  </VStack>
+                ) : null}
+
                 {anteprima ? (
                   <VStack gap={3}>
                     {anteprima.avvisi.map((a, i) => (
@@ -240,7 +303,7 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                       <>
                         <HStack gap={3} align="center">
                           <Heading level={3}>
-                            {MESI[anteprima.mese - 1]} {anteprima.anno}
+                            {anteprima.esistenti.length ? 'Se lo ricostruisci' : `${MESI[anteprima.mese - 1]} ${anteprima.anno}`}
                           </Heading>
                           <Text color="secondary">
                             {anteprima.slot.length} post ·{' '}

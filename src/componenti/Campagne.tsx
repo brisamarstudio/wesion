@@ -72,6 +72,42 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
     router.refresh();
   }
 
+  /**
+   * ⚠️ CANCELLA I LEAD, NON IL LAVORO.
+   *
+   * Serve a buttare via una ricerca sbagliata — categoria storta, "stavo solo
+   * provando". Ma se dentro c'e' un'azienda diventata cliente, o con bozze o
+   * servizi attivi, quella resta: perde solo il legame con la campagna.
+   * Portarsela via a cascata sarebbe irreversibile per un gesto nato come
+   * "faccio pulizia".
+   */
+  async function cancella(c: CampagnaRiga) {
+    const conLead = c.raccolte > 0;
+    const avviso = conLead
+      ? `Cancello «${c.nome}» e i ${c.raccolte} lead che ha portato. ` +
+        'Quelli diventati clienti, o che hanno bozze, servizi o messaggi, NON vengono cancellati: ' +
+        'perdono solo il legame con la campagna.'
+      : `Cancello «${c.nome}». Non ha portato nessun lead.`;
+    if (!window.confirm(avviso)) return;
+
+    setMessaggio(null);
+    const risposta = await fetch(`/api/campagne/${c.id}${conLead ? '?aziende=si' : ''}`, { method: 'DELETE' });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Non è andata.' });
+      return;
+    }
+    setMessaggio({
+      tipo: 'success',
+      testo:
+        `Campagna cancellata${esito.cancellate ? `, con ${esito.cancellate} lead` : ''}.` +
+        (esito.protette?.length
+          ? ` ${esito.protette.length} non sono state toccate perché ci lavoriamo: ${esito.protette.slice(0, 3).join(', ')}${esito.protette.length > 3 ? '…' : ''}`
+          : ''),
+    });
+    router.refresh();
+  }
+
   async function raccogli(id: number) {
     setMessaggio({ tipo: 'info', testo: 'Raccolgo i risultati…' });
     const risposta = await fetch(`/api/campagne/${id}/raccogli`, { method: 'POST' });
@@ -169,6 +205,11 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
                       key={c.id}
                       label={c.nome}
                       description={`${c.categoria} · ${c.citta.join(', ')} · ${quandoBreve(c.creata_at)}`}
+                      /* Cliccare la riga APRE la lista, filtrata su questa
+                         campagna. Era la cosa che mancava: si raccoglievano
+                         trenta lead e poi bisognava andarli a cercare a mano
+                         in un elenco di settantasette. */
+                      onClick={() => router.push(`/aziende?campagna=${c.id}`)}
                       endContent={
                         <HStack gap={3} align="center">
                           {c.raccolte > 0 ? (
@@ -180,12 +221,18 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
                             <Button
                               label={c.raccolte > 0 ? 'Raccogli ancora' : 'Raccogli'}
                               size="sm"
-                              variant={c.raccolte > 0 ? 'ghost' : 'secondary'}
+                              variant="ghost"
                               clickAction={() => raccogli(c.id)}
                             />
                           ) : (
                             <Text type="supporting">senza run</Text>
                           )}
+                          <Button
+                            label="Cancella"
+                            size="sm"
+                            variant="destructive"
+                            clickAction={() => cancella(c)}
+                          />
                         </HStack>
                       }
                     />

@@ -10,8 +10,41 @@
  * calendario.
  */
 import { NextResponse } from 'next/server';
+import { query } from '@/lib/db';
 import { leggiMateria, materiaUtilizzabile } from '@/lib/materia';
 import { costruisciPiano, postPerMese, salvaPiano } from '@/lib/piano';
+
+/**
+ * Cosa e' GIA' programmato per questo cliente in questo mese.
+ *
+ * ⚠️ Mancava, e la mancanza si vedeva: l'anteprima diceva "18 slot" senza dire
+ * che diciotto c'erano gia'. Chi guardava non sapeva se stava costruendo il
+ * piano o guardando quello che aveva gia' costruito ieri — che sono due
+ * situazioni opposte con lo stesso schermo davanti.
+ */
+async function giaProgrammati(aziendaId: number, anno: number, mese: number) {
+  const inizio = new Date(anno, mese - 1, 1).toISOString();
+  const fine = new Date(anno, mese, 1).toISOString();
+  return query<{
+    id: number;
+    stato: string;
+    pubblica_at: string;
+    titolo: string | null;
+    testo: string | null;
+    pubblicata: boolean;
+  }>(
+    `SELECT b.id, b.stato, b.pubblica_at,
+            b.contenuto->>'titolo' AS titolo,
+            b.contenuto->>'testo'  AS testo,
+            EXISTS (SELECT 1 FROM wesion.pubblicazione p
+                     WHERE p.bozza_id = b.id AND p.esito = 'ok') AS pubblicata
+       FROM wesion.bozza b
+      WHERE b.azienda_id = $1 AND b.origine = 'piano'
+        AND b.pubblica_at >= $2 AND b.pubblica_at < $3
+      ORDER BY b.pubblica_at`,
+    [aziendaId, inizio, fine]
+  );
+}
 
 function quando(richiesta: Request) {
   const p = new URL(richiesta.url).searchParams;
@@ -29,10 +62,13 @@ async function preparaPiano(aziendaId: number, richiesta: Request) {
   const materia = await leggiMateria(aziendaId);
   const esito = costruisciPiano(materia, { anno, mese, quantita });
 
+  const esistenti = await giaProgrammati(aziendaId, anno, mese);
+
   return {
     anno,
     mese,
     quantita,
+    esistenti,
     // Detto esplicitamente: un piano si costruisce anche con poca materia, ma
     // esce povero, e chi lo guarda deve sapere che il problema è a monte.
     materiaSufficiente: materiaUtilizzabile(materia),
