@@ -1,20 +1,28 @@
 'use client';
 
 /**
- * L'elenco aziende: righe fitte, e da ognuna si può FARE qualcosa.
+ * L'elenco aziende: raggruppato, filtrabile, e da ogni riga si può FARE qualcosa.
  *
- * ⚠️ LA PRIMA VERSIONE ERA UNA VETRINA. Mostrava 46 aziende con un punteggio
- * accanto e non offriva un solo modo di agirci: né chiamare, né aprire una
- * chat, né segnare l'esito. Si guardava il lavoro invece di farlo, e il
- * punteggio dell'audit — che esiste per decidere chi chiamare per primo — non
- * portava da nessuna parte.
+ * ⚠️ DUE DIFETTI VERI, VISTI SU DATI VERI (27/08/2026).
  *
- * Adesso da qui si telefona, si apre WhatsApp col numero nel formato giusto, si
- * copia il gancio scritto dall'audit e si segna com'è andata. È la differenza
- * fra un cruscotto e uno strumento.
+ * 1. I DENTISTI MISCHIATI AI RISTORANTI. L'ordine era per punteggio: i
+ *    ristoranti di Vigevano, già analizzati, stavano in cima; i dentisti di
+ *    Abbiategrasso, senza audit, in fondo. Erano DUE CAMPAGNE diverse finite
+ *    nello stesso elenco, e non c'era modo di guardarne una sola.
  *
- * Filtri, ricerca e pagina stanno nell'URL e non in `useState`: un filtro si
- * manda a qualcuno, si mette nei segnalibri, e il tasto indietro funziona.
+ *    Si raggruppa per CAMPAGNA, ed è una scelta contata: sui dati veri, la
+ *    categoria fa 24 gruppi su 77 aziende (le categorie di Google Maps sono
+ *    granulari — «Ristorante toscano», «Ristopub», «Pizza da asporto»), la
+ *    città ne fa 4, la campagna 3. Raggruppare per categoria avrebbe prodotto
+ *    più rumore del problema che curava.
+ *
+ * 2. QUARANTA RIGHE DI SEGUITO NON SI LEGGONO, si scorrono. Adesso sono
+ *    venticinque, con gli stacchi fra i gruppi, e i comandi stanno
+ *    nell'intestazione invece che sopra la lista: è verticale che si guadagna,
+ *    ed è quello che mancava.
+ *
+ * L'archetipo resta `incident-console`: righe fitte a filo, zero card, ispettore
+ * laterale alla selezione. Lo stato della vista sta nell'URL, non in `useState`.
  */
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -31,7 +39,10 @@ import { TextArea } from '@astryxdesign/core/TextArea';
 import { Button } from '@astryxdesign/core/Button';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
+import { Selector } from '@astryxdesign/core/Selector';
+import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { Divider } from '@astryxdesign/core/Divider';
 import { soloData } from '@/lib/quando';
 
 export interface Azienda {
@@ -43,9 +54,9 @@ export interface Azienda {
   provincia: string | null;
   stato: string;
   maps_url: string | null;
+  campagna: string | null;
   score: number | null;
   telefono: string | null;
-  /** Solo cifre col prefisso: è quello che vuole wa.me. */
   telefono_normalizzato: string | null;
   email: string | null;
   sito: string | null;
@@ -55,7 +66,7 @@ export interface Azienda {
   audit_errore: string | null;
 }
 
-const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 'neutral'> = {
+const COLORE: Record<string, 'success' | 'warning' | 'error' | 'accent' | 'neutral'> = {
   prospect: 'neutral',
   contattato: 'accent',
   in_trattativa: 'warning',
@@ -66,15 +77,28 @@ const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 
 
 const ETICHETTA: Record<string, string> = {
   prospect: 'Da contattare',
-  contattato: 'Contattata',
+  contattato: 'Contattate',
   in_trattativa: 'In trattativa',
-  cliente: 'Cliente',
-  perso: 'Persa',
-  archiviato: 'Archiviata',
+  cliente: 'Clienti',
+  perso: 'Perse',
 };
 
-/** L'ordine in cui si scorre un imbuto: da chi non sa chi siamo a chi paga. */
 const STATI = ['prospect', 'contattato', 'in_trattativa', 'cliente', 'perso'];
+
+interface Vista {
+  q: string;
+  stato: string;
+  categoria: string;
+  citta: string;
+  campagna: string;
+  sito: string;
+}
+
+interface Opzioni {
+  categorie: Array<{ valore: string; quanti: number }>;
+  citte: Array<{ valore: string; quanti: number }>;
+  campagne: Array<{ id: number; nome: string; quanti: number }>;
+}
 
 export function ElencoAziende({
   aziende,
@@ -82,20 +106,22 @@ export function ElencoAziende({
   quante,
   pagina,
   perPagina,
-  cerca: cercaIniziale,
-  stato,
+  gruppo,
+  vista,
+  opzioni,
 }: {
   aziende: Azienda[];
   conteggi: Record<string, number>;
   quante: number;
   pagina: number;
   perPagina: number;
-  cerca: string;
-  stato: string;
+  gruppo: string;
+  vista: Vista;
+  opzioni: Opzioni;
 }) {
   const router = useRouter();
   const [inCorso, avvia] = useTransition();
-  const [cerca, setCerca] = useState(cercaIniziale);
+  const [cerca, setCerca] = useState(vista.q);
   const [selezionataId, setSelezionataId] = useState<number | null>(null);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
   const [copiato, setCopiato] = useState(false);
@@ -106,23 +132,47 @@ export function ElencoAziende({
   /** Cambia la vista scrivendo nell'URL: è lì che vive lo stato. */
   function vaiA(campi: Record<string, string | number | null>) {
     const p = new URLSearchParams();
-    const attuali: Record<string, string | number | null> = { q: cerca, stato, pagina, ...campi };
-    for (const [k, v] of Object.entries(attuali)) {
-      if (v === null || v === '' || v === 'tutti' || (k === 'pagina' && v === 1)) continue;
+    const tutti = { ...vista, gruppo, pagina, q: cerca, ...campi } as Record<string, string | number | null>;
+    for (const [k, v] of Object.entries(tutti)) {
+      if (v === null || v === '' || v === 'tutti') continue;
+      if (k === 'pagina' && v === 1) continue;
+      if (k === 'gruppo' && v === 'campagna') continue; // è il default
       p.set(k, String(v));
     }
     avvia(() => router.push(`/aziende${p.toString() ? `?${p}` : ''}`));
   }
 
+  /**
+   * Le righe divise in gruppi, nell'ordine in cui arrivano dal database.
+   *
+   * Il server ordina già per gruppo e poi per punteggio dentro il gruppo: qui
+   * si taglia dove il valore cambia. Non si riordina niente lato client, o la
+   * paginazione mostrerebbe gruppi a metà con l'ordine sbagliato.
+   */
+  const gruppi: Array<{ titolo: string; righe: Azienda[] }> = [];
+  for (const a of aziende) {
+    const chiave =
+      gruppo === 'citta'
+        ? a.citta || 'Senza città'
+        : gruppo === 'campagna'
+          ? a.campagna || 'Senza campagna'
+          : gruppo === 'nessuno'
+            ? ''
+            : a.categoria || 'Senza categoria';
+    const ultimo = gruppi[gruppi.length - 1];
+    if (ultimo && ultimo.titolo === chiave) ultimo.righe.push(a);
+    else gruppi.push({ titolo: chiave, righe: [a] });
+  }
+
   async function cambiaStato(id: number, nuovo: string) {
     setMessaggio(null);
-    const risposta = await fetch(`/api/aziende/${id}/stato`, {
+    const r = await fetch(`/api/aziende/${id}/stato`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stato: nuovo }),
     });
-    if (!risposta.ok) {
-      const e = await risposta.json().catch(() => ({}));
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
       setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
       return;
     }
@@ -131,29 +181,26 @@ export function ElencoAziende({
 
   async function analizza(id: number) {
     setMessaggio(null);
-    const risposta = await fetch(`/api/aziende/${id}/audit`, { method: 'POST' });
-    const esito = await risposta.json().catch(() => ({}));
-    if (!risposta.ok || esito?.esito === 'errore') {
-      setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Non è andata.' });
-    }
-    // Si ricarica comunque: anche un audit fallito ha lasciato la sua riga.
+    const r = await fetch(`/api/aziende/${id}/audit`, { method: 'POST' });
+    const e = await r.json().catch(() => ({}));
+    if (!r.ok || e?.esito === 'errore') setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
     router.refresh();
   }
 
   async function analizzaMancanti() {
     setMessaggio({ tipo: 'info', testo: 'Analizzo quelle senza un audit riuscito…' });
-    const risposta = await fetch('/api/aziende/audit-batch', { method: 'POST' });
-    const esito = await risposta.json().catch(() => ({}));
-    if (!risposta.ok) {
-      setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Non è andata.' });
+    const r = await fetch('/api/aziende/audit-batch', { method: 'POST' });
+    const e = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
       return;
     }
     setMessaggio({
       tipo: 'success',
       testo:
-        esito.analizzate === 0
+        e.analizzate === 0
           ? 'Non c’è nessuna azienda da analizzare.'
-          : `Analizzate ${esito.analizzate}, riuscite ${esito.riuscite}. Il tetto è 25 per giro: rilancia per continuare.`,
+          : `Analizzate ${e.analizzate}, riuscite ${e.riuscite}. Il tetto è 25 per giro: rilancia per continuare.`,
     });
     router.refresh();
   }
@@ -168,20 +215,36 @@ export function ElencoAziende({
     }
   }
 
-  const totale = Object.values(conteggi).reduce((a, b) => a + b, 0);
+  const filtriAttivi = [vista.categoria, vista.citta, vista.campagna, vista.sito].filter(Boolean).length;
 
   return (
     <Layout
       height="fill"
       header={
+        /* I comandi stanno QUI e non sopra la lista: è verticale guadagnato,
+           ed è quello che mancava per non dover scorrere prima di decidere. */
         <LayoutHeader hasDivider>
-          <HStack gap={3} align="center">
+          <HStack gap={3} align="center" wrap="wrap">
             <Heading level={2}>Aziende</Heading>
             <Text color="secondary">
-              {quante === 0
-                ? 'nessuna'
-                : `${quante}${totalePagine > 1 ? ` · pagina ${pagina} di ${totalePagine}` : ''}`}
+              {quante}
+              {totalePagine > 1 ? ` · pagina ${pagina} di ${totalePagine}` : ''}
             </Text>
+
+            <SegmentedControl
+              label="Stato"
+              size="sm"
+              value={vista.stato}
+              onChange={(v) => vaiA({ stato: v, pagina: 1 })}
+            >
+              <SegmentedControlItem
+                value="tutti"
+                label={`Tutte (${Object.values(conteggi).reduce((a, b) => a + b, 0)})`}
+              />
+              {STATI.filter((s) => conteggi[s]).map((s) => (
+                <SegmentedControlItem key={s} value={s} label={`${ETICHETTA[s]} (${conteggi[s]})`} />
+              ))}
+            </SegmentedControl>
           </HStack>
         </LayoutHeader>
       }
@@ -189,32 +252,11 @@ export function ElencoAziende({
         <LayoutContent padding={0}>
           <VStack gap={0}>
             <VStack padding={3} gap={3}>
-              {/* I conteggi dicono quanto c'è DI LÀ, non quanto se ne vede di
-                  qua: servono a decidere dove andare. */}
-              <HStack gap={2} wrap="wrap" align="center">
-                <Button
-                  label={`Tutte (${totale})`}
-                  size="sm"
-                  variant={stato === 'tutti' ? 'primary' : 'ghost'}
-                  onClick={() => vaiA({ stato: 'tutti', pagina: 1 })}
-                />
-                {STATI.map((s) => (
-                  <Button
-                    key={s}
-                    label={`${ETICHETTA[s]} (${conteggi[s] ?? 0})`}
-                    size="sm"
-                    variant={stato === s ? 'primary' : 'ghost'}
-                    isDisabled={!conteggi[s]}
-                    onClick={() => vaiA({ stato: s, pagina: 1 })}
-                  />
-                ))}
-              </HStack>
-
               <HStack gap={2} align="end" wrap="wrap">
                 <TextInput
                   label="Cerca"
                   isLabelHidden
-                  placeholder="Nome, città, categoria, telefono, sito…"
+                  placeholder="Nome, città, categoria, telefono…"
                   value={cerca}
                   onChange={setCerca}
                   size="sm"
@@ -223,14 +265,82 @@ export function ElencoAziende({
                     if (e.key === 'Enter') vaiA({ q: cerca, pagina: 1 });
                   }}
                 />
+
+                {/* I filtri portano il loro numero: si sceglie sapendo quanto
+                    c'è dietro, invece di aprire e trovare tre righe. */}
+                <Selector
+                  label="Categoria"
+                  size="sm"
+                  hasClear
+                  hasSearch={opzioni.categorie.length > 8}
+                  placeholder="Tutte le categorie"
+                  value={vista.categoria}
+                  onChange={(v) => vaiA({ categoria: v ?? '', pagina: 1 })}
+                  options={opzioni.categorie.map((c) => ({ value: c.valore, label: `${c.valore} (${c.quanti})` }))}
+                />
+                <Selector
+                  label="Città"
+                  size="sm"
+                  hasClear
+                  hasSearch={opzioni.citte.length > 8}
+                  placeholder="Tutte le città"
+                  value={vista.citta}
+                  onChange={(v) => vaiA({ citta: v ?? '', pagina: 1 })}
+                  options={opzioni.citte.map((c) => ({ value: c.valore, label: `${c.valore} (${c.quanti})` }))}
+                />
+                <Selector
+                  label="Campagna"
+                  size="sm"
+                  hasClear
+                  placeholder="Tutte le campagne"
+                  value={vista.campagna}
+                  onChange={(v) => vaiA({ campagna: v ?? '', pagina: 1 })}
+                  options={opzioni.campagne.map((c) => ({ value: String(c.id), label: `${c.nome} (${c.quanti})` }))}
+                />
+                <Selector
+                  label="Sito"
+                  size="sm"
+                  hasClear
+                  placeholder="Con e senza sito"
+                  value={vista.sito}
+                  onChange={(v) => vaiA({ sito: v ?? '', pagina: 1 })}
+                  options={[
+                    { value: 'no', label: 'Senza sito' },
+                    { value: 'si', label: 'Con un sito' },
+                  ]}
+                />
+              </HStack>
+
+              <HStack gap={2} align="center" wrap="wrap">
+                <Text type="supporting">Raggruppa per</Text>
+                <SegmentedControl label="Raggruppa" size="sm" value={gruppo} onChange={(v) => vaiA({ gruppo: v })}>
+                  <SegmentedControlItem value="campagna" label="Campagna" />
+                  <SegmentedControlItem value="citta" label="Città" />
+                  {/* La categoria fa 24 gruppi su 77 aziende: le categorie di
+                      Google Maps sono granulari. Resta disponibile, ma non è
+                      il default per un motivo misurato. */}
+                  <SegmentedControlItem value="categoria" label="Categoria" />
+                  <SegmentedControlItem value="nessuno" label="Niente" />
+                </SegmentedControl>
+
                 <Button label="Cerca" size="sm" isLoading={inCorso} onClick={() => vaiA({ q: cerca, pagina: 1 })} />
+                {filtriAttivi > 0 ? (
+                  <Button
+                    label={`Togli i filtri (${filtriAttivi})`}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      vaiA({ categoria: '', citta: '', campagna: '', sito: '', pagina: 1 })
+                    }
+                  />
+                ) : null}
                 <Button label="Analizza le mancanti" size="sm" variant="ghost" clickAction={analizzaMancanti} />
                 <Button
                   label="Esporta CSV"
                   size="sm"
                   variant="ghost"
                   onClick={() => {
-                    window.location.href = `/api/aziende/esporta${stato !== 'tutti' ? `?stato=${stato}` : ''}`;
+                    window.location.href = `/api/aziende/esporta${vista.stato !== 'tutti' ? `?stato=${vista.stato}` : ''}`;
                   }}
                 />
               </HStack>
@@ -249,55 +359,79 @@ export function ElencoAziende({
               <EmptyState
                 title="Nessuna azienda"
                 description={
-                  cercaIniziale
-                    ? 'Nessun risultato per questa ricerca. Prova con meno parole.'
-                    : 'Con questo filtro non c’è niente. Le aziende arrivano dalle campagne.'
+                  vista.q || filtriAttivi
+                    ? 'Con questi filtri non c’è niente. Toglierne uno di solito basta.'
+                    : 'Le aziende arrivano dalle campagne.'
                 }
               />
             ) : (
-              <List hasDividers density="balanced">
-                {aziende.map((a) => (
-                  <ListItem
-                    key={a.id}
-                    label={a.nome}
-                    description={[a.categoria, a.citta].filter(Boolean).join(' · ') || undefined}
-                    isSelected={a.id === selezionataId}
-                    onClick={() => setSelezionataId(a.id)}
-                    startContent={
-                      <StatusDot
-                        variant={COLORE_STATO[a.stato] ?? 'neutral'}
-                        label={ETICHETTA[a.stato] ?? a.stato}
-                        tooltip={ETICHETTA[a.stato] ?? a.stato}
-                      />
-                    }
-                    endContent={
-                      <HStack gap={4} align="center">
-                        {/* Badge solo sopra 80: se ce l'hanno tutte non dice
-                            niente. È il numero che decide chi si chiama prima. */}
-                        {a.score !== null && a.score >= 80 ? (
-                          <Badge variant="orange" label={String(a.score)} />
-                        ) : (
-                          <Text color="secondary" hasTabularNumbers>
-                            {a.score === null ? '—' : a.score}
-                          </Text>
-                        )}
-                        {!a.sito ? <Badge variant="red" label="senza sito" /> : null}
-                        <Text type="supporting">{a.telefono ?? ''}</Text>
-                      </HStack>
-                    }
-                  />
+              <VStack gap={0}>
+                {gruppi.map((g) => (
+                  <VStack key={g.titolo || 'tutto'} gap={0}>
+                    {/* L'intestazione del gruppo è l'unica cosa che rompe il
+                        flusso di righe, ed è esattamente il suo mestiere:
+                        senza, i dentisti si leggono come la coda dei
+                        ristoranti. */}
+                    {g.titolo ? (
+                      <>
+                        <Divider />
+                        <HStack gap={2} align="center" padding={3}>
+                          <Text type="supporting">{g.titolo}</Text>
+                          <Badge variant="neutral" label={String(g.righe.length)} />
+                        </HStack>
+                      </>
+                    ) : null}
+                    <List hasDividers density="compact">
+                      {g.righe.map((a) => (
+                        <ListItem
+                          key={a.id}
+                          label={a.nome}
+                          description={
+                            /* Non si ripete nella riga quello che c'è già
+                               nell'intestazione del gruppo: è rumore che rende
+                               ogni riga più alta e la lista più lunga. */
+                            gruppo === 'categoria'
+                              ? a.citta || undefined
+                              : gruppo === 'citta'
+                                ? a.categoria || undefined
+                                : [a.categoria, a.citta].filter(Boolean).join(' · ') || undefined
+                          }
+                          isSelected={a.id === selezionataId}
+                          onClick={() => setSelezionataId(a.id)}
+                          startContent={
+                            <StatusDot
+                              variant={COLORE[a.stato] ?? 'neutral'}
+                              label={ETICHETTA[a.stato] ?? a.stato}
+                              tooltip={ETICHETTA[a.stato] ?? a.stato}
+                            />
+                          }
+                          endContent={
+                            <HStack gap={3} align="center">
+                              {/* Badge solo sopra 80: se ce l'hanno tutte non
+                                  dice niente. È il numero che decide chi si
+                                  chiama per primo. */}
+                              {a.score !== null && a.score >= 80 ? (
+                                <Badge variant="orange" label={String(a.score)} />
+                              ) : (
+                                <Text color="secondary" hasTabularNumbers>
+                                  {a.score === null ? '—' : a.score}
+                                </Text>
+                              )}
+                              {!a.sito ? <Badge variant="red" label="senza sito" /> : null}
+                              <Text type="supporting">{a.telefono ?? ''}</Text>
+                            </HStack>
+                          }
+                        />
+                      ))}
+                    </List>
+                  </VStack>
                 ))}
-              </List>
+              </VStack>
             )}
 
             {totalePagine > 1 ? (
               <HStack gap={2} padding={3} align="center">
-                <Button
-                  label="Indietro"
-                  size="sm"
-                  isDisabled={pagina <= 1}
-                  onClick={() => vaiA({ pagina: pagina - 1 })}
-                />
+                <Button label="Indietro" size="sm" isDisabled={pagina <= 1} onClick={() => vaiA({ pagina: pagina - 1 })} />
                 <Text type="supporting">
                   {(pagina - 1) * perPagina + 1}–{Math.min(pagina * perPagina, quante)} di {quante}
                 </Text>
@@ -313,7 +447,7 @@ export function ElencoAziende({
         </LayoutContent>
       }
       end={
-        <LayoutPanel width={400} hasDivider isScrollable label="Dettaglio azienda" padding={4}>
+        <LayoutPanel width={380} hasDivider isScrollable label="Dettaglio azienda" padding={4}>
           {!selezionata ? (
             <EmptyState
               isCompact
@@ -329,10 +463,8 @@ export function ElencoAziende({
                 </Text>
               </VStack>
 
-              {/* ── Le azioni, in cima ────────────────────────────────────────
-                  Sono il motivo per cui si apre una riga. Prima non c'erano
-                  affatto: chi telefona non deve scorrere una scheda per trovare
-                  il numero. */}
+              {/* Le azioni in cima: sono il motivo per cui si apre una riga.
+                  Chi telefona non deve scorrere una scheda per trovare il numero. */}
               <HStack gap={2} wrap="wrap">
                 <Button
                   label="Chiama"
@@ -348,12 +480,7 @@ export function ElencoAziende({
                   label="WhatsApp"
                   size="sm"
                   isDisabled={!selezionata.telefono_normalizzato}
-                  tooltip={selezionata.telefono_normalizzato ? undefined : 'Non ha un numero utilizzabile'}
-                  onClick={() => {
-                    // wa.me vuole SOLO cifre col prefisso: passargli il numero
-                    // come è scritto apre una chat con un contatto inesistente.
-                    window.open(`https://wa.me/${selezionata.telefono_normalizzato}`, '_blank');
-                  }}
+                  onClick={() => window.open(`https://wa.me/${selezionata.telefono_normalizzato}`, '_blank')}
                 />
                 <Button
                   label="Maps"
@@ -371,9 +498,6 @@ export function ElencoAziende({
                 />
               </HStack>
 
-              {/* ── Com'è andata ─────────────────────────────────────────────
-                  Si segna da qui e non dalla scheda: si scorre l'elenco dopo
-                  dieci telefonate e si mettono gli esiti, uno dietro l'altro. */}
               <VStack gap={2}>
                 <Text type="supporting">Com’è andata</Text>
                 <HStack gap={2} wrap="wrap">
@@ -390,24 +514,14 @@ export function ElencoAziende({
               </VStack>
 
               {selezionata.audit_errore && !selezionata.audit_hook ? (
-                <Banner
-                  status="warning"
-                  title="L’ultimo audit non è riuscito"
-                  description={selezionata.audit_errore}
-                />
+                <Banner status="warning" title="L’ultimo audit non è riuscito" description={selezionata.audit_errore} />
               ) : null}
 
-              {/* ── Il gancio ────────────────────────────────────────────────
-                  L'unica riga di tutta la pagina che finisce davvero fuori: si
-                  legge al telefono o si incolla in chat. Per questo è copiabile
-                  e non solo leggibile. */}
               {selezionata.audit_hook ? (
                 <VStack gap={2}>
                   <HStack gap={2} align="center">
                     <Text type="supporting">Come aprire il discorso</Text>
-                    {selezionata.score !== null ? (
-                      <Badge variant="orange" label={`${selezionata.score}/100`} />
-                    ) : null}
+                    {selezionata.score !== null ? <Badge variant="orange" label={`${selezionata.score}/100`} /> : null}
                   </HStack>
                   <TextArea
                     label="Gancio"
@@ -424,12 +538,7 @@ export function ElencoAziende({
                       variant={copiato ? 'ghost' : 'secondary'}
                       onClick={() => copiaGancio(selezionata.audit_hook ?? '')}
                     />
-                    <Button
-                      label="Rianalizza"
-                      size="sm"
-                      variant="ghost"
-                      clickAction={() => analizza(selezionata.id)}
-                    />
+                    <Button label="Rianalizza" size="sm" variant="ghost" clickAction={() => analizza(selezionata.id)} />
                   </HStack>
                 </VStack>
               ) : (
@@ -452,9 +561,9 @@ export function ElencoAziende({
                 <MetadataListItem label="Telefono">{selezionata.telefono ?? '—'}</MetadataListItem>
                 <MetadataListItem label="Email">{selezionata.email ?? '—'}</MetadataListItem>
                 <MetadataListItem label="Sito">{selezionata.sito ?? 'nessuno'}</MetadataListItem>
-                <MetadataListItem label="Dove">
-                  {[selezionata.citta, selezionata.provincia].filter(Boolean).join(', ') || '—'}
-                </MetadataListItem>
+                {selezionata.campagna ? (
+                  <MetadataListItem label="Da campagna">{selezionata.campagna}</MetadataListItem>
+                ) : null}
                 {selezionata.audit_quando ? (
                   <MetadataListItem label="Ultimo audit">{soloData(selezionata.audit_quando)}</MetadataListItem>
                 ) : null}
