@@ -394,8 +394,11 @@ Google settimane dopo.
 > Verificato che configurare un cliente **accende da solo** le spie dei silenzi che lo
 > riguardano (`coda-vuota`, `voce-mancante`): non serve ricordarsi di attivarle.
 
-Una pagina in dashboard che faccia lo stesso non c'è ancora: quando arriverà, dovrà
-chiamare le stesse funzioni, non riscrivere le query.
+**Adesso lo si fa anche dalla dashboard**, dalla scheda dell'azienda: la linguetta
+«Servizi» attiva i servizi e ci scrive dentro le chiavi. `npm run cliente` resta per il
+primo giro e per quando la dashboard non è raggiungibile — le due strade chiamano le
+stesse funzioni, apposta: una configurazione fatta da una parte non deve poter risultare
+diversa dall'altra.
 
 ## 14. Dove gira, e perché lì
 
