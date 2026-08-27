@@ -48,7 +48,9 @@ export default async function PaginaCalendario({
   const fine = new Date(inizio);
   fine.setDate(fine.getDate() + 7);
 
-  const voci = await query<VoceCalendario>(
+  // Le due insieme: la settimana e i rimasti indietro non si parlano.
+  const [voci, indietro] = await Promise.all([
+    query<VoceCalendario>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at, b.scade_at,
             a.id AS azienda_id, a.nome AS azienda,
             b.contenuto->>'titolo' AS titolo,
@@ -71,8 +73,8 @@ export default async function PaginaCalendario({
       WHERE COALESCE(b.pubblica_at, b.scade_at) >= $1
         AND COALESCE(b.pubblica_at, b.scade_at) <  $2
       ORDER BY COALESCE(b.pubblica_at, b.scade_at), a.nome`,
-    [inizio.toISOString(), fine.toISOString()]
-  );
+      [inizio.toISOString(), fine.toISOString()]
+    ),
 
   /**
    * Rimasti indietro: approvati, data passata, mai usciti.
@@ -81,7 +83,7 @@ export default async function PaginaCalendario({
    * è di tre giorni fa, e guardandolo solo dentro la settimana corrente lo si
    * perderebbe ogni lunedì mattina — che è esattamente quando serve saperlo.
    */
-  const indietro = await query<VoceCalendario>(
+    query<VoceCalendario>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at, b.scade_at,
             a.id AS azienda_id, a.nome AS azienda,
             b.contenuto->>'titolo' AS titolo,
@@ -95,7 +97,8 @@ export default async function PaginaCalendario({
                          WHERE x.bozza_id = b.id AND x.esito = 'ok')
       ORDER BY COALESCE(b.pubblica_at, b.approvata_at)
       LIMIT 20`
-  );
+    ),
+  ]);
 
   // Tutti e sette i giorni, anche quelli vuoti: un giorno senza niente è
   // un'informazione, non uno spazio da togliere.

@@ -80,7 +80,19 @@ export default async function PaginaAziende({
 
   const filtri = [stato, cerca, categoria, citta, campagna, sito];
 
-  const aziende = await query<Azienda>(
+  /**
+   * ⚠️ TUTTE INSIEME, non una dietro l'altra.
+   *
+   * Sono sei query e nessuna usa il risultato di un'altra, ma erano scritte in
+   * fila con un `await` ciascuna: sei viaggi a Neon uno dopo l'altro. Misurato
+   * il 27/08/2026, un round trip a Francoforte costa 38 ms — quindi 230 ms
+   * spesi ad aspettare, su una pagina che ne impiegava 440 in tutto. Metà del
+   * tempo era coda.
+   *
+   * `Promise.all` le manda insieme: il costo diventa quello della più lenta.
+   */
+  const [aziende, conteggioTotale, conteggi, categorie, citte, campagne] = await Promise.all([
+    query<Azienda>(
     `SELECT
        a.id, a.slug, a.nome, a.categoria, a.citta, a.provincia, a.stato, a.maps_url,
        camp.nome AS campagna,
@@ -141,39 +153,33 @@ export default async function PaginaAziende({
        END,
        ultimo.score DESC NULLS LAST, a.nome
      LIMIT $8 OFFSET $9`,
-    [...filtri, gruppo, PER_PAGINA, (pagina - 1) * PER_PAGINA]
-  );
+      [...filtri, gruppo, PER_PAGINA, (pagina - 1) * PER_PAGINA]
+    ),
 
-  const [{ quante }] = await query<{ quante: number }>(
-    `SELECT count(*)::int AS quante FROM wesion.azienda a WHERE ${DOVE}`,
-    filtri
-  );
+    query<{ quante: number }>(`SELECT count(*)::int AS quante FROM wesion.azienda a WHERE ${DOVE}`, filtri),
 
-  // I conteggi per stato guardano SEMPRE tutte le aziende: dicono quanto c'è
-  // di là, non quanto se ne vede di qua.
-  const conteggi = await query<{ stato: string; quanti: number }>(
-    `SELECT stato, count(*)::int AS quanti FROM wesion.azienda GROUP BY stato`
-  );
+    // I conteggi per stato guardano SEMPRE tutte le aziende: dicono quanto c'è
+    // di là, non quanto se ne vede di qua.
+    query<{ stato: string; quanti: number }>(
+      `SELECT stato, count(*)::int AS quanti FROM wesion.azienda GROUP BY stato`
+    ),
 
-  /**
-   * Le voci dei filtri, coi loro numeri.
-   *
-   * Solo quelle che hanno almeno due aziende: un filtro che porta a una riga
-   * sola è rumore in un elenco a tendina lungo trenta.
-   */
-  const categorie = await query<{ valore: string; quanti: number }>(
-    `SELECT categoria AS valore, count(*)::int AS quanti FROM wesion.azienda
-      WHERE COALESCE(categoria,'') <> '' GROUP BY 1 HAVING count(*) > 1 ORDER BY 2 DESC, 1`
-  );
-  const citte = await query<{ valore: string; quanti: number }>(
-    `SELECT citta AS valore, count(*)::int AS quanti FROM wesion.azienda
-      WHERE COALESCE(citta,'') <> '' GROUP BY 1 HAVING count(*) > 1 ORDER BY 2 DESC, 1`
-  );
-  const campagne = await query<{ id: number; nome: string; quanti: number }>(
-    `SELECT c.id, c.nome, count(a.id)::int AS quanti
-       FROM wesion.campagna c JOIN wesion.azienda a ON a.campagna_id = c.id
-      GROUP BY c.id, c.nome ORDER BY c.creata_at DESC LIMIT 20`
-  );
+    query<{ valore: string; quanti: number }>(
+      `SELECT categoria AS valore, count(*)::int AS quanti FROM wesion.azienda
+        WHERE COALESCE(categoria,'') <> '' GROUP BY 1 HAVING count(*) > 1 ORDER BY 2 DESC, 1`
+    ),
+    query<{ valore: string; quanti: number }>(
+      `SELECT citta AS valore, count(*)::int AS quanti FROM wesion.azienda
+        WHERE COALESCE(citta,'') <> '' GROUP BY 1 HAVING count(*) > 1 ORDER BY 2 DESC, 1`
+    ),
+    query<{ id: number; nome: string; quanti: number }>(
+      `SELECT c.id, c.nome, count(a.id)::int AS quanti
+         FROM wesion.campagna c JOIN wesion.azienda a ON a.campagna_id = c.id
+        GROUP BY c.id, c.nome ORDER BY c.creata_at DESC LIMIT 20`
+    ),
+  ]);
+
+  const quante = conteggioTotale[0].quante;
 
   return (
     <Telaio attiva="/aziende">
