@@ -54,6 +54,27 @@ DELETE FROM wesion.evento WHERE azienda_id = (SELECT id FROM wesion.azienda WHER
 DELETE FROM wesion.azienda WHERE slug='zzz-piano-fenice';
 ```
 
+### La voce: perche' i post non suonano da agenzia
+
+Il pezzo piu' prezioso portato da gbp-autoposter, e quello con dentro la lezione
+piu' cara. Sta in `src/lib/voce.ts` e `analizzaVoce.ts`.
+
+**Tre destini diversi, non uno.** Fino al 25/07/2026 il vecchio impacchettava
+tutto — origine, voce, parole sue, recensioni — sotto un unico "sfondo, non
+citare". Il modello obbediva alla lettera e le spegneva tutte e tre: la voce
+arrivava al prompt, ma imbavagliata, e i post uscivano intercambiabili. Adesso:
+lo SFONDO non si cita davvero, le RECENSIONI si usano (unica fonte verificata da
+terzi), le ISTRUZIONI vanno in fondo, dove il modello guarda per ultimo.
+
+**Tre domande separate per ricavarla.** Ognuna vede solo la sua fonte: la voce
+dalla descrizione della scheda e dal materiale incollato, `apprezzato` solo dalle
+recensioni, i fatti da sito e descrizione. Il sito NON entra nella domanda sulla
+voce: l'ha scritto un'agenzia. Mettendoli insieme, su una prova vera, fra le
+"parole sue" erano usciti "prodotti impeccabili" e "soddisfazione totale".
+
+**Analizza non salva.** Propone, si guarda, si accetta cio' che torna. Quella
+roba finisce in ogni post per mesi.
+
 ### La catena dei generatori, misurata
 
 Cinque anelli, misurati tutti sullo stesso prompt. Dettagli e trappole nel

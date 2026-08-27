@@ -52,6 +52,12 @@ export interface Materia {
   /** Come scrivere. */
   tono: string;
   pubblico: string;
+  /** Lo SFONDO: sceglie il taglio, non si cita mai. Vedi `voce.ts`. */
+  origine: string;
+  come_ragiona: string;
+  /** Le parole sue e quelle che non gli appartengono. */
+  parole_sue: string[];
+  da_evitare: string[];
 }
 
 /** Le chiavi di `fatto` che i pilastri sanno usare come materia prima. */
@@ -78,6 +84,10 @@ export const MATERIA_VUOTA: Materia = {
   mai_dire: [],
   tono: '',
   pubblico: '',
+  origine: '',
+  come_ragiona: '',
+  parole_sue: [],
+  da_evitare: [],
 };
 
 /**
@@ -117,11 +127,15 @@ export async function leggiMateria(aziendaId: number): Promise<Materia> {
   const [voce] = await query<{
     voce: string | null;
     pubblico: string | null;
+    origine: string | null;
+    come_ragiona: string | null;
     apprezzato: string[];
     non_fa: string[];
     mai_dire: string[];
+    parole_sue: string[];
+    da_evitare: string[];
   }>(
-    `SELECT voce, pubblico, apprezzato, non_fa, mai_dire
+    `SELECT voce, pubblico, origine, come_ragiona, apprezzato, non_fa, mai_dire, parole_sue, da_evitare
        FROM wesion.voce WHERE azienda_id = $1`,
     [aziendaId]
   );
@@ -155,6 +169,10 @@ export async function leggiMateria(aziendaId: number): Promise<Materia> {
     mai_dire: voce?.mai_dire ?? [],
     tono: voce?.voce ?? '',
     pubblico: voce?.pubblico ?? '',
+    origine: voce?.origine ?? '',
+    come_ragiona: voce?.come_ragiona ?? '',
+    parole_sue: voce?.parole_sue ?? [],
+    da_evitare: voce?.da_evitare ?? [],
   };
 }
 
@@ -167,4 +185,24 @@ export async function leggiMateria(aziendaId: number): Promise<Materia> {
  */
 export function materiaUtilizzabile(m: Materia): boolean {
   return Boolean(m.cosa_fa?.valore) && m.offerta.length + m.materiali.length + m.punti_forza.length >= 3;
+}
+
+/**
+ * La materia vista come voce, per `vocePerPrompt`.
+ *
+ * Esiste solo perche' la stessa cosa ha due nomi in due posti: qui e'
+ * `tono`, in `voce.ts` (e in tabella) e' `voce`. Un adattatore di tre righe e'
+ * meglio di rinominare una colonna a cui punta gia' del codice — ma se un
+ * giorno si rinomina, questa funzione sparisce e nessuno se ne accorge.
+ */
+export function voceDi(m: Materia): import('./voce').VoceCliente {
+  return {
+    origine: m.origine,
+    come_ragiona: m.come_ragiona,
+    voce: m.tono,
+    pubblico: m.pubblico,
+    apprezzato: m.apprezzato.map((v) => v.valore),
+    parole_sue: m.parole_sue,
+    da_evitare: m.da_evitare,
+  };
 }

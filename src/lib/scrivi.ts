@@ -25,7 +25,9 @@ import { controllaBozza } from './controlloTesto';
 import { scriviArticolo } from './articolo';
 import { genera } from './generatore';
 import { leggiMateria, type Materia } from './materia';
+import { voceDi } from './materia';
 import { DIVIETI_BASE, REGOLE_CRITICHE, SISTEMA_COPYWRITER } from './regolePost';
+import { vocePerPrompt } from './voce';
 
 interface BozzaDaScrivere {
   id: number;
@@ -91,8 +93,6 @@ export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
   const pezzi = [
     `ATTIVITÀ: ${bozza.azienda}${dove}.`,
     m.cosa_fa?.valore ? `In concreto: ${m.cosa_fa.valore}.` : '',
-    m.tono ? `\nCOME PARLA: ${m.tono}` : '',
-    m.pubblico ? `A CHI PARLA: ${m.pubblico}` : '',
 
     `\n\nIL FATTO da cui deve nascere questo post${c.fonte ? ` (${c.fonte})` : ''}:\n"${c.fatto ?? ''}"`,
     `\nIL COMPITO: ${c.angolo ?? 'Racconta questo fatto in modo concreto.'}`,
@@ -103,11 +103,29 @@ export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
       ...m.materiali.map((v) => v.valore),
       ...m.punti_forza.map((v) => v.valore),
     ]),
-    elenco('\nCOSA APPREZZANO I CLIENTI (dalle recensioni, quindi verificato):', m.apprezzato.map((v) => v.valore)),
-
     elenco('\nCONFINI DI QUESTA ATTIVITÀ — non contraddirli mai:', m.non_fa),
     elenco('\nNON DIRE MAI, per esplicita richiesta del cliente:', m.mai_dire),
     elenco('\nNON AFFERMARE MAI, qualunque sia il cliente:', DIVIETI_BASE),
+
+    /**
+     * ⚠️ LA VOCE VA IN FONDO, DOPO I DIVIETI, E NON È UN CAPRICCIO.
+     *
+     * `vocePerPrompt` separa tre cose che fino al 25/07/2026 in gbp-autoposter
+     * stavano insieme sotto un unico «non citare»: lo SFONDO (che davvero non si
+     * cita), le RECENSIONI (che si usano, e sono l'unica cosa verificata da
+     * terzi), e le ISTRUZIONI su come scrivere (che vanno seguite). Il modello
+     * obbediva alla lettera e le spegneva tutte e tre: la voce arrivava al
+     * prompt, ma imbavagliata, e i post uscivano corretti e intercambiabili.
+     *
+     * Anche il blocco delle recensioni è dentro `vocePerPrompt` e non più qui
+     * sopra: là si porta dietro l'istruzione che conta — parlarne dal lato del
+     * lavoro, mai citando che qualcuno l'ha detto.
+     *
+     * In fondo perché è l'ultimo posto che un modello guarda prima di
+     * rispondere, ed è la parte che decide se il post suona come lui o come
+     * un'agenzia.
+     */
+    `\n\n${vocePerPrompt(voceDi(m))}`,
 
     `\n\n${REGOLE_CRITICHE}`,
   ];

@@ -44,6 +44,9 @@ export interface Scheda {
   voce: {
     voce: string;
     pubblico: string;
+    /** Lo SFONDO: sceglie il taglio, non si cita mai. Vedi `voce.ts`. */
+    origine: string;
+    come_ragiona: string;
     apprezzato: string[];
     non_fa: string[];
     mai_dire: string[];
@@ -59,6 +62,8 @@ export interface Scheda {
 export const VOCE_VUOTA: Scheda['voce'] = {
   voce: '',
   pubblico: '',
+  origine: '',
+  come_ragiona: '',
   apprezzato: [],
   non_fa: [],
   mai_dire: [],
@@ -79,6 +84,7 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
 
   const [voce] = await query<Scheda['voce']>(
     `SELECT COALESCE(voce, '') AS voce, COALESCE(pubblico, '') AS pubblico,
+            COALESCE(origine, '') AS origine, COALESCE(come_ragiona, '') AS come_ragiona,
             apprezzato, non_fa, mai_dire, parole_sue, da_evitare
        FROM wesion.voce WHERE azienda_id = $1`,
     [aziendaId]
@@ -139,11 +145,13 @@ export async function salvaScheda(aziendaId: number, m: ModificheScheda): Promis
   if (m.voce) {
     const v = m.voce;
     await query(
-      `INSERT INTO wesion.voce (azienda_id, voce, pubblico, apprezzato, non_fa, mai_dire, parole_sue, da_evitare)
-       VALUES ($1, $2, $3, COALESCE($4,'{}'), COALESCE($5,'{}'), COALESCE($6,'{}'), COALESCE($7,'{}'), COALESCE($8,'{}'))
+      `INSERT INTO wesion.voce (azienda_id, voce, pubblico, apprezzato, non_fa, mai_dire, parole_sue, da_evitare, origine, come_ragiona)
+       VALUES ($1, $2, $3, COALESCE($4,'{}'), COALESCE($5,'{}'), COALESCE($6,'{}'), COALESCE($7,'{}'), COALESCE($8,'{}'), $9, $10)
        ON CONFLICT (azienda_id) DO UPDATE
          SET voce = COALESCE(EXCLUDED.voce, wesion.voce.voce),
              pubblico = COALESCE(EXCLUDED.pubblico, wesion.voce.pubblico),
+             origine = COALESCE(EXCLUDED.origine, wesion.voce.origine),
+             come_ragiona = COALESCE(EXCLUDED.come_ragiona, wesion.voce.come_ragiona),
              apprezzato = EXCLUDED.apprezzato,
              non_fa = EXCLUDED.non_fa,
              mai_dire = EXCLUDED.mai_dire,
@@ -159,6 +167,8 @@ export async function salvaScheda(aziendaId: number, m: ModificheScheda): Promis
         v.mai_dire ?? [],
         v.parole_sue ?? [],
         v.da_evitare ?? [],
+        v.origine ?? null,
+        v.come_ragiona ?? null,
       ]
     );
   }

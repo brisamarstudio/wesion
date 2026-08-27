@@ -26,6 +26,8 @@ import { creaSlug } from './normalizza';
 import { DIVIETI_BASE, SISTEMA_COPYWRITER } from './regolePost';
 import type { Materia } from './materia';
 import { daFonte } from './materia';
+import { voceDi } from './materia';
+import { vocePerPrompt } from './voce';
 
 export interface SchedaArticolo {
   titolo: string;
@@ -100,9 +102,6 @@ export function promptArticolo(r: RichiestaArticolo, m: Materia): string {
   return [
     `ATTIVITÀ: ${r.azienda}${dove}.`,
     m.cosa_fa?.valore ? `In concreto: ${m.cosa_fa.valore}.` : '',
-    m.tono ? `\nCOME PARLA: ${m.tono}` : '',
-    m.pubblico ? `A CHI PARLA: ${m.pubblico}` : '',
-
     r.fatto ? `\n\nIL FATTO da cui parte l'articolo:\n"${r.fatto}"` : '',
     `\nDI COSA PARLA: ${r.angolo}`,
     r.titoloLavorazione ? `(tema di lavorazione: ${r.titoloLavorazione})` : '',
@@ -112,10 +111,14 @@ export function promptArticolo(r: RichiestaArticolo, m: Materia): string {
       ...daFonte(m, 'materiali').map((v) => v.valore),
       ...daFonte(m, 'punti_forza').map((v) => v.valore),
     ]),
-    elenco('\nCOSA APPREZZANO I CLIENTI (dalle recensioni, verificato):', m.apprezzato.map((v) => v.valore)),
     elenco('\nCONFINI — non contraddirli mai:', m.non_fa),
     elenco('\nNON DIRE MAI:', m.mai_dire),
     elenco('\nNON AFFERMARE MAI, qualunque sia il cliente:', DIVIETI_BASE),
+
+    // La voce in fondo, con la separazione fra sfondo, recensioni e istruzioni:
+    // vedi `voce.ts`. È l'ultimo posto che un modello guarda prima di
+    // rispondere, ed è la parte che decide se il pezzo suona come lui.
+    `\n\n${vocePerPrompt(voceDi(m))}`,
 
     r.categorie.length
       ? `\nCATEGORIA: scegli UNA fra queste, scritta identica: ${r.categorie.join(' · ')}`

@@ -145,3 +145,63 @@ export async function elencaSchede(): Promise<SchedaGoogle[]> {
   }
   return fuori;
 }
+
+/**
+ * La descrizione che il cliente ha scritto di sé sulla propria scheda.
+ *
+ * È la fonte migliore che esista per capire come parla: sono parole SUE, già
+ * pubbliche, già scelte da lui. Meglio del sito, che quasi sempre l'ha scritto
+ * un'agenzia e ha la voce dell'agenzia.
+ */
+export async function leggiProfiloGoogle(
+  locationId: string
+): Promise<{ descrizione: string; titolo: string; categoria: string }> {
+  const token = await tokenAccesso();
+  const risposta = await fetch(
+    `https://mybusinessbusinessinformation.googleapis.com/v1/locations/${locationId}?readMask=title,profile,categories`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!risposta.ok) throw new Error(`Profilo scheda non leggibile: ${(await risposta.text()).slice(0, 200)}`);
+
+  const dati = await risposta.json();
+  return {
+    descrizione: dati.profile?.description || '',
+    titolo: dati.title || '',
+    categoria: dati.categories?.primaryCategory?.displayName || '',
+  };
+}
+
+export interface RecensioneGoogle {
+  stelle: number;
+  testo: string;
+}
+
+/**
+ * Le recensioni con del testo dentro.
+ *
+ * ⚠️ SONO L'UNICA FONTE CHE NON HA SCRITTO IL CLIENTE. Tutto il resto — sito,
+ * descrizione, materiale incollato — è vetrina: dice quello che vorrebbe
+ * sembrare. Le recensioni le scrive chi ha pagato, quindi quello che ci si
+ * ripete dentro è verificato da terzi e si può usare senza chiedere conferma.
+ *
+ * Quelle senza testo si scartano: una stella e basta non dice cosa apprezzano.
+ */
+export async function leggiRecensioni(
+  accountId: string,
+  locationId: string,
+  quante = 50
+): Promise<RecensioneGoogle[]> {
+  const token = await tokenAccesso();
+  const risposta = await fetch(
+    `https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations/${locationId}/reviews?pageSize=${quante}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!risposta.ok) throw new Error(`Recensioni non leggibili: ${(await risposta.text()).slice(0, 200)}`);
+
+  const STELLE: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+  const { reviews = [] } = await risposta.json();
+
+  return (reviews as Array<{ starRating?: string; comment?: string }>)
+    .map((r) => ({ stelle: STELLE[r.starRating ?? ''] || 0, testo: String(r.comment || '').trim() }))
+    .filter((r) => r.testo.length > 0);
+}

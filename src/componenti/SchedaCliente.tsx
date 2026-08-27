@@ -32,6 +32,7 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
 import { Selector } from '@astryxdesign/core/Selector';
 import type { Scheda } from '@/lib/scheda';
 
@@ -51,6 +52,9 @@ const CHIAVI: Array<{ id: string; nome: string; aiuto: string }> = [
   { id: 'punti_forza', nome: 'Punti di forza', aiuto: 'Cosa lo distingue davvero, senza superlativi.' },
 ];
 
+/** L'a capo, come costante: dentro un join scritto a mano si rompe. */
+const SEP = String.fromCharCode(10);
+
 /** Da testo a righe e viceversa: nel form le liste sono textarea. */
 const aRighe = (v: string[]): string => v.join('\n');
 const daRighe = (v: string): string[] => v.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
@@ -62,6 +66,15 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const [salvato, setSalvato] = useState(true);
   /** Le schede lette da Google, quando qualcuno le chiede. */
   const [schede, setSchede] = useState<Array<{ accountId: string; locationId: string; titolo: string }> | null>(null);
+  /** Il materiale incollato a mano: didascalie, appunti, la telefonata. */
+  const [incollato, setIncollato] = useState('');
+  /** Cosa ha capito l'analisi. NON e' ancora salvato: si guarda e si accetta. */
+  const [proposta, setProposta] = useState<{
+    voce: Record<string, unknown>;
+    fatti: { cosa_fa: string; offerta: string[]; materiali: string[] };
+    fonti: string[];
+    avvisi: string[];
+  } | null>(null);
 
   /** I fatti nel form sono testo per chiave, una voce per riga. */
   const [fatti, setFatti] = useState<Record<string, string>>(() => {
@@ -116,6 +129,74 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
       tipo: 'success',
       testo: `${(esito.schede ?? []).length} schede lette. Scegli quella di ${s.nome}.`,
     });
+  }
+
+  /**
+   * ⚠️ ANALIZZA E BASTA: NON SALVA.
+   *
+   * Un modello legge le recensioni, la descrizione della scheda e il sito, e ne
+   * trae conclusioni. Alcune saranno giuste, altre no, e chi conosce il cliente
+   * e' dall'altra parte dello schermo. Quella roba poi finisce in OGNI post che
+   * scriveremo per lui, per mesi: salvarla direttamente vorrebbe dire mettere in
+   * tabella l'idea che un modello si e' fatto leggendo un sito.
+   *
+   * Si guarda, si accetta cio' che torna, e si salva come qualsiasi altra
+   * modifica. L'ultimo bottone non e' del modello.
+   */
+  async function analizzaLaVoce() {
+    setProposta(null);
+    setMessaggio({ tipo: 'info', testo: 'Leggo recensioni, scheda Google e sito…' });
+    const risposta = await fetch(`/api/aziende/${s.id}/analizza-voce`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ incollato }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Non è andata.' });
+      return;
+    }
+    setProposta(esito);
+    setMessaggio({
+      tipo: esito.fonti?.length ? 'success' : 'error',
+      testo: esito.fonti?.length
+        ? `Letto da: ${esito.fonti.join(', ')}. Guarda cosa ha capito e tieni solo quello che torna.`
+        : 'Non c’è stato niente da leggere.',
+    });
+  }
+
+  /** Porta la proposta nei campi. Da lì si corregge e si salva come sempre. */
+  function accetta() {
+    if (!proposta) return;
+    const v = proposta.voce as Record<string, unknown>;
+    const testo = (x: unknown) => (typeof x === 'string' ? x : '');
+    const lista = (x: unknown) => (Array.isArray(x) ? x.map(String) : []);
+
+    setSalvato(false);
+    setS((x) => ({
+      ...x,
+      voce: {
+        ...x.voce,
+        // Solo dove c'era il vuoto: quello che una persona ha gia' scritto
+        // vale piu' di quello che ha dedotto un modello, e sovrascriverlo
+        // senza chiedere e' il modo migliore per far perdere mezz'ora.
+        origine: x.voce.origine || testo(v.origine),
+        come_ragiona: x.voce.come_ragiona || testo(v.come_ragiona),
+        voce: x.voce.voce || testo(v.voce),
+        parole_sue: x.voce.parole_sue.length ? x.voce.parole_sue : lista(v.parole_sue),
+        apprezzato: x.voce.apprezzato.length ? x.voce.apprezzato : lista(v.apprezzato),
+      },
+    }));
+
+    setFatti((f) => ({
+      ...f,
+      cosa_fa: f.cosa_fa || proposta.fatti.cosa_fa,
+      offerta: f.offerta || proposta.fatti.offerta.join(SEP),
+      materiali: f.materiali || proposta.fatti.materiali.join(SEP),
+    }));
+
+    setProposta(null);
+    setMessaggio({ tipo: 'success', testo: 'Portato nei campi. Correggi quello che non torna, poi salva.' });
   }
 
   async function salva() {
@@ -272,6 +353,62 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   agenzia, ed è il difetto che si nota anche quando non è un errore.
                 </Text>
               </VStack>
+              {/* ── Ricavare la voce da quello che c'e' gia' ────────────────
+                  Le fonti stanno in ordine di quanto ci si puo' fidare: le
+                  recensioni per prime, perche' sono l'unica cosa che non ha
+                  scritto il cliente. */}
+              <VStack gap={2}>
+                <HStack gap={2} align="center" wrap="wrap">
+                  <Button label="Ricava la voce da quello che c’è" size="sm" clickAction={analizzaLaVoce} />
+                  <Text type="supporting">
+                    Legge recensioni, descrizione della scheda Google e sito. Non salva niente: propone.
+                  </Text>
+                </HStack>
+                <TextArea
+                  label="Materiale suo, se ne hai"
+                  description="Didascalie dei social, appunti di una telefonata, un messaggio che ti ha scritto. È la fonte migliore dopo le recensioni, perché sono parole sue."
+                  rows={3}
+                  value={incollato}
+                  onChange={setIncollato}
+                />
+              </VStack>
+
+              {proposta ? (
+                <Banner
+                  status="info"
+                  title="Cosa ha capito"
+                  description={
+                    proposta.avvisi.length
+                      ? proposta.avvisi.join(' · ')
+                      : 'Guarda se ti torna. Riempie solo i campi ancora vuoti.'
+                  }
+                  defaultIsExpanded
+                >
+                  <VStack gap={3}>
+                    <MetadataList>
+                      <MetadataListItem label="Da dove viene">
+                        {String(proposta.voce.origine || '—')}
+                      </MetadataListItem>
+                      <MetadataListItem label="Come ragiona">
+                        {String(proposta.voce.come_ragiona || '—')}
+                      </MetadataListItem>
+                      <MetadataListItem label="Come parla">{String(proposta.voce.voce || '—')}</MetadataListItem>
+                      <MetadataListItem label="Parole sue">
+                        {(proposta.voce.parole_sue as string[] | undefined)?.join(' · ') || '—'}
+                      </MetadataListItem>
+                      <MetadataListItem label="Cosa gli riconoscono">
+                        {(proposta.voce.apprezzato as string[] | undefined)?.join(' · ') || '—'}
+                      </MetadataListItem>
+                      <MetadataListItem label="Cosa fa">{proposta.fatti.cosa_fa || '—'}</MetadataListItem>
+                    </MetadataList>
+                    <HStack gap={2}>
+                      <Button label="Porta nei campi" variant="primary" size="sm" onClick={accetta} />
+                      <Button label="Lascia perdere" size="sm" variant="ghost" onClick={() => setProposta(null)} />
+                    </HStack>
+                  </VStack>
+                </Banner>
+              ) : null}
+
               <TextInput
                 label="La voce"
                 placeholder="diretto, senza fronzoli, da osteria di paese"

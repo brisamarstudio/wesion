@@ -26,6 +26,7 @@ const VOCI = [
   { href: '/piano', label: 'Piano' },
   { href: '/bozze', label: 'Bozze' },
   { href: '/spie', label: 'Spie' },
+  { href: '/insights', label: 'Insights' },
 ];
 
 export function Telaio({
