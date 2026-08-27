@@ -84,9 +84,9 @@ services:
     container_name: wesion-dashboard
     restart: unless-stopped
 
-    # Solo su 127.0.0.1: davanti ci va nginx, come per gli altri prodotti.
-    # Esporla su 0.0.0.0 vorrebbe dire metterla su internet senza TLS e senza
-    # autenticazione — che ancora non c'è.
+    # Solo su 127.0.0.1: davanti ci va nginx, che mette il TLS. L'autenticazione
+    # adesso c'e', ma restare dietro nginx vale lo stesso — un cookie di
+    # sessione mandato in chiaro non protegge nessuno.
     ports:
       - "127.0.0.1:${DASHBOARD_PORT:-3020}:3000"
 
@@ -102,8 +102,13 @@ services:
       APIFY_ACTOR_ID: ${APIFY_ACTOR_ID:-compass~crawler-google-places}
       SESSION_SECRET: ${SESSION_SECRET:?serve SESSION_SECRET}
 
+    # ⚠️ /entra e non /aziende: da quando c'e' l'autenticazione, /aziende
+    # risponde con un redirect al login. Un healthcheck che passa da un
+    # redirect dice "sano" anche quando l'unica cosa che funziona e' la porta
+    # chiusa — che e' esattamente il tipo di verde bugiardo che il blackout di
+    # luglio ha insegnato a non fidarsi.
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/aziende"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/entra"]
       interval: 60s
       timeout: 10s
       retries: 3
