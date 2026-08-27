@@ -130,24 +130,6 @@ export function vociMenu(contenuto: Record<string, unknown>): VoceMenu[] {
 }
 
 /**
- * Quanto manca alla scadenza, detto a voce.
- *
- * Il menu scade in quindici minuti apposta: un SI che arriva domattina non deve
- * pubblicare il menu di ieri. Un numero di minuti serve piu' di un orario —
- * "fra 3 minuti" si capisce senza guardare l'ora.
- */
-export function scadenza(scade_at: string | null, adesso = Date.now()):
-  | { scaduta: boolean; testo: string }
-  | null {
-  if (!scade_at) return null;
-  const minuti = Math.round((new Date(scade_at).getTime() - adesso) / 60000);
-  if (minuti <= 0) return { scaduta: true, testo: 'scaduta' };
-  if (minuti < 60) return { scaduta: false, testo: `scade fra ${minuti} min` };
-  const ore = Math.round(minuti / 60);
-  return { scaduta: false, testo: `scade fra ${ore} h` };
-}
-
-/**
  * La query della consolle.
  *
  * `avvisi` si rilegge qui invece di fidarsi della colonna: la colonna e' stata

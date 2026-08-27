@@ -44,12 +44,13 @@ import {
   ETICHETTA_ORIGINE,
   ETICHETTA_STATO,
   ETICHETTA_TIPO,
-  scadenza,
   testoBozza,
   vociMenu,
   type Bozza,
 } from '@/lib/bozze';
 import { controllaBozza } from '@/lib/controlloTesto';
+import { quandoBreve, scadenza } from '@/lib/quando';
+import { useAdesso } from './useAdesso';
 
 /** Il colore dice a colpo d'occhio se la riga aspetta una persona o no. */
 const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 'neutral'> = {
@@ -64,15 +65,10 @@ const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 
 
 const DECIDIBILI = new Set(['vuota', 'generata', 'attesa_approvazione']);
 
-function quandoBreve(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) +
-    ' ' +
-    d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-}
-
 export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const router = useRouter();
+  // L'ora arriva dopo il montaggio: prima non si sa, e va bene cosi'.
+  const adesso = useAdesso();
   const [filtro, setFiltro] = useState('da_decidere');
   const [cerca, setCerca] = useState('');
   const [selezionataId, setSelezionataId] = useState<number | null>(null);
@@ -111,7 +107,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const attenzioni = avvisiCorrenti.filter((a) => a.gravita === 'attenzione');
 
   const voci = selezionata ? vociMenu(selezionata.contenuto) : [];
-  const scade = selezionata ? scadenza(selezionata.scade_at) : null;
+  const scade = selezionata ? scadenza(selezionata.scade_at, adesso) : null;
 
   async function decidi(azione: 'approva' | 'rifiuta') {
     if (!selezionata) return;
@@ -191,7 +187,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
             ) : (
               <List hasDividers density="balanced">
                 {filtrate.map((b) => {
-                  const s = scadenza(b.scade_at);
+                  const s = scadenza(b.scade_at, adesso);
                   const graviQui = b.avvisi.filter((a) => a.gravita === 'grave').length;
                   return (
                     <ListItem

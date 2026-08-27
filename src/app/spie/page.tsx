@@ -12,6 +12,7 @@
  */
 import { Telaio } from '@/componenti/Telaio';
 import { leggiSpie, type Spia } from '@/lib/spie';
+import { daQuando } from '@/lib/quando';
 import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
@@ -36,25 +37,11 @@ const SOTTOTITOLO_FAMIGLIA: Record<Spia['famiglia'], string> = {
   impianto: 'Se è giù non funziona più niente, su tutti i clienti insieme.',
 };
 
-/**
- * Da quanto è accesa, detto come lo direbbe una persona.
- *
- * Non e' un dettaglio: "accesa da tre giorni" dice due cose, che il guasto c'e'
- * e che per tre giorni nessuno l'ha guardato.
- */
-function daQuando(dal: string | null): string | null {
-  if (!dal) return null;
-  const minuti = Math.round((Date.now() - new Date(dal).getTime()) / 60000);
-  if (minuti < 2) return 'appena accesa';
-  if (minuti < 60) return `accesa da ${minuti} minuti`;
-  const ore = Math.round(minuti / 60);
-  if (ore < 24) return `accesa da ${ore} ${ore === 1 ? 'ora' : 'ore'}`;
-  const giorni = Math.round(ore / 24);
-  return `accesa da ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`;
-}
-
 export default async function PaginaSpie() {
   const spie = await leggiSpie();
+  // Pagina server: l'ora si prende una volta sola qui, e finisce nell'HTML.
+  // Nessuna idratazione di mezzo, quindi nessun rischio di due valori diversi.
+  const adesso = Date.now();
   const rosse = spie.filter((s) => s.colore === 'rossa').length;
 
   const famiglie: Array<Spia['famiglia']> = ['guasto', 'silenzio', 'impianto'];
@@ -95,7 +82,7 @@ export default async function PaginaSpie() {
                       </VStack>
 
                       {gruppo.map((s) => {
-                        const quando = daQuando(s.dal);
+                        const quando = daQuando(s.dal, adesso);
                         return (
                           <Banner
                             key={s.chiave}

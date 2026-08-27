@@ -10,7 +10,17 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
-      <body>
+      {/*
+        `suppressHydrationWarning` sul body, e SOLO sul body.
+        Le estensioni del browser scrivono i loro attributi qui prima che React
+        si idrati — ColorZilla ci mette `cz-shortcut-listen="true"`, Grammarly
+        e i gestori di password fanno lo stesso. Sono attributi che non
+        controlliamo e che non possiamo far comparire anche sul server.
+        Sopprime il confronto di UN livello solo, sugli attributi di questo tag:
+        tutto quello che sta dentro resta controllato. Metterlo piu' in basso
+        nascondirebbe i nostri, di errori.
+      */}
+      <body suppressHydrationWarning>
         <TemaWesion>{children}</TemaWesion>
       </body>
     </html>
