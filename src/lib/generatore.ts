@@ -65,6 +65,28 @@ export const CATENA: Modello[] = [
     // zittire i tag <think> che altrimenti finiscono nel testo.
     ragiona: 'none',
   },
+  /**
+   * Z.AI, terzo e non secondo — per velocità, non per qualità.
+   *
+   * Il piano è già pagato a forfait, quindi qui non si consuma a token: sulla
+   * carta dovrebbe stare più in alto. Ma misurato il 27/08/2026 sullo stesso
+   * prompt: Groq risponde in 1,4 secondi, `glm-4.5-air` in 15. Su diciotto post
+   * di un mese sono quattro minuti di attesa invece di trenta secondi.
+   *
+   * Quindi è la rete che si tende quando Groq è a tetto: allora quei 15 secondi
+   * sono ottimi, perché l'alternativa è pagare a consumo.
+   *
+   * `glm-4.6` è deliberatamente ESCLUSO: 100 secondi per restituire una
+   * risposta VUOTA, perché spende tutto il budget di token a ragionare. Se un
+   * domani lo si volesse, va prima capito dove finisce il testo.
+   */
+  {
+    nome: 'zai/glm-4.5-air',
+    url: 'https://api.z.ai/api/paas/v4/chat/completions',
+    chiaveEnv: 'ZAI_API_KEY',
+    modello: 'glm-4.5-air',
+    costa: false,
+  },
   {
     nome: 'openrouter/google/gemini-2.5-flash',
     url: 'https://openrouter.ai/api/v1/chat/completions',

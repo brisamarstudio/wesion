@@ -13,7 +13,8 @@
     "start": "next start -p 3000",
     "astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs",
     "router": "node --experimental-strip-types --env-file=.env router/index.ts",
-    "cliente": "node --experimental-strip-types --env-file=.env db/configura-cliente.ts"
+    "cliente": "node --experimental-strip-types --env-file=.env db/configura-cliente.ts",
+    "utente": "node --experimental-strip-types --env-file=.env db/crea-utente.ts"
   },
   "dependencies": {
     "@astryxdesign/cli": "^0.1.9",

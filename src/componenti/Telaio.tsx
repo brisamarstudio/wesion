@@ -21,6 +21,7 @@ import { SideNav, SideNavHeading, SideNavItem } from '@astryxdesign/core/SideNav
 import type { ReactNode } from 'react';
 
 const VOCI = [
+  { href: '/campagne', label: 'Campagne' },
   { href: '/aziende', label: 'Aziende' },
   { href: '/bozze', label: 'Bozze' },
   { href: '/spie', label: 'Spie' },

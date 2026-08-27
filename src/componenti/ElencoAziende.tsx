@@ -226,6 +226,16 @@ export function ElencoAziende({ aziende }: { aziende: Azienda[] }) {
                 />
               ) : null}
 
+              {/* La scheda e' dove si fa tutto il resto: sta in cima al
+                  pannello perche' e' l'azione piu' probabile dopo aver
+                  scelto una riga. */}
+              <Button
+                label="Apri la scheda del cliente"
+                variant="primary"
+                size="sm"
+                onClick={() => router.push(`/aziende/${selezionata.id}`)}
+              />
+
               <VStack gap={3}>
                 <HStack gap={2} align="center">
                   <Button
