@@ -174,12 +174,9 @@ Aperto, in ordine di quanto scotta:
 1. **Provare il router con WAHA vero.** Tutto quello che si può provare senza una
    sessione WhatsApp è provato (sotto c'è cosa); quello che manca è una foto vera di
    una lavagna vera. Il vecchio continua a girare finché non è successo.
-2. **Configurare i servizi dei primi clienti.** Il router non pubblica su un cliente che
-   non ha una riga in `servizio` con `site_menu_url`/`site_secret` (menù) o
-   `gbp_account_id`/`gbp_location_id` (scheda Google). Oggi in tabella non ce n'è
-   nessuna, e non c'è ancora una pagina per scriverle: si fanno a mano in SQL.
-3. **Spuntare `e_titolare`** sui contatti di chi può pubblicare. Senza, il router
-   risponde "numero non abilitato" — apposta, vedi sotto.
+2. **Configurare i primi clienti** con `npm run cliente` (vedi §6-quater). Oggi in
+   tabella non c'è nessun servizio e nessun titolare, quindi il router non ha niente
+   da fare per nessuno.
 4. **Il piano editoriale** (`pianoEditoriale.ts`, `pilastri.ts`, `ricorrenze.ts` in
    gbp-autoposter): è quello che crea le bozze `origine='piano'`, cioè l'altro ingresso
    della consolle.
@@ -245,6 +242,41 @@ del playbook.
 **Non provato:** una foto vera che passa dall'OCR, la pubblicazione riuscita verso un
 sito o una scheda Google, e la risoluzione di un LID — servono WAHA acceso e un cliente
 configurato.
+
+## 6-quater. Preparare un cliente
+
+```bash
+npm run cliente -- --mostra                    # chi è configurato adesso
+npm run cliente -- --azienda <slug> --mostra   # una sola
+
+npm run cliente -- --azienda trattoria-la-fenice-pavia --cliente \
+  --titolare "+39 333 1234567" \
+  --sito-url https://lafenice.it/api/menu --sito-segreto SEGRETO \
+  --sito-pagina https://lafenice.it/menu \
+  --gbp-account 123456789 --gbp-scheda 987654321
+```
+
+Servono tre cose, e mancarne una vuol dire un bot che tace o che pubblica nel vuoto:
+lo **stato** a `cliente` (le spie dei silenzi ignorano i prospect — un prospect che non
+riceve post non è un guasto), un **contatto con `e_titolare`**, e almeno un **servizio
+attivo**. Alla fine lo script dice se è pronto e, se non lo è, cosa manca.
+
+**È scritto in `.ts` e non in `.mjs` per un motivo:** importa `normalizzaTelefono` dalla
+stessa libreria che usa il router. Se normalizzasse il numero anche solo un po'
+diversamente scriverebbe una stringa che il router non ritrova mai, e il sintomo sarebbe
+"il bot non mi risponde" su un cliente configurato benissimo. Verificato il 27/08/2026:
+un numero scritto `+39 333 1234567` viene riconosciuto sia come `393331234567@c.us` sia
+come `00393331234567@c.us`.
+
+**Rifiuta gli id Google non numerici** invece di scriverli. È la classe esatta del guasto
+del 21/07/2026, bloccata dove c'è ancora qualcuno che guarda invece che con un 404 di
+Google settimane dopo.
+
+> Verificato che configurare un cliente **accende da solo** le spie dei silenzi che lo
+> riguardano (`coda-vuota`, `voce-mancante`): non serve ricordarsi di attivarle.
+
+Una pagina in dashboard che faccia lo stesso non c'è ancora: quando arriverà, dovrà
+chiamare le stesse funzioni, non riscrivere le query.
 
 ## 6-ter. Dove gira, e perché lì
 
