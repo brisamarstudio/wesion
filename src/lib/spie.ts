@@ -353,15 +353,17 @@ async function fattiMancanti(): Promise<Spia | null> {
  * di fretta.
  */
 async function testiARischio(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string; tipo: string; contenuto: Record<string, unknown> }>(
-    `SELECT a.nome AS azienda, b.tipo, b.contenuto
+  const righe = await query<{ azienda: string; tipo: string; contenuto: Record<string, unknown>; fatti: string[] }>(
+    `SELECT a.nome AS azienda, b.tipo, b.contenuto,
+            COALESCE((SELECT array_agg(x.valore) FROM wesion.fatto x
+                       WHERE x.azienda_id = a.id AND x.attivo), '{}') AS fatti
        FROM wesion.bozza b
        JOIN wesion.azienda a ON a.id = b.azienda_id
       WHERE b.stato IN ('generata','attesa_approvazione','approvata')`
   );
 
   const sospetti = righe
-    .map((r) => ({ ...r, gravi: controllaBozza(r.tipo, testoBozza(r.contenuto)).filter((a) => a.gravita === 'grave') }))
+    .map((r) => ({ ...r, gravi: controllaBozza(r.tipo, testoBozza(r.contenuto), r.fatti).filter((a) => a.gravita === 'grave') }))
     .filter((r) => r.gravi.length > 0);
 
   if (!sospetti.length) return null;
@@ -389,15 +391,17 @@ async function testiARischio(): Promise<Spia | null> {
  * che ne accumula.
  */
 async function pubblicatiDaRivedere(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string; tipo: string; contenuto: Record<string, unknown> }>(
-    `SELECT a.nome AS azienda, b.tipo, b.contenuto
+  const righe = await query<{ azienda: string; tipo: string; contenuto: Record<string, unknown>; fatti: string[] }>(
+    `SELECT a.nome AS azienda, b.tipo, b.contenuto,
+            COALESCE((SELECT array_agg(x.valore) FROM wesion.fatto x
+                       WHERE x.azienda_id = a.id AND x.attivo), '{}') AS fatti
        FROM wesion.bozza b
        JOIN wesion.azienda a ON a.id = b.azienda_id
       WHERE b.stato = 'pubblicata' AND b.tipo IN ('post_gbp','articolo')`
   );
 
   const sospetti = righe
-    .map((r) => ({ ...r, gravi: controllaBozza(r.tipo, testoBozza(r.contenuto)).filter((a) => a.gravita === 'grave') }))
+    .map((r) => ({ ...r, gravi: controllaBozza(r.tipo, testoBozza(r.contenuto), r.fatti).filter((a) => a.gravita === 'grave') }))
     .filter((r) => r.gravi.length > 0);
 
   if (!sospetti.length) return null;

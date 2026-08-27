@@ -19,7 +19,7 @@ export default async function PaginaBozze() {
 
   const bozze: Bozza[] = righe.map((b) => ({
     ...b,
-    avvisi: controllaBozza(b.tipo, testoBozza(b.contenuto)),
+    avvisi: controllaBozza(b.tipo, testoBozza(b.contenuto), b.fatti_veri),
   }));
 
   return (

@@ -100,7 +100,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
 
   // Ricalcolati sul testo CORRENTE: e' il punto 2 del commento in cima.
   const avvisiCorrenti = useMemo(
-    () => (selezionata ? controllaBozza(selezionata.tipo, testoCorrente) : []),
+    () => (selezionata ? controllaBozza(selezionata.tipo, testoCorrente, selezionata.fatti_veri) : []),
     [selezionata, testoCorrente]
   );
   const gravi = avvisiCorrenti.filter((a) => a.gravita === 'grave');

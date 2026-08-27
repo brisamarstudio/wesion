@@ -36,6 +36,13 @@ export interface Bozza {
   /** Il fatto su cui la bozza si reggeva, se ne aveva uno. */
   fatto_chiave: string | null;
   fatto_valore: string | null;
+  /**
+   * I fatti verificati dell'azienda.
+   *
+   * Servono alla consolle per ricalcolare gli avvisi mentre si corregge senza
+   * segnalare come inventato cio' che e' stato confermato dal cliente.
+   */
+  fatti_veri: string[];
   /** Esiti di pubblicazione gia' registrati, per non riproporre un lavoro fatto. */
   pubblicazioni: Array<{ destinazione: string; esito: string; errore: string | null }>;
 }
@@ -147,6 +154,12 @@ export const SQL_BOZZE = `
     a.citta AS citta,
     f.chiave AS fatto_chiave,
     f.valore AS fatto_valore,
+    COALESCE((
+      SELECT array_agg(x.valore)
+        FROM wesion.fatto x
+       WHERE x.azienda_id = a.id AND x.attivo
+         AND (x.scade_at IS NULL OR x.scade_at > now())
+    ), '{}') AS fatti_veri,
     COALESCE((
       SELECT json_agg(json_build_object(
                'destinazione', p.destinazione,

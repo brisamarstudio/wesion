@@ -31,6 +31,16 @@ export interface AvvisoTesto {
   gravita: 'grave' | 'attenzione';
   /** Detto all'operatore, non al programmatore. */
   messaggio: string;
+  /**
+   * Il pezzo di testo che ha fatto scattare l'avviso.
+   *
+   * Serve a poterlo RITIRARE: se quella stessa cosa sta scritta in un fatto
+   * verificato del cliente, non e' un'invenzione del modello ed e' sbagliato
+   * segnalarla. Presente solo sugli avvisi che parlano di contenuto; quelli di
+   * forma (emoji, markdown, contatti) non hanno prova perche' nessun fatto puo'
+   * giustificarli.
+   */
+  prova?: string;
 }
 
 /** Numeri scritti in lettere che nei post escono piu' spesso delle cifre. */
@@ -47,16 +57,22 @@ const DECINE =
 export function controllaFattiInventati(testo: string): AvvisoTesto[] {
   const t = testo || '';
   const avvisi: AvvisoTesto[] = [];
-  const grave = (messaggio: string) => avvisi.push({ gravita: 'grave', messaggio });
-  const attenzione = (messaggio: string) => avvisi.push({ gravita: 'attenzione', messaggio });
+  const grave = (messaggio: string, prova?: string) => avvisi.push({ gravita: 'grave', messaggio, prova });
+  const attenzione = (messaggio: string, prova?: string) =>
+    avvisi.push({ gravita: 'attenzione', messaggio, prova });
 
   // Anni di attivita': "da 20 anni", "vent'anni", "30 anni di esperienza".
-  if (new RegExp(`\\b(?:\\d{1,3}|${DECINE})\\s*anni\\b`, 'i').test(t)) {
-    grave("Cita un numero di anni di attività: il modello non lo sa, se l'è inventato. Toglilo o verificalo.");
+  const anni = new RegExp(`\\b(?:\\d{1,3}|${DECINE})\\s*anni\\b`, 'i').exec(t);
+  if (anni) {
+    grave(
+      "Cita un numero di anni di attività: il modello non lo sa, se l'è inventato. Toglilo o verificalo.",
+      anni[0]
+    );
   }
   // "dal 1985", "fin dal 1970".
-  if (/\b(?:dal|sin dal|fin dal|since)\s+(?:18|19|20)\d{2}\b/i.test(t)) {
-    grave("Cita l'anno di fondazione: va verificato prima di pubblicarlo.");
+  const fondazione = /\b(?:dal|sin dal|fin dal|since)\s+(?:18|19|20)\d{2}\b/i.exec(t);
+  if (fondazione) {
+    grave("Cita l'anno di fondazione: va verificato prima di pubblicarlo.", fondazione[0]);
   }
   // "da anni", "da generazioni", "da sempre". Nessun numero, quindi i controlli
   // qui sopra non le vedono — e sono uscite davvero (25/07/2026, primo articolo
@@ -70,11 +86,13 @@ export function controllaFattiInventati(testo: string): AvvisoTesto[] {
   }
   // "oltre 500 clienti", "piu' di 1000 lavori". Niente "circa": e' un'esitazione,
   // non un vanto, e "circa venti minuti" e' una descrizione onesta del lavoro.
-  if (/\b(?:oltre|più di|piu' di)\s+\d{2,}\b/i.test(t)) {
-    grave('Cita una quantità ("oltre N…"): è un numero che nessuno ha verificato.');
+  const quantita = /\b(?:oltre|più di|piu' di)\s+\d{2,}\b/i.exec(t);
+  if (quantita) {
+    grave('Cita una quantità ("oltre N…"): è un numero che nessuno ha verificato.', quantita[0]);
   }
-  if (/\b(?:premio|premiat[oi]|riconoscimento|classific)/i.test(t)) {
-    grave('Sembra citare un premio o una classifica: sono cose che vanno provate.');
+  const premio = /\b(?:premio|premiat[oi]|riconoscimento|classific)\w*/i.exec(t);
+  if (premio) {
+    grave('Sembra citare un premio o una classifica: sono cose che vanno provate.', premio[0]);
   }
   // Superlativo di piazza — "i migliori della zona". Con l'articolo davanti,
   // altrimenti prende anche "il legno vecchio e' migliore di quello nuovo", che
@@ -82,8 +100,10 @@ export function controllaFattiInventati(testo: string): AvvisoTesto[] {
   if (/\b(?:il|i|la|le)\s+miglior[ei]\s+(?:del|della|dei|delle|di|in)\b/i.test(t)) {
     attenzione('Suona come "i migliori della zona": è un confronto che va provato.');
   }
-  if (/\b(?:certificat[oi]|certificazione|DOP|IGP|biologic[oi]|km\s*0|a chilometro zero|FSC)\b/i.test(t)) {
-    grave('Cita una certificazione o una denominazione: va confermata dal cliente.');
+  const certificazione =
+    /\b(?:certificat[oi]|certificazione|DOP|IGP|biologic[oi]|km\s*0|a chilometro zero|FSC)\b/i.exec(t);
+  if (certificazione) {
+    grave('Cita una certificazione o una denominazione: va confermata dal cliente.', certificazione[0]);
   }
   // ⚠️ La prima versione cercava la parola "prezzo" secca, e su un articolo vero
   // ha suonato per "Non è una questione di prezzo, è una questione di risultato"
@@ -185,15 +205,64 @@ export function controllaPostGoogle(testo: string): AvvisoTesto[] {
 }
 
 /**
+ * Ritira gli avvisi che un fatto verificato giustifica.
+ *
+ * ⚠️ NASCE DA UN FALSO POSITIVO VERO. Il 27/08/2026, generando il piano di un
+ * mese, quattro post su diciotto sono stati segnati come "cita un numero di
+ * anni di attività: se l'è inventato". Ma il fatto da cui nascevano diceva
+ * testualmente "Marco in sala da 12 anni" — verificato, detto dal cliente. Il
+ * modello aveva fatto esattamente il suo lavoro.
+ *
+ * Perché conta più di quanto sembri: un avviso che suona su una cosa vera
+ * insegna a ignorare gli avvisi. Con quattro rossi su diciotto per lo stesso
+ * motivo sbagliato, entro una settimana nessuno li guarda più — e il giorno che
+ * ne scatta uno giusto passa insieme agli altri.
+ *
+ * Vale solo per gli avvisi di CONTENUTO, quelli che portano una `prova`. Un
+ * fatto verificato non può giustificare tre emoji o un numero di telefono nel
+ * testo: quelle sono regole di forma, e nessun cliente le rende lecite.
+ */
+export function ritiraGiustificati(avvisi: AvvisoTesto[], fattiVeri: string[]): AvvisoTesto[] {
+  if (!fattiVeri.length) return avvisi;
+  const materia = perConfronto(fattiVeri.join(' \n '));
+  return avvisi.filter((a) => !a.prova || !materia.includes(perConfronto(a.prova)));
+}
+
+/**
+ * Due stringhe che si leggono uguali devono confrontarsi uguali.
+ *
+ * ⚠️ NASCE DA UN CARATTERE INVISIBILE. Il 27/08/2026 un avviso continuava a
+ * scattare su "12 anni" nonostante quelle stesse parole fossero in un fatto
+ * verificato. Guardando i codici dei caratteri: il modello aveva scritto lo
+ * spazio come U+202F (spazio unificatore stretto, codice 8239) invece del
+ * normale U+0020 (32). Sullo schermo sono identici; per `includes` sono due
+ * stringhe diverse.
+ *
+ * È il tipo di guasto che non si trova leggendo, e che fa tornare i falsi
+ * positivi proprio nel sistema che serviva a toglierli — cioè fa smettere di
+ * fidarsi degli avvisi, che è il danno vero.
+ *
+ * Si normalizza qualunque spazio unicode (`\s` in modalità unicode li prende
+ * tutti: no-break, stretti, em, tabulazioni) e si schiaccia il minuscolo.
+ */
+function perConfronto(s: string): string {
+  return s.replace(/\s+/gu, ' ').trim().toLowerCase();
+}
+
+/**
  * Il controllo giusto per il tipo di bozza.
  *
  * Il menu del giorno finisce sul sito del cliente, dove un orario o un prezzo
  * non solo sono leciti, sono IL contenuto. Applicargli le regole di Google
  * accenderebbe una spia grave su ogni singolo menu — e una spia che suona
  * sempre e' una spia spenta.
+ *
+ * `fattiVeri` sono le cose che il cliente ci ha confermato. Passarle è
+ * facoltativo ma quasi sempre giusto: senza, si segnala come inventato anche
+ * ciò che è stato verificato.
  */
-export function controllaBozza(tipo: string, testo: string): AvvisoTesto[] {
+export function controllaBozza(tipo: string, testo: string, fattiVeri: string[] = []): AvvisoTesto[] {
   if (tipo === 'menu') return [];
-  if (tipo === 'post_gbp') return controllaPostGoogle(testo);
-  return controllaFattiInventati(testo);
+  const avvisi = tipo === 'post_gbp' ? controllaPostGoogle(testo) : controllaFattiInventati(testo);
+  return ritiraGiustificati(avvisi, fattiVeri);
 }
