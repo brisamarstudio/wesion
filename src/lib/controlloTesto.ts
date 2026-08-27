@@ -43,9 +43,20 @@ export interface AvvisoTesto {
   prova?: string;
 }
 
-/** Numeri scritti in lettere che nei post escono piu' spesso delle cifre. */
+/**
+ * Numeri scritti in lettere, che nei post escono piu' spesso delle cifre.
+ *
+ * ⚠️ Mancavano gli undici-diciannove, e non era una svista innocua: l'elenco
+ * aveva `dieci` e `quindici` e saltava tutto il resto. Trovato il 27/08/2026
+ * provando un generatore nuovo, che ha scritto "Da DODICI anni Marco sta in
+ * sala" — un'anzianita' in lettere che passava il controllo indisturbata
+ * mentre "da 12 anni" veniva presa. Lo stesso fatto, scritto in due modi, con
+ * due esiti diversi: e' peggio di un controllo che manca, perche' sembra che
+ * ci sia.
+ */
 const DECINE =
-  "dieci|quindici|vent[i']|trent[a']|quarant[a']|cinquant[a']|sessant[a']|settant[a']|ottant[a']|novant[a']|cent[o']";
+  "dieci|undici|dodici|tredici|quattordici|quindici|sedici|diciassette|diciotto|diciannove|" +
+  "vent[i']|trent[a']|quarant[a']|cinquant[a']|sessant[a']|settant[a']|ottant[a']|novant[a']|cent[o']";
 
 /**
  * Roba che il modello non puo' sapere e che quindi si e' inventato.

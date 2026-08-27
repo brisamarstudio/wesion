@@ -96,6 +96,7 @@ services:
       # La catena: gratis, forfait, a consumo. Nessuna e' obbligatoria da sola,
       # ma senza almeno una non si genera niente.
       GROQ_API_KEY: ${GROQ_API_KEY}
+      NARA_API_KEY: ${NARA_API_KEY}
       ZAI_API_KEY: ${ZAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY}
       APIFY_API_TOKEN: ${APIFY_API_TOKEN}

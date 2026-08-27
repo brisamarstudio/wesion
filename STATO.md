@@ -39,22 +39,20 @@ DELETE FROM wesion.azienda WHERE slug='zzz-piano-fenice';
 
 ### La catena dei generatori, misurata
 
+Cinque anelli, misurati tutti sullo stesso prompt. Dettagli e trappole nel
+playbook, §"I generatori di testo".
+
 | | Tempo | Costo | Note |
 |---|---|---|---|
-| `groq/openai/gpt-oss-120b` | **1,4s** | gratis | il migliore dei provati |
+| `groq/openai/gpt-oss-120b` | **1,4s** | gratis | il piu' veloce |
 | `groq/qwen/qwen3.6-27b` | ~1s | gratis | vuole `reasoning_effort: 'none'`, non 'low' |
+| `nara/minimax-m3-free` | 8,5s | gratis | il testo migliore. Solo i modelli `-free`; vuole un canale Telegram |
 | `zai/glm-4.5-air` | ~15s | forfait | ottima rete, troppo lenta per essere prima |
 | `openrouter/gemini-2.5-flash` | — | **a consumo** | ultima spiaggia, e serve per l'OCR |
 
-Scartati: `glm-4.6` (100 secondi per una risposta vuota, spende tutto in
-ragionamento), `glm-4.5-flash` (41 secondi).
-
-**Da provare quando si potra':** Nara (`router.bynara.id`, 7M token al giorno,
-15 req/min, nessuna scadenza). La chiave c'e' ed e' valida, ma l'account
-risponde `403 telegram_required`: va collegato un account Telegram su
-`/settings`. Non e' in catena e non e' nel playbook finche' non la si vede
-rispondere — un fornitore aggiunto senza averlo misurato e' un anello che si
-scopre rotto il giorno che serve.
+Scartati, col motivo: `glm-4.6` (100 secondi per una risposta VUOTA),
+`glm-4.5-flash` (41s), `tencent-hy3-free` (vuota), `qwen-3.8-max-free` (41s),
+`mimo-v2.5-free` (402 payment_required).
 
 ## 1. Cos'è
 

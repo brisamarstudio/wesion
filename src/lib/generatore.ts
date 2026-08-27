@@ -66,7 +66,35 @@ export const CATENA: Modello[] = [
     ragiona: 'none',
   },
   /**
-   * Z.AI, terzo e non secondo — per velocità, non per qualità.
+   * Nara, secondo. Gratis, e scrive bene.
+   *
+   * ⚠️ SOLO I MODELLI COL SUFFISSO `-free` SONO DAVVERO GRATIS. Il listino ne
+   * mostra 54, compresi nomi di punta, ma provati il 27/08/2026 quelli senza
+   * suffisso rispondono `429 Insufficient credits`: la quota giornaliera copre
+   * un sottoinsieme. Cambiare questo modello con uno più altisonante vuol dire
+   * spegnere l'anello senza accorgersene, perché la catena scivola al
+   * successivo in silenzio.
+   *
+   * `minimax-m3-free` è stato il migliore della giornata come testo — legge
+   * come una persona invece che come un'agenzia — a 8,5 secondi. Scartati:
+   * `tencent-hy3-free` (risposta vuota), `qwen-3.8-max-free` (41 secondi),
+   * `mimo-v2.5-free` (402 payment_required).
+   *
+   * ⚠️ DIPENDE DA UN CANALE TELEGRAM. L'accesso richiede di essere iscritti a
+   * un canale e di aver ricollegato l'account: se un giorno esci, o loro lo
+   * chiudono, la chiave smette di funzionare. Non lo sapresti da un avviso, lo
+   * vedresti dai post che non escono — per questo sta secondo e non primo, e
+   * per questo sotto c'è ancora chi lo sostituisce.
+   */
+  {
+    nome: 'nara/minimax-m3-free',
+    url: 'https://router.bynara.id/v1/chat/completions',
+    chiaveEnv: 'NARA_API_KEY',
+    modello: 'minimax-m3-free',
+    costa: false,
+  },
+  /**
+   * Z.AI, terzo — per velocità, non per qualità.
    *
    * Il piano è già pagato a forfait, quindi qui non si consuma a token: sulla
    * carta dovrebbe stare più in alto. Ma misurato il 27/08/2026 sullo stesso
