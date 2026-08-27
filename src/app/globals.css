@@ -1,0 +1,9 @@
+/* Solo Astryx: niente Tailwind.
+   In gbp-autoposter i due convivono, ma al prezzo di un ordine di @layer delicato —
+   gli import "nudi" di Astryx stanno fuori da ogni layer e quindi battono sempre le
+   utility, indipendentemente dalla specificita'. Qui quel problema non esiste perche'
+   lo styling passa solo dalle props dei componenti, come vuole il design system. */
+
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+@import '@astryxdesign/theme-neutral/theme.css';

@@ -1,0 +1,55 @@
+# Il router — va su Oracle, accanto ai container WAHA.
+#
+# ⚠️ SI AVVIA CON `network_mode: host`. NON È UN DETTAGLIO.
+#
+# Il router deve fare due cose che un container in rete propria non può fare:
+#   1. mettersi in ascolto su 172.17.0.1 (l'interfaccia docker0 dell'HOST), che
+#      è il modo in cui resta raggiungibile dai container WAHA e mai da internet;
+#   2. chiamare WAHA su 127.0.0.1:3006, che è dove i container WAHA pubblicano.
+#      Dentro una rete Docker propria, `127.0.0.1` è il loopback DEL CONTAINER:
+#      non è "quasi giusto", è un altro computer. Si scaricherebbe niente e non
+#      si capirebbe perché.
+#
+# Con `network_mode: host` il container vede la rete dell'host così com'è, e
+# tutto quello che era vero per il processo PM2 di prima resta vero. La difesa
+# (mai esposto a internet) è identica: è l'indirizzo di ascolto a garantirla.
+#
+# ARM: Oracle è aarch64. `node:22-alpine` è multi-arch, quindi l'immagine si
+# costruisce SUL SERVER e non serve buildx. Costruirla su Windows e spedirla
+# darebbe un binario x86 che sull'ARM non parte.
+
+FROM node:22-alpine
+
+WORKDIR /app
+
+# ⚠️ Le dipendenze del ROUTER, non quelle del progetto.
+#
+# `router/package.json` dichiara una sola cosa: `pg`. È tutto quello che il
+# router importa oltre ai moduli di Node.
+#
+# Copiare qui il package.json principale sembra la scelta ovvia ed è sbagliata:
+# `npm ci --omit=dev` installerebbe comunque tutte le dipendenze di PRODUZIONE
+# della dashboard — Next, React, Astryx, la sua CLI — che il router non tocca
+# nemmeno. Misurato: 1,45 GB invece di ~150 MB. Su ARM, in fondo a una
+# connessione, è la differenza fra un deploy e un'attesa.
+#
+# Finisce in /app/package.json (non in /app/router/) perché Node cerca
+# node_modules risalendo dalle cartelle: `src/lib/db.ts` deve poter trovare `pg`.
+COPY router/package.json ./package.json
+RUN npm install --omit=dev --no-audit --no-fund
+
+# Solo quello che il router carica davvero: il suo codice e le librerie
+# condivise con la dashboard. Il resto di src/ (le pagine, i componenti) non
+# c'entra e non deve stare in questa immagine.
+COPY router ./router
+COPY src/lib ./src/lib
+
+# Non gira da root: se qualcosa va storto, che vada storto senza privilegi.
+USER node
+
+# Vive di variabili d'ambiente, che arrivano dal compose. Qui solo il default
+# che non è un segreto.
+ENV NODE_ENV=production
+
+# Il --env-file non serve: in un container le variabili le passa Docker.
+CMD ["node", "--experimental-strip-types", "router/index.ts"]

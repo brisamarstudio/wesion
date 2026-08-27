@@ -1,0 +1,13 @@
+node_modules/
+.next/
+dist/
+
+# Cache dei compilatori: si rigenera, e in diff fa solo rumore.
+*.tsbuildinfo
+
+# ⚠️ I segreti non entrano qui. Il modello sta in .env.esempio, che è
+# committato apposta: serve a sapere QUALI variabili servono senza sapere
+# quanto valgono.
+.env
+.env.local
+.env.*.local

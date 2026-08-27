@@ -1,0 +1,18 @@
+# Il contesto di build viene spedito INTERO al daemon Docker prima ancora che
+# il Dockerfile parta. Senza queste righe si spediscono node_modules e .next,
+# che su Oracle (ARM, in fondo a una connessione) sono minuti buttati a ogni build.
+node_modules
+.next
+dist
+
+# I segreti non entrano in un'immagine. Le variabili le passa il compose a
+# runtime: un .env copiato dentro resta nei livelli dell'immagine per sempre,
+# anche se una riga dopo lo cancelli.
+.env
+.env.*
+
+.git
+.gitignore
+*.md
+Dockerfile*
+docker-compose*.yml

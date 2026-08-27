@@ -1,0 +1,9 @@
+{
+  "name": "wesion-router",
+  "private": true,
+  "type": "module",
+  "_perche": "Il router usa 'node:http' e 'pg', e basta. Senza questo file l'immagine si porterebbe dietro Next, React, Astryx e la sua CLI, che stanno nelle dependencies della dashboard: misurato, sono 1,45 GB invece di 150 MB. Su ARM, in fondo a una connessione, e' la differenza fra un deploy e un'attesa. La versione di pg va tenuta uguale a quella del package.json principale: e' lo stesso pool, con le stesse regole di SSL.",
+  "dependencies": {
+    "pg": "^8.23.0"
+  }
+}
