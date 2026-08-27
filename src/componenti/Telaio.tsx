@@ -23,6 +23,7 @@ import type { ReactNode } from 'react';
 const VOCI = [
   { href: '/campagne', label: 'Campagne' },
   { href: '/aziende', label: 'Aziende' },
+  { href: '/calendario', label: 'Calendario' },
   { href: '/piano', label: 'Piano' },
   { href: '/bozze', label: 'Bozze' },
   { href: '/spie', label: 'Spie' },

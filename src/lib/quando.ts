@@ -74,3 +74,27 @@ export function daQuando(dal: string | null, adesso: number): string | null {
   const giorni = Math.round(ore / 24);
   return `accesa da ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`;
 }
+
+/**
+ * Il giorno di un istante, in ora italiana, come AAAA-MM-GG.
+ *
+ * ⚠️ NASCE DA DUE BUG INSIEME, trovati il 27/08/2026 sul calendario, che
+ * facevano dire "questa settimana non esce niente" a una settimana piena.
+ *
+ * 1. `toISOString()` su una mezzanotte italiana restituisce il GIORNO PRIMA.
+ *    Il 14 dicembre alle 00:00 a Roma sono le 23:00 del 13 in UTC, quindi la
+ *    chiave del gruppo diventava "2026-12-13" e non combaciava con niente.
+ *
+ * 2. Le colonne timestamptz tornano da node-postgres come oggetti `Date`, non
+ *    come stringhe. `String(quellaData).slice(0,10)` dava "Tue Dec 15" invece
+ *    di "2026-12-15": due formati diversi confrontati fra loro, sempre falso.
+ *
+ * `en-CA` non e' un vezzo: e' l'unico locale comune che formata le date proprio
+ * come AAAA-MM-GG, che e' quello che serve per confrontarle come stringhe.
+ */
+export function giornoRoma(v: string | Date | null | undefined): string {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+}
