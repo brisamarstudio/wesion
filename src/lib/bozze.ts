@@ -27,6 +27,8 @@ export interface Bozza {
   avvisi: AvvisoTesto[];
   modello: string | null;
   scade_at: string | null;
+  /** Quando deve USCIRE (il piano). `scade_at` è l'opposto: entro quando. */
+  pubblica_at: string | null;
   approvata_da: string | null;
   approvata_via: string | null;
   approvata_at: string | null;
@@ -82,6 +84,28 @@ export function testoBozza(contenuto: Record<string, unknown>): string {
     const v = contenuto[chiave];
     if (typeof v === 'string' && v.trim()) return v;
   }
+
+  /**
+   * Uno slot del piano, che il testo non ce l'ha ancora.
+   *
+   * Si mostra il COMPITO invece del JSON: cosa deve fare il post e su quale
+   * fatto si regge. È esattamente quello che serve per rivedere un piano —
+   * la domanda qui è "questo slot ha senso?", non "questo testo è bello?",
+   * e il testo non esiste ancora.
+   */
+  if (typeof contenuto.angolo === 'string') {
+    return [
+      contenuto.titolo ? `${contenuto.titolo}` : null,
+      '',
+      `Cosa deve fare: ${contenuto.angolo}`,
+      contenuto.fatto ? `Si regge su (${contenuto.fonte ?? '—'}): ${contenuto.fatto}` : null,
+      '',
+      'Il testo non è ancora stato scritto.',
+    ]
+      .filter((r) => r !== null)
+      .join('\n');
+  }
+
   return JSON.stringify(contenuto, null, 2);
 }
 
@@ -135,7 +159,7 @@ export function scadenza(scade_at: string | null, adesso = Date.now()):
 export const SQL_BOZZE = `
   SELECT
     b.id, b.azienda_id, b.tipo, b.origine, b.stato, b.contenuto,
-    b.modello, b.scade_at, b.approvata_da, b.approvata_via, b.approvata_at,
+    b.modello, b.scade_at, b.pubblica_at, b.approvata_da, b.approvata_via, b.approvata_at,
     b.creata_at,
     a.nome  AS azienda,
     a.citta AS citta,

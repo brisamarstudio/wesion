@@ -270,6 +270,10 @@ export async function giroPubblicazioni(): Promise<EsitoPubblicazione[]> {
         AND (SELECT count(*) FROM wesion.pubblicazione p WHERE p.bozza_id = b.id) < $1
         -- Una bozza scaduta non si pubblica in ritardo: si lascia dov'è.
         AND (b.scade_at IS NULL OR b.scade_at > now())
+        -- ...e una programmata non si pubblica in anticipo. Sono due vincoli
+        -- opposti su due colonne diverse apposta: un post del piano approvato
+        -- a settembre deve uscire il giorno suo, non subito.
+        AND (b.pubblica_at IS NULL OR b.pubblica_at <= now())
       ORDER BY b.approvata_at NULLS FIRST
       LIMIT 20`,
     [MAX_TENTATIVI]

@@ -340,6 +340,11 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                   </MetadataListItem>
                 ) : null}
                 <MetadataListItem label="Creata">{quandoBreve(selezionata.creata_at)}</MetadataListItem>
+                {/* Il piano programma: qui la data che conta è quando ESCE,
+                    non entro quando si decide. Sono due colonne diverse. */}
+                {selezionata.pubblica_at ? (
+                  <MetadataListItem label="Esce il">{quandoBreve(selezionata.pubblica_at)}</MetadataListItem>
+                ) : null}
                 {scade ? <MetadataListItem label="Scadenza">{scade.testo}</MetadataListItem> : null}
                 {selezionata.approvata_at ? (
                   <MetadataListItem label="Approvata">

@@ -258,3 +258,44 @@ CREATE TABLE IF NOT EXISTS wesion.utente (
   creato_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   ultimo_accesso_at TIMESTAMPTZ
 );
+
+-- ============ AGGIUNTE DEL 27/08/2026 — il piano editoriale ============
+-- Innesto di gbp-autoposter. La sua `SchedaFatti` era un JSONB unico; qui la
+-- stessa materia sta gia' divisa fra `voce` (il tono e i confini) e `fatto` (le
+-- cose vere, una riga ciascuna, con provenienza e scadenza). Mancavano due
+-- informazioni che la scheda aveva e qui non avevano casa.
+
+-- Il settore sceglie pilastri e ricorrenze pertinenti. Esplicito e NON dedotto
+-- dalla categoria di Google: indovinare il settore da "Da Andrea" vuol dire
+-- sbagliarlo, e l'errore si propaga su tutto il piano del mese.
+ALTER TABLE wesion.azienda
+  ADD COLUMN IF NOT EXISTS settore TEXT[] NOT NULL DEFAULT '{}';
+
+-- A chi parla: "famiglie, ristoratori del pavese". Sta in `voce` e non fra i
+-- fatti perche' non e' una cosa vera sull'azienda, e' un'istruzione su come
+-- scrivere — come il tono.
+ALTER TABLE wesion.voce
+  ADD COLUMN IF NOT EXISTS pubblico TEXT;
+
+-- Il piano crea bozze VUOTE, e ne crea molte. Senza questo indice la query che
+-- chiede "cosa c'e' da scrivere" scorre tutta la tabella a ogni giro.
+CREATE INDEX IF NOT EXISTS idx_bozza_da_scrivere ON wesion.bozza (azienda_id, creata_at)
+  WHERE stato = 'vuota';
+
+-- ⚠️ Correzione del 27/08/2026, stesso giorno dell'errore.
+--
+-- Il piano scriveva la data di pubblicazione in `scade_at`, ma quella colonna
+-- vuol dire "dopo questo istante NON pubblicare" — e il giro del router
+-- pubblica tutto quello che e' approvato e non ancora scaduto. Un post
+-- programmato per Natale e approvato a settembre sarebbe uscito a settembre.
+-- Nessun errore, nessun log: il cliente se ne accorge guardando la sua scheda.
+--
+-- Due colonne, due significati opposti, nessuna ambiguita':
+--   pubblica_at  non prima di    (il piano: esci il 25 dicembre)
+--   scade_at     non dopo        (il menu: un SI tardivo non pubblica ieri)
+ALTER TABLE wesion.bozza
+  ADD COLUMN IF NOT EXISTS pubblica_at TIMESTAMPTZ;
+
+-- Il giro del router chiede "cosa e' maturo adesso": deve costare poco.
+CREATE INDEX IF NOT EXISTS idx_bozza_da_pubblicare ON wesion.bozza (pubblica_at)
+  WHERE stato = 'approvata';
