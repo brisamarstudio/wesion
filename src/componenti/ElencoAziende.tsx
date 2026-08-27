@@ -217,6 +217,33 @@ export function ElencoAziende({
 
   const filtriAttivi = [vista.categoria, vista.citta, vista.campagna, vista.sito].filter(Boolean).length;
 
+  /**
+   * Cosa scrivere sotto il nome, e cosa NO.
+   *
+   * ⚠️ Due regole, e tutte e due tolgono roba invece di aggiungerne.
+   *
+   * 1. Non si ripete quello che è già scritto nell'intestazione del gruppo.
+   *    Raggruppando per campagna «dentisti · abbiategrasso», scrivere «Dentista
+   *    · Abbiategrasso» sotto ogni riga è rumore che raddoppia l'altezza della
+   *    lista senza dire niente di nuovo.
+   *
+   * 2. LO STATO SI SCRIVE, non solo si colora. Il pallino ha il suo `label` per
+   *    chi usa uno screen reader, ma chi guarda e non distingue i colori vede
+   *    solo un puntino grigio: fra «contattata» e «cliente» non c'è differenza
+   *    leggibile. Si scrive solo quando serve — cioè quando NON è già implicito
+   *    nel filtro attivo, altrimenti è la stessa parola ripetuta venticinque
+   *    volte.
+   */
+  function descrizione(a: Azienda): string | undefined {
+    const pezzi: string[] = [];
+
+    if (vista.stato === 'tutti') pezzi.push(ETICHETTA[a.stato] ?? a.stato);
+    if (gruppo !== 'categoria' && a.categoria) pezzi.push(a.categoria);
+    if (gruppo !== 'citta' && gruppo !== 'campagna' && a.citta) pezzi.push(a.citta);
+
+    return pezzi.join(' · ') || undefined;
+  }
+
   return (
     <Layout
       height="fill"
@@ -386,16 +413,7 @@ export function ElencoAziende({
                         <ListItem
                           key={a.id}
                           label={a.nome}
-                          description={
-                            /* Non si ripete nella riga quello che c'è già
-                               nell'intestazione del gruppo: è rumore che rende
-                               ogni riga più alta e la lista più lunga. */
-                            gruppo === 'categoria'
-                              ? a.citta || undefined
-                              : gruppo === 'citta'
-                                ? a.categoria || undefined
-                                : [a.categoria, a.citta].filter(Boolean).join(' · ') || undefined
-                          }
+                          description={descrizione(a)}
                           isSelected={a.id === selezionataId}
                           onClick={() => setSelezionataId(a.id)}
                           startContent={
