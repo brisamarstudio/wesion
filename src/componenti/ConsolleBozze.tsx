@@ -40,6 +40,7 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
+import { Selector } from '@astryxdesign/core/Selector';
 import {
   ETICHETTA_ORIGINE,
   ETICHETTA_STATO,
@@ -70,6 +71,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   // L'ora arriva dopo il montaggio: prima non si sa, e va bene cosi'.
   const adesso = useAdesso();
   const [filtro, setFiltro] = useState('da_decidere');
+  const [cliente, setCliente] = useState('tutti');
   const [cerca, setCerca] = useState('');
   const [selezionataId, setSelezionataId] = useState<number | null>(null);
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
@@ -79,14 +81,17 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const filtrate = useMemo(() => {
     const q = cerca.trim().toLowerCase();
     return bozze.filter((b) => {
+      if (cliente !== 'tutti' && String(b.azienda_id) !== cliente) return false;
       if (filtro === 'da_decidere' && !DECIDIBILI.has(b.stato)) return false;
       if (filtro === 'attenzione' && !b.avvisi.some((a) => a.gravita === 'grave')) return false;
+      if (filtro === 'pubblicate' && b.stato !== 'pubblicata') return false;
+      if (filtro === 'fallite' && !b.pubblicazioni.some((p) => p.esito === 'errore')) return false;
       if (!q) return true;
       return [b.azienda, b.citta, ETICHETTA_TIPO[b.tipo] ?? b.tipo, testoBozza(b.contenuto)]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [bozze, filtro, cerca]);
+  }, [bozze, filtro, cliente, cerca]);
 
   const selezionata = bozze.find((b) => b.id === selezionataId) ?? null;
 
@@ -135,7 +140,25 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
     router.refresh();
   }
 
-  const daDecidere = bozze.filter((b) => DECIDIBILI.has(b.stato)).length;
+  /**
+   * I conteggi si fanno su TUTTE le bozze, non su quelle filtrate.
+   *
+   * Servono a decidere dove guardare: un filtro che dice "0" mentre stai
+   * guardando altro e' un'informazione, un filtro che dice "0" perche' lo stai
+   * gia' escludendo non e' niente.
+   */
+  const conta = {
+    daDecidere: bozze.filter((b) => DECIDIBILI.has(b.stato)).length,
+    conAvvisi: bozze.filter((b) => b.avvisi.some((a) => a.gravita === 'grave')).length,
+    pubblicate: bozze.filter((b) => b.stato === 'pubblicata').length,
+    fallite: bozze.filter((b) => b.pubblicazioni.some((p) => p.esito === 'errore')).length,
+  };
+  const daDecidere = conta.daDecidere;
+
+  /** I clienti che hanno almeno una bozza: gli altri non servono nel filtro. */
+  const clienti = [...new Map(bozze.map((b) => [String(b.azienda_id), b.azienda])).entries()]
+    .map(([id, nome]) => ({ id, nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
     <Layout
@@ -154,16 +177,27 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
         <LayoutContent padding={0}>
           <VStack gap={0}>
             <VStack padding={3} gap={3}>
-              <SegmentedControl
-                label="Cosa mostrare"
-                value={filtro}
-                onChange={setFiltro}
-                size="sm"
-              >
-                <SegmentedControlItem value="da_decidere" label="Da decidere" />
-                <SegmentedControlItem value="attenzione" label="Con avvisi" />
-                <SegmentedControlItem value="tutte" label="Tutte" />
+              <SegmentedControl label="Cosa mostrare" value={filtro} onChange={setFiltro} size="sm">
+                <SegmentedControlItem value="da_decidere" label={`Da decidere (${conta.daDecidere})`} />
+                <SegmentedControlItem value="attenzione" label={`Con avvisi (${conta.conAvvisi})`} />
+                <SegmentedControlItem value="pubblicate" label={`Pubblicate (${conta.pubblicate})`} />
+                <SegmentedControlItem value="fallite" label={`Fallite (${conta.fallite})`} />
+                <SegmentedControlItem value="tutte" label={`Tutte (${bozze.length})`} />
               </SegmentedControl>
+
+              {clienti.length > 1 ? (
+                <Selector
+                  label="Cliente"
+                  value={cliente}
+                  onChange={setCliente}
+                  size="sm"
+                  hasSearch={clienti.length > 8}
+                  options={[
+                    { value: 'tutti', label: `Tutti i clienti (${clienti.length})` },
+                    ...clienti.map((c) => ({ value: c.id, label: c.nome })),
+                  ]}
+                />
+              ) : null}
               <TextInput
                 label="Cerca"
                 isLabelHidden

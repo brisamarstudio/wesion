@@ -23,8 +23,7 @@
  */
 
 import { query } from './db';
-
-const MODELLO = process.env.OCR_MODEL || 'google/gemini-2.5-flash';
+import { generaJson } from './generatore';
 
 export interface EsitoAudit {
   score: number | null;
@@ -32,6 +31,8 @@ export interface EsitoAudit {
   hook: string | null;
   esito: 'ok' | 'errore';
   errore: string | null;
+  /** Chi l'ha scritto: i punteggi di modelli diversi non sono confrontabili. */
+  modello: string;
 }
 
 /**
@@ -74,30 +75,30 @@ export interface DatiAzienda {
 }
 
 /**
- * Il giudizio, chiesto al modello.
+ * Il giudizio, chiesto alla CATENA.
  *
- * `response_format: json_object` non basta da solo — i modelli lo rispettano
- * quasi sempre e ogni tanto imbustano il JSON in un blocco di codice. Da qui la
- * ripulitura prima di JSON.parse, che e' rimasta identica alle copie vecchie
- * perche' li' era stata gia' pagata.
+ * ⚠️ PRIMA ANDAVA DRITTO SU OPENROUTER, cioè sul fornitore a pagamento,
+ * saltando i tre gratuiti che stanno sopra. Con 46 lead da analizzare erano 46
+ * chiamate pagate per un lavoro che Groq fa gratis in un secondo e mezzo — e
+ * nessuno se ne sarebbe accorto finché non arrivava la fattura, perché
+ * funzionava benissimo.
+ *
+ * Era rimasto così perché l'audit è stato scritto prima della catena e nessuno
+ * l'ha ricollegato dopo. È la stessa malattia dei due punteggi discordanti che
+ * questo progetto cura: due strade per fare la stessa cosa, e quella vecchia
+ * che continua a girare da sola.
  */
+function eGiudizio(x: unknown): x is { score?: unknown; note?: unknown; hook?: unknown } {
+  return Boolean(x) && typeof x === 'object';
+}
+
 async function chiediGiudizio(dati: DatiAzienda, note: string): Promise<EsitoAudit> {
-  const chiave = process.env.OPENROUTER_API_KEY;
-  if (!chiave) {
-    return {
-      score: null,
-      note,
-      hook: null,
-      esito: 'errore',
-      errore: 'OPENROUTER_API_KEY mancante: la scansione tecnica è stata fatta, il giudizio no.',
-    };
-  }
+  const sistema =
+    "Sei l'esperto di consulenza web di MyWebby (www.mywebby.it). Valuti quanto urgentemente " +
+    "un'attività ha bisogno di un sito nuovo, e scrivi il messaggio con cui aprire il discorso. " +
+    'Rispondi solo con l’oggetto JSON richiesto, senza niente attorno.';
 
-  const prompt = `
-Sei l'esperto di consulenza web di MyWebby (www.mywebby.it).
-Devi analizzare una potenziale azienda cliente e generare un breve messaggio d'impatto (hook)
-per proporre la creazione di un nuovo sito web moderno, veloce e completo.
-
+  const utente = `
 Dati dell'azienda:
 - Nome: "${dati.nome}"
 - Categoria: "${dati.categoria || 'Attività commerciale'}"
@@ -106,50 +107,39 @@ Dati dell'azienda:
 - Esito della scansione tecnica: "${note}"
 
 Compiti:
-1. Assegna uno score da 1 a 100 che indica l'urgenza di un nuovo sito web
-   (es. 95 per chi non ha il sito o ha errori, 80 per chi ha un sito datato o non responsive).
-2. Fornisci 2 brevi righe di "note" sui punti deboli rilevati.
-3. Scrivi un "hook" (massimo 3 righe) in tono professionale, cordiale ed empatico, per aprire
-   una conversazione su WhatsApp o via email. Personalizzato, con una soluzione concreta
-   (sito responsive, menù o prenotazioni online, velocità). Niente spam, niente toni da
-   marketer aggressivo.
+1. "score" da 1 a 100: quanto urge un sito nuovo. 95 per chi non ce l'ha o ha errori,
+   80 per chi ha un sito datato o non leggibile da telefono, 40 per chi sta già bene.
+2. "note": due righe sui punti deboli rilevati, concrete, senza gergo.
+3. "hook": massimo 3 righe per aprire una conversazione su WhatsApp o via email. Tono
+   professionale, cordiale, mai da marketer aggressivo. Personalizzato, con una soluzione
+   concreta (sito leggibile da telefono, menù o prenotazioni online, velocità).
+   Niente prezzi, niente promesse di risultati, niente superlativi.
 
-Rispondi SOLO con un oggetto JSON valido:
+   ⚠️ MAI SEGNAPOSTO. Niente [Nome], [Città], [inserire qui] o simili: questo testo viene
+   letto al telefono o incollato in una chat così com'è, e "sono parentesi quadra Nome"
+   è esattamente la figura che fa chiudere la chiamata. Se non sai una cosa, non nominarla:
+   si firma "MyWebby" e basta, senza nome proprio.
+
+Rispondi SOLO con:
 {"score": 90, "note": "…", "hook": "…"}
 `.trim();
 
   try {
-    const risposta = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${chiave}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODELLO,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
-
-    if (!risposta.ok) throw new Error(`OpenRouter HTTP ${risposta.status}`);
-
-    const dato = await risposta.json();
-    const grezzo = dato?.choices?.[0]?.message?.content || '{}';
-    const letto = JSON.parse(String(grezzo).replace(/```json/g, '').replace(/```/g, '').trim());
-
-    const score = Number(letto.score);
+    const esito = await generaJson(sistema, utente, eGiudizio);
+    const score = Number(esito.dato.score);
     return {
-      // Uno score fuori scala e' un modello che ha sbagliato, non un giudizio
+      // Uno score fuori scala è un modello che ha sbagliato, non un giudizio
       // basso: si scarta invece di salvarlo storto.
       score: Number.isFinite(score) && score >= 0 && score <= 100 ? Math.round(score) : null,
-      note: String(letto.note || note).trim(),
-      hook: String(letto.hook || '').trim() || null,
+      note: String(esito.dato.note ?? note).trim() || note,
+      hook: String(esito.dato.hook ?? '').trim() || null,
       esito: 'ok',
       errore: null,
+      modello: esito.modello,
     };
   } catch (errore: unknown) {
     const motivo = errore instanceof Error ? errore.message : String(errore);
-    return { score: null, note, hook: null, esito: 'errore', errore: motivo };
+    return { score: null, note, hook: null, esito: 'errore', errore: motivo, modello: 'nessuno' };
   }
 }
 
@@ -177,7 +167,7 @@ export async function analizzaAzienda(aziendaId: number): Promise<EsitoAudit> {
   await query(
     `INSERT INTO wesion.audit (azienda_id, modello, sito_letto, score, note, hook, esito, errore)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [aziendaId, MODELLO, azienda.sito, esito.score, esito.note, esito.hook, esito.esito, esito.errore]
+    [aziendaId, esito.modello, azienda.sito, esito.score, esito.note, esito.hook, esito.esito, esito.errore]
   );
 
   return esito;

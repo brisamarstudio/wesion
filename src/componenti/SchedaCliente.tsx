@@ -32,6 +32,7 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { Selector } from '@astryxdesign/core/Selector';
 import type { Scheda } from '@/lib/scheda';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
@@ -59,6 +60,8 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const [s, setS] = useState<Scheda>(iniziale);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
   const [salvato, setSalvato] = useState(true);
+  /** Le schede lette da Google, quando qualcuno le chiede. */
+  const [schede, setSchede] = useState<Array<{ accountId: string; locationId: string; titolo: string }> | null>(null);
 
   /** I fatti nel form sono testo per chiave, una voce per riga. */
   const [fatti, setFatti] = useState<Record<string, string>>(() => {
@@ -85,6 +88,33 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
           { tipo, attivo: acceso ?? mio?.attivo ?? true, config: { ...(mio?.config ?? {}), ...campi } },
         ],
       };
+    });
+  }
+
+  /**
+   * ⚠️ GLI ID SI LEGGONO DA GOOGLE, NON SI DIGITANO.
+   *
+   * Il playbook lo dice con parole precise: "si correggono solo rileggendoli da
+   * Importa da Google: non si deducono e non si scrivono a mano". E' la regola
+   * nata dal guasto del 21/07/2026 — id sbagliati che facevano rispondere 404 a
+   * Google per settimane, su clienti a caso.
+   *
+   * La prima versione di questa pagina li faceva scrivere a mano, cioe' era
+   * l'unica cosa capace di produrre esattamente quel guasto, mentre di fianco
+   * girava una spia costruita per accorgersene. Questo bottone e' la riparazione.
+   */
+  async function leggiDaGoogle() {
+    setMessaggio({ tipo: 'info', testo: 'Chiedo a Google le schede dell’agenzia…' });
+    const risposta = await fetch('/api/google/schede');
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Google non risponde.' });
+      return;
+    }
+    setSchede(esito.schede ?? []);
+    setMessaggio({
+      tipo: 'success',
+      testo: `${(esito.schede ?? []).length} schede lette. Scegli quella di ${s.nome}.`,
     });
   }
 
@@ -370,28 +400,64 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   />
                 </HStack>
                 {attivo('post_gbp') ? (
-                  <VStack gap={2}>
-                    <TextInput
-                      label="ID account Google"
-                      description="Solo cifre. Si rileggono da Google, non si deducono: un id sbagliato fallisce con 404 settimane dopo."
-                      value={config('post_gbp').gbp_account_id ?? ''}
-                      status={
-                        config('post_gbp').gbp_account_id && !/^[0-9]+$/.test(config('post_gbp').gbp_account_id)
-                          ? { type: 'error', message: 'Deve essere numerico.' }
-                          : undefined
-                      }
-                      onChange={(v) => cambiaServizio('post_gbp', { gbp_account_id: v })}
-                    />
-                    <TextInput
-                      label="ID scheda Google"
-                      value={config('post_gbp').gbp_location_id ?? ''}
-                      status={
-                        config('post_gbp').gbp_location_id && !/^[0-9]+$/.test(config('post_gbp').gbp_location_id)
-                          ? { type: 'error', message: 'Deve essere numerico.' }
-                          : undefined
-                      }
-                      onChange={(v) => cambiaServizio('post_gbp', { gbp_location_id: v })}
-                    />
+                  <VStack gap={3}>
+                    {/* ⚠️ Gli id NON si digitano. Vedi il commento su
+                        `leggiDaGoogle`: e' la regola del guasto del 21/07/2026,
+                        e la prima versione di questa pagina la violava. */}
+                    <HStack gap={2} align="center" wrap="wrap">
+                      <Button label="Leggi le schede da Google" size="sm" clickAction={leggiDaGoogle} />
+                      {config('post_gbp').gbp_account_id ? (
+                        <Text type="supporting">
+                          collegata: account {config('post_gbp').gbp_account_id} · scheda{' '}
+                          {config('post_gbp').gbp_location_id}
+                        </Text>
+                      ) : (
+                        <Text type="supporting">nessuna scheda collegata</Text>
+                      )}
+                    </HStack>
+
+                    {schede ? (
+                      schede.length ? (
+                        <Selector
+                          label="Quale scheda è questo cliente"
+                          hasSearch={schede.length > 8}
+                          placeholder="Scegli dall’elenco letto da Google"
+                          value={
+                            config('post_gbp').gbp_location_id
+                              ? `${config('post_gbp').gbp_account_id}/${config('post_gbp').gbp_location_id}`
+                              : ''
+                          }
+                          onChange={(v) => {
+                            const [account, location] = v.split('/');
+                            cambiaServizio('post_gbp', { gbp_account_id: account, gbp_location_id: location });
+                          }}
+                          options={schede.map((x) => ({
+                            value: `${x.accountId}/${x.locationId}`,
+                            label: x.titolo || `scheda ${x.locationId}`,
+                          }))}
+                        />
+                      ) : (
+                        <Banner
+                          status="warning"
+                          title="Google non ha restituito nessuna scheda"
+                          description="O l’agenzia non ne gestisce, o il token non ha i permessi giusti."
+                        />
+                      )
+                    ) : null}
+
+                    {/* Se in tabella c'e' gia' qualcosa di storto lo si vede
+                        subito: e' la stessa cosa che sorveglia la spia
+                        `id-google-malformati`, detta qui dove si puo' riparare. */}
+                    {(config('post_gbp').gbp_account_id &&
+                      !/^[0-9]+$/.test(config('post_gbp').gbp_account_id)) ||
+                    (config('post_gbp').gbp_location_id &&
+                      !/^[0-9]+$/.test(config('post_gbp').gbp_location_id)) ? (
+                      <Banner
+                        status="error"
+                        title="Gli id salvati non sono numerici"
+                        description="Così la pubblicazione fallirà con 404 al primo tentativo. Rileggili da Google."
+                      />
+                    ) : null}
                   </VStack>
                 ) : null}
               </VStack>
