@@ -23,7 +23,7 @@
 
 import { query } from '../src/lib/db.ts';
 import { pubblicaPost } from '../src/lib/gbp.ts';
-import { pubblicaMenu, type ConfigSito } from '../src/lib/sito.ts';
+import { pubblicaArticolo, pubblicaMenu, type ConfigSito } from '../src/lib/sito.ts';
 
 /**
  * Dopo tre tentativi falliti si smette di riprovare.
@@ -215,6 +215,44 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
         await segna(bozzaId, 'whatsapp', 'errore', { errore: motivo });
         destinazioni.push({ destinazione: 'whatsapp', esito: 'errore', errore: motivo });
       }
+    }
+  }
+
+  /**
+   * ── Il blog del cliente ──────────────────────────────────────────────────
+   *
+   * Stesso schema del menu: il SITO scrive sul proprio database, noi gli
+   * mandiamo una richiesta firmata col segreto suo. Wesion non ha (e non deve
+   * avere) le credenziali di quindici database di clienti.
+   *
+   * Vale anche per mywebby.it, che qui dentro e' un cliente come gli altri: il
+   * blog dell'agenzia si pubblica dalla stessa consolle e con lo stesso
+   * bottone. Non e' un vezzo di simmetria — e' il motivo per cui una modifica
+   * al percorso di pubblicazione la si prova per primi su di noi.
+   */
+  if (bozza.tipo === 'articolo') {
+    const config = servizio('blog') as ConfigSito | null;
+    if (config?.site_blog_url) {
+      try {
+        const esito = await pubblicaArticolo(config, {
+          titolo: String(bozza.contenuto.titolo ?? '').trim() || 'Senza titolo',
+          sommario: String(bozza.contenuto.sommario ?? '').trim() || undefined,
+          corpo: testo,
+          categoria: String(bozza.contenuto.categoria ?? '').trim() || undefined,
+          immagine: foto,
+          slug: String(bozza.contenuto.slug ?? `articolo-${bozzaId}`),
+        });
+        await segna(bozzaId, 'blog', 'ok', { risposta: esito.risposta, url: esito.url });
+        destinazioni.push({ destinazione: 'blog', esito: 'ok' });
+      } catch (errore: unknown) {
+        const motivo = errore instanceof Error ? errore.message : String(errore);
+        await segna(bozzaId, 'blog', 'errore', { errore: motivo });
+        destinazioni.push({ destinazione: 'blog', esito: 'errore', errore: motivo });
+      }
+    } else {
+      const motivo = 'il cliente non ha il servizio "blog" configurato con un site_blog_url';
+      await segna(bozzaId, 'blog', 'errore', { errore: motivo });
+      destinazioni.push({ destinazione: 'blog', esito: 'errore', errore: motivo });
     }
   }
 

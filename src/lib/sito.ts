@@ -19,19 +19,27 @@ export interface ConfigSito {
   site_menu_url?: string;
   site_secret?: string;
   site_menu_page?: string;
+  /** Il blog: un endpoint diverso, con un segreto diverso. Vedi sotto. */
+  site_blog_url?: string;
+  site_blog_secret?: string;
+  site_blog_page?: string;
 }
 
-async function chiama(config: ConfigSito, corpo: unknown): Promise<Record<string, unknown>> {
-  if (!config.site_menu_url) throw new Error('il servizio non ha site_menu_url configurato');
+async function chiama(
+  url: string | undefined,
+  intestazione: string,
+  segreto: string | undefined,
+  corpo: unknown
+): Promise<Record<string, unknown>> {
+  if (!url) throw new Error('manca l’indirizzo a cui mandare la richiesta');
 
-  const risposta = await fetch(config.site_menu_url, {
+  const risposta = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-menu-secret': config.site_secret || '',
-    },
+    headers: { 'Content-Type': 'application/json', [intestazione]: segreto || '' },
     body: JSON.stringify(corpo),
-    signal: AbortSignal.timeout(20000),
+    // Un articolo puo' essere lungo e il sito puo' doverlo indicizzare: piu'
+    // largo del menu, che sono venti righe.
+    signal: AbortSignal.timeout(30000),
   });
 
   const testo = await risposta.text();
@@ -41,7 +49,58 @@ async function chiama(config: ConfigSito, corpo: unknown): Promise<Record<string
 
 /** Sostituisce il menù pubblicato sul sito. */
 export async function pubblicaMenu(config: ConfigSito, piatti: unknown[]): Promise<Record<string, unknown>> {
-  return chiama(config, { action: 'replace', items: piatti });
+  return chiama(config.site_menu_url, 'x-menu-secret', config.site_secret, { action: 'replace', items: piatti });
+}
+
+export interface ArticoloDaPubblicare {
+  /** Il titolo che si legge nella scheda dell'articolo. */
+  titolo: string;
+  /** Due righe di riassunto sotto il titolo, nell'elenco. */
+  sommario?: string;
+  /** Il corpo, in testo semplice con gli a capo. Niente markdown. */
+  corpo: string;
+  /** Etichetta di categoria: «Ristorazione», «SEO», «Prezzi & Budget». */
+  categoria?: string;
+  /** URL pubblica dell'immagine di copertina, se c'è. */
+  immagine?: string | null;
+  /**
+   * Lo slug con cui l'articolo vive nell'URL.
+   *
+   * Lo manda WESION e non lo inventa il sito, per una ragione precisa: e' la
+   * chiave con cui un aggiornamento riconosce l'articolo gia' pubblicato invece
+   * di crearne un secondo identico. Se lo generasse il sito da titolo, cambiare
+   * una parola nel titolo creerebbe un doppione e il vecchio resterebbe online.
+   */
+  slug: string;
+}
+
+/**
+ * Pubblica un articolo sul blog del cliente.
+ *
+ * ⚠️ STESSO SCHEMA DEL MENÙ, ENDPOINT E SEGRETO DIVERSI. Non si riusa
+ * `site_menu_url` con un'azione in più: sono due superfici con rischi diversi.
+ * Il menù cambia venti righe di una pagina, un articolo crea contenuto
+ * indicizzabile con un URL suo. Chi ha il segreto del menù non deve poter
+ * scrivere articoli sul blog — e su un sito che il menù non ce l'ha proprio,
+ * come mywebby.it, l'endpoint del menù non esiste nemmeno.
+ *
+ * L'IDEMPOTENZA E' DEL SITO. Si manda sempre lo stesso `slug`: se quell'articolo
+ * c'e' gia', il sito lo aggiorna; se non c'e', lo crea. Cosi' ripubblicare dopo
+ * una correzione non lascia due versioni online, ed e' lo stesso motivo per cui
+ * lo slug lo decide chi pubblica e non chi riceve.
+ */
+export async function pubblicaArticolo(
+  config: ConfigSito,
+  articolo: ArticoloDaPubblicare
+): Promise<{ url: string | null; risposta: Record<string, unknown> }> {
+  const risposta = await chiama(config.site_blog_url, 'x-blog-secret', config.site_blog_secret, {
+    action: 'pubblica',
+    articolo,
+  });
+  // Il sito risponde con l'URL vero dell'articolo: e' quello che finisce in
+  // `pubblicazione.url_risultato`, cosi' dalla consolle ci si clicca sopra.
+  const url = (risposta.url ?? risposta.link ?? null) as string | null;
+  return { url, risposta };
 }
 
 /**
@@ -53,6 +112,6 @@ export async function pubblicaMenu(config: ConfigSito, piatti: unknown[]): Promi
  * giorno tale", non a ricostruire la sua pagina.
  */
 export async function ripristinaMenu(config: ConfigSito): Promise<{ ripristinato: boolean }> {
-  const esito = await chiama(config, { action: 'restore' });
+  const esito = await chiama(config.site_menu_url, 'x-menu-secret', config.site_secret, { action: 'restore' });
   return { ripristinato: Boolean(esito.restored ?? esito.ripristinato) };
 }

@@ -396,6 +396,40 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 ) : null}
               </VStack>
 
+              <VStack gap={2}>
+                <HStack gap={2} align="center">
+                  <Button
+                    label={attivo('blog') ? 'Blog: attivo' : 'Blog: spento'}
+                    size="sm"
+                    variant={attivo('blog') ? 'primary' : 'secondary'}
+                    onClick={() => cambiaServizio('blog', {}, !attivo('blog'))}
+                  />
+                </HStack>
+                {attivo('blog') ? (
+                  <VStack gap={2}>
+                    <TextInput
+                      label="URL a cui mandare gli articoli"
+                      description="Un endpoint sul sito del cliente. Il sito scrive sul proprio database: noi non abbiamo le sue credenziali, e non dobbiamo averle."
+                      placeholder="https://ilcliente.it/api/blog"
+                      value={config('blog').site_blog_url ?? ''}
+                      onChange={(v) => cambiaServizio('blog', { site_blog_url: v })}
+                    />
+                    <TextInput
+                      label="Segreto del blog"
+                      description="Diverso da quello del menù, apposta: chi può cambiare venti righe di menù non deve poter pubblicare articoli indicizzabili."
+                      value={config('blog').site_blog_secret ?? ''}
+                      onChange={(v) => cambiaServizio('blog', { site_blog_secret: v })}
+                    />
+                    <TextInput
+                      label="Pagina del blog"
+                      placeholder="https://ilcliente.it/blog"
+                      value={config('blog').site_blog_page ?? ''}
+                      onChange={(v) => cambiaServizio('blog', { site_blog_page: v })}
+                    />
+                  </VStack>
+                ) : null}
+              </VStack>
+
               <VStack gap={1}>
                 <Text type="supporting">Chi può dare comandi al router</Text>
                 {s.titolari.length ? (

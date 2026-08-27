@@ -15,6 +15,23 @@ piano -> testi -> approvazione -> pubblicazione. **Manca il collaudo vero**, che
 non e' mai stato fatto tutto insieme: fino a qui si e' provato pezzo per pezzo
 mentre si costruiva, che e' un altro sport.
 
+### Come si pubblica sul sito di un cliente
+
+Wesion **non scrive mai** sul database di un sito. Gli manda un POST firmato col segreto
+di quel cliente, e il sito scrive sul proprio. Due endpoint distinti con due segreti
+distinti — `x-menu-secret` per il menu, `x-blog-secret` per il blog — perche' sono
+superfici con rischi diversi: il menu cambia venti righe che c'erano gia', un articolo
+crea contenuto indicizzabile con un URL suo.
+
+Il contratto completo, con l'endpoint Astro da incollare e le tre regole che il sito deve
+rispettare, sta in **`CONTRATTO-SITO.md`**. Le tre in breve: lo slug lo manda Wesion (se lo
+genera il sito dal titolo, correggere una parola crea un doppione e il vecchio resta
+online); pubblicare due volte deve AGGIORNARE, non duplicare; il segreto si confronta a
+tempo costante.
+
+mywebby.it qui dentro e' un cliente come gli altri, e non e' un vezzo di simmetria: e' il
+motivo per cui una modifica al percorso di pubblicazione la si prova per primi su di noi.
+
 ### Il collaudo da fare, in ordine
 
 1. `PASSWORD='...' npm run utente -- --email tu@mywebby.it --nome Mariano`
