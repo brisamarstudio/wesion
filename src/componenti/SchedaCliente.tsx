@@ -423,12 +423,18 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 </Text>
               </VStack>
               <HStack gap={2} wrap="wrap">
+                {/* ⚠️ PORTA ALL'ANTEPRIMA, non crea niente.
+                    Prima questo bottone faceva direttamente il POST, e il piano
+                    lo si scopriva dopo guardando diciotto righe gia' fatte —
+                    che e' esattamente cio' che la separazione fra piano e
+                    scrittura serve a evitare. Guardare non costa niente: che
+                    sia la strada piu' comoda. */}
                 <Button
                   label="Costruisci il piano del mese"
                   variant="primary"
                   isDisabled={!salvato}
                   tooltip={salvato ? undefined : 'Salva prima la scheda: il piano nasce da questi fatti.'}
-                  clickAction={() => chiama(`/api/aziende/${s.id}/piano`, 'Costruisco il piano')}
+                  onClick={() => router.push(`/piano?cliente=${s.id}`)}
                 />
                 <Button
                   label="Scrivi i testi mancanti"

@@ -87,15 +87,18 @@ fra due database.
 ## 3. Come si accende
 
 ```
-npm run dev        →  http://localhost:3000
+npm run dev        →  http://localhost:3015
 npm run db:schema  →  applica db/schema.sql (idempotente)
 npm run db:migra   →  travasa leadgen.* -> wesion.* (idempotente)
 npm run db:conta   →  CONFRONTA i numeri fra i due schemi
 npm run astryx -- component <Nome>   →  documentazione del design system
 ```
 
-⚠️ La porta 3000 è occupata anche da `gbp-autoposter` e dal gestionale clienti:
-finché convivono, uno dei tre va spostato.
+⚠️ **Wesion sta sulla 3015, non sulla 3000.** La 3000 è di `gbp-autoposter` e del
+gestionale clienti, che girano ancora — Wesion è l'ultimo arrivato ed è lui che si
+sposta. Non è pignoleria: il 27/08/2026 mezz'ora di prove è finita contro
+l'applicazione sbagliata, perché rispondeva sulla porta attesa e *sembrava* la nostra.
+Il sintomo era un redirect a `/login` invece che a `/entra`.
 
 ## 4. Il database
 
