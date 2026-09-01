@@ -48,6 +48,7 @@ import {
   ETICHETTA_STATO,
   ETICHETTA_TIPO,
   testoBozza,
+  titoloBozza,
   vociMenu,
   type Bozza,
 } from '@/lib/bozze';
@@ -123,7 +124,11 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
       if (filtro === 'pubblicate' && b.stato !== 'pubblicata') return false;
       if (filtro === 'fallite' && !b.pubblicazioni.some((p) => p.esito === 'errore')) return false;
       if (!q) return true;
-      return [b.azienda, b.citta, ETICHETTA_TIPO[b.tipo] ?? b.tipo, testoBozza(b.contenuto)]
+      // Il titolo va cercato a parte: `testoBozza` restituisce il CORPO, e per
+      // un post di Google il titolo non ci sta dentro. Cercare "problema" non
+      // trovava "Un problema tipico" — cioe' la ricerca non trovava le righe
+      // con il nome che si legge nella lista.
+      return [b.azienda, b.citta, ETICHETTA_TIPO[b.tipo] ?? b.tipo, titoloBozza(b.contenuto, b.tipo), testoBozza(b.contenuto)]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
@@ -300,9 +305,15 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                   return (
                     <ListItem
                       key={b.id}
-                      label={b.azienda}
+                      /* ⚠️ IL TITOLO, NON IL NOME DEL CLIENTE (01/09/2026).
+                         Con label=azienda un piano del mese dava diciassette
+                         righe identiche: stesso cliente, stesso tipo, stessa
+                         ora di creazione (nascono tutte insieme). Il cliente
+                         resta leggibile nella descrizione — e la colonna con
+                         cui si sceglie dev'essere quella che cambia. */
+                      label={titoloBozza(b.contenuto, b.tipo)}
                       description={
-                        [ETICHETTA_TIPO[b.tipo] ?? b.tipo, ETICHETTA_ORIGINE[b.origine] ?? b.origine]
+                        [b.azienda, ETICHETTA_TIPO[b.tipo] ?? b.tipo, ETICHETTA_ORIGINE[b.origine] ?? b.origine]
                           .filter(Boolean)
                           .join(' · ')
                       }
@@ -332,7 +343,21 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                           ) : s ? (
                             <Text type="supporting">{s.testo}</Text>
                           ) : null}
-                          <Text type="supporting">{quandoBreve(b.creata_at)}</Text>
+                          {/* ⚠️ QUANDO ESCE, non quando e' stata creata. La data
+                              di creazione e' identica per tutto un piano del
+                              mese e non serve a decidere niente; quella di
+                              uscita dice se questa riga tocca a oggi o fra tre
+                              settimane — che e' l'unica domanda che si fa chi
+                              guarda questa colonna. */}
+                          {b.pubblica_at ? (
+                            adesso !== null && new Date(b.pubblica_at).getTime() <= adesso ? (
+                              <Badge variant="warning" label="tocca a oggi" />
+                            ) : (
+                              <Text type="supporting">esce il {quandoBreve(b.pubblica_at)}</Text>
+                            )
+                          ) : (
+                            <Text type="supporting">esce subito</Text>
+                          )}
                         </HStack>
                       }
                     />

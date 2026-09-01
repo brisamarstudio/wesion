@@ -76,6 +76,31 @@ export const ETICHETTA_STATO: Record<string, string> = {
   scaduta: 'Scaduta',
 };
 
+/**
+ * Come si chiama una bozza in un elenco.
+ *
+ * ⚠️ NASCE DA UNA LISTA ILLEGGIBILE (01/09/2026). La consolle mostrava per ogni
+ * riga il nome del cliente, il tipo e la data di CREAZIONE: su un piano del
+ * mese, che nasce tutto in un colpo su un cliente solo, vuol dire diciassette
+ * righe identiche al pixel. Per trovarne una bisognava aprirle tutte.
+ *
+ * Il titolo c'era da sempre dentro `contenuto`, semplicemente non lo guardava
+ * nessuno. Il menù del giorno un titolo non ce l'ha — li' la prima riga del
+ * testo E' il titolo — quindi si ripiega su quella invece di scrivere
+ * "Menù del giorno" diciassette volte.
+ */
+export function titoloBozza(contenuto: Record<string, unknown>, tipo: string): string {
+  const t = contenuto?.titolo;
+  if (typeof t === 'string' && t.trim()) return t.trim();
+
+  const testo = testoBozza(contenuto).trim();
+  if (testo) {
+    const primaRiga = testo.split('\n')[0].trim();
+    return primaRiga.length > 70 ? primaRiga.slice(0, 70) + '…' : primaRiga;
+  }
+  return ETICHETTA_TIPO[tipo] ?? tipo;
+}
+
 /** Dove può finire una pubblicazione — `wesion.pubblicazione.destinazione`. */
 export const ETICHETTA_DESTINAZIONE: Record<string, string> = {
   sito: 'Sito',
