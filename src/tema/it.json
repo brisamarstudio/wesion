@@ -1,0 +1,222 @@
+{
+  "@astryx._perche": {
+    "defaultMessage": "",
+    "description": "JSON non ha commenti e il tipo Catalog accetta solo chiavi che cominciano per @astryx., quindi il perche' vive qui: Astryx spedisce solo inglese e francese, e le sue stringhe di serie (Choose file, Search…, Close) comparivano in mezzo a un programma tutto in italiano. Segnalato dall'uso, 01/09/2026: «poi scrivi in ITALIANO choose file». Le chiavi che mancano ricadono sull'inglese senza rompere niente: si traduce quello che si vede, e si aggiunge il resto quando salta fuori. PowerSearch non e' tradotto apposta, Wesion non lo usa. Questa chiave non la cerca nessun componente."
+  },
+  "@astryx.pagination.label": {
+    "defaultMessage": "Impaginazione"
+  },
+  "@astryx.pagination.previous": {
+    "defaultMessage": "Vai alla pagina precedente"
+  },
+  "@astryx.pagination.next": {
+    "defaultMessage": "Vai alla pagina successiva"
+  },
+  "@astryx.pagination.goToPage": {
+    "defaultMessage": "Vai alla pagina {page, number}"
+  },
+  "@astryx.pagination.pageIndicators": {
+    "defaultMessage": "Indicatori di pagina"
+  },
+  "@astryx.pagination.itemsPerPage": {
+    "defaultMessage": "Righe per pagina"
+  },
+  "@astryx.pagination.count": {
+    "defaultMessage": "{from, number}–{to, number} di {total, number}"
+  },
+  "@astryx.pagination.pageOfTotal": {
+    "defaultMessage": "Pagina {current, number} di {total, number}"
+  },
+  "@astryx.pagination.pageAnnounce": {
+    "defaultMessage": "Pagina {current, number}"
+  },
+  "@astryx.alertDialog.cancel": {
+    "defaultMessage": "Annulla"
+  },
+  "@astryx.appShell.mobileNavigation": {
+    "defaultMessage": "Navigazione da telefono"
+  },
+  "@astryx.banner.dismiss": {
+    "defaultMessage": "Chiudi"
+  },
+  "@astryx.calendar.previousMonth": {
+    "defaultMessage": "Mese precedente"
+  },
+  "@astryx.calendar.nextMonth": {
+    "defaultMessage": "Mese successivo"
+  },
+  "@astryx.checkboxList.item.checkbox": {
+    "defaultMessage": "Casella"
+  },
+  "@astryx.commandPalette.emptySearch": {
+    "defaultMessage": "Nessun risultato"
+  },
+  "@astryx.commandPalette.emptyBootstrap": {
+    "defaultMessage": "Scrivi per cercare"
+  },
+  "@astryx.dateRangeInput.presetDateRanges": {
+    "defaultMessage": "Periodi pronti"
+  },
+  "@astryx.dateTimeInput.timePlaceholder": {
+    "defaultMessage": "Scegli un orario"
+  },
+  "@astryx.dialog.close": {
+    "defaultMessage": "Chiudi"
+  },
+  "@astryx.dropdownMenu.label": {
+    "defaultMessage": "Menu"
+  },
+  "@astryx.lightbox.close": {
+    "defaultMessage": "Chiudi"
+  },
+  "@astryx.lightbox.previous": {
+    "defaultMessage": "Precedente"
+  },
+  "@astryx.lightbox.next": {
+    "defaultMessage": "Successivo"
+  },
+  "@astryx.lightbox.mediaViewer": {
+    "defaultMessage": "Visualizzatore"
+  },
+  "@astryx.mobileNav.closeNavigation": {
+    "defaultMessage": "Chiudi il menu"
+  },
+  "@astryx.mobileNav.navigation": {
+    "defaultMessage": "Navigazione"
+  },
+  "@astryx.multiSelector.selectAll": {
+    "defaultMessage": "Seleziona tutto"
+  },
+  "@astryx.multiSelector.searchPlaceholder": {
+    "defaultMessage": "Cerca…"
+  },
+  "@astryx.multiSelector.searchOptions": {
+    "defaultMessage": "Cerca fra le opzioni"
+  },
+  "@astryx.multiSelector.clearAll": {
+    "defaultMessage": "Svuota {label}"
+  },
+  "@astryx.popover.close": {
+    "defaultMessage": "Chiudi"
+  },
+  "@astryx.selector.searchPlaceholder": {
+    "defaultMessage": "Cerca…"
+  },
+  "@astryx.selector.searchOptions": {
+    "defaultMessage": "Cerca fra le opzioni"
+  },
+  "@astryx.selector.clearLabel": {
+    "defaultMessage": "Svuota {label}"
+  },
+  "@astryx.sideNav.label": {
+    "defaultMessage": "Menu laterale"
+  },
+  "@astryx.sideNav.resizeSidebar": {
+    "defaultMessage": "Ridimensiona il menu"
+  },
+  "@astryx.sideNav.heading.openMenu": {
+    "defaultMessage": "Apri il menu"
+  },
+  "@astryx.sideNavCollapseButton.expandSidebar": {
+    "defaultMessage": "Allarga il menu"
+  },
+  "@astryx.sideNavCollapseButton.collapseSidebar": {
+    "defaultMessage": "Stringi il menu"
+  },
+  "@astryx.sideNavItem.expand": {
+    "defaultMessage": "Apri {label}"
+  },
+  "@astryx.sideNavItem.collapse": {
+    "defaultMessage": "Chiudi {label}"
+  },
+  "@astryx.tabList.label": {
+    "defaultMessage": "Linguette"
+  },
+  "@astryx.table.label": {
+    "defaultMessage": "Tabella"
+  },
+  "@astryx.table.noData": {
+    "defaultMessage": "Nessun dato"
+  },
+  "@astryx.table.filter.allPlaceholder": {
+    "defaultMessage": "Tutti"
+  },
+  "@astryx.table.filter.reset": {
+    "defaultMessage": "Azzera"
+  },
+  "@astryx.table.filter.apply": {
+    "defaultMessage": "Applica"
+  },
+  "@astryx.table.selection.selectAllRows": {
+    "defaultMessage": "Seleziona tutte le righe"
+  },
+  "@astryx.table.selection.selectRow": {
+    "defaultMessage": "Seleziona la riga"
+  },
+  "@astryx.table.selection.selectRowNamed": {
+    "defaultMessage": "Seleziona {label}"
+  },
+  "@astryx.table.sort.ascending": {
+    "defaultMessage": "Ordina dal primo all’ultimo"
+  },
+  "@astryx.table.sort.descending": {
+    "defaultMessage": "Ordina dall’ultimo al primo"
+  },
+  "@astryx.table.sort.clear": {
+    "defaultMessage": "Togli l’ordinamento"
+  },
+  "@astryx.tableFiltering.filterByColumn": {
+    "defaultMessage": "Filtra {header}"
+  },
+  "@astryx.tableGroupedRows.expandGroup": {
+    "defaultMessage": "Apri il gruppo {groupKey}"
+  },
+  "@astryx.tableGroupedRows.collapseGroup": {
+    "defaultMessage": "Chiudi il gruppo {groupKey}"
+  },
+  "@astryx.tableRowExpansion.expandRow": {
+    "defaultMessage": "Apri la riga"
+  },
+  "@astryx.tableRowExpansion.collapseRow": {
+    "defaultMessage": "Chiudi la riga"
+  },
+  "@astryx.tableRowExpansion.expandAllRows": {
+    "defaultMessage": "Apri tutte le righe"
+  },
+  "@astryx.tableRowExpansion.collapseAllRows": {
+    "defaultMessage": "Chiudi tutte le righe"
+  },
+  "@astryx.fileInput.clearLabel": {
+    "defaultMessage": "Togli {label}"
+  },
+  "@astryx.fileInput.triggerWithFiles": {
+    "defaultMessage": "{label}, {fileNames}"
+  },
+  "@astryx.numberInput.clearLabel": {
+    "defaultMessage": "Svuota {label}"
+  },
+  "@astryx.textInput.clearLabel": {
+    "defaultMessage": "Svuota {label}"
+  },
+  "@astryx.timeInput.clearLabel": {
+    "defaultMessage": "Svuota {label}"
+  },
+  "@astryx.token.remove": {
+    "defaultMessage": "Togli {label}"
+  },
+  "@astryx.thumbnail.remove": {
+    "defaultMessage": "Togli {accessibleName}"
+  },
+  "@astryx.thumbnail.open": {
+    "defaultMessage": "Apri {accessibleName}"
+  },
+  "@astryx.thumbnail.fallbackName": {
+    "defaultMessage": "Anteprima"
+  },
+  "@astryx.codeBlock.copyCode": {
+    "defaultMessage": "Copia il codice"
+  },
+  "@astryx.codeBlock.code": {
+    "defaultMessage": "Codice"
+  }
+}

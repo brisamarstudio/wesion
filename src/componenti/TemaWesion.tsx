@@ -30,7 +30,9 @@
  */
 import { Theme } from '@astryxdesign/core/theme';
 import { LinkProvider } from '@astryxdesign/core/Link';
+import { InternationalizationProvider } from '@astryxdesign/core/i18n';
 import { gothicTheme } from '@/tema/gothic';
+import it from '@/tema/it.json';
 import '@/tema/gothic.css';
 // DOPO il tema, sempre: sovrascrive il fondo delle righe pari e deve vincere.
 import '@/tema/righe.css';
@@ -38,9 +40,23 @@ import NextLink from 'next/link';
 import type { ReactNode } from 'react';
 
 export function TemaWesion({ children }: { children: ReactNode }) {
+  /**
+   * ⚠️ ASTRYX PARLA INGLESE DI SERIE, E SI VEDE (01/09/2026). Le sue stringhe
+   * — "Choose file" sul caricamento della copertina, "Search…" nei menu a
+   * tendina, "Close" sui banner — comparivano in mezzo a un programma tutto in
+   * italiano. Segnalato da chi lo usa, guardando la consolle bozze.
+   *
+   * Astryx spedisce solo `en` e `fr-FR`, ma la sua documentazione dice di
+   * passare un catalogo proprio finche' la lingua non c'e': `it.json` qui
+   * accanto. Le chiavi che mancano ricadono sull'inglese senza rompere niente,
+   * quindi si traduce quello che si vede e si aggiunge il resto quando salta
+   * fuori.
+   */
   return (
-    <Theme theme={gothicTheme}>
-      <LinkProvider component={NextLink}>{children}</LinkProvider>
-    </Theme>
+    <InternationalizationProvider locale="it" messages={{ it }}>
+      <Theme theme={gothicTheme}>
+        <LinkProvider component={NextLink}>{children}</LinkProvider>
+      </Theme>
+    </InternationalizationProvider>
   );
 }

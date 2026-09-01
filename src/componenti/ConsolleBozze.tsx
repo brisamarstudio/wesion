@@ -564,8 +564,22 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                         showRemoveOn="always"
                       />
                     ) : null}
+                    {/* ⚠️ `placeholder` IN ITALIANO, e diverso a foto messa
+                        (01/09/2026). Di serie il componente scrive "Choose
+                        file": in un programma tutto in italiano stona, ma
+                        soprattutto — caricata la copertina — quel riquadro
+                        restava identico a prima, e sembrava che il caricamento
+                        non fosse andato. La miniatura c'era, accanto, e non
+                        bastava a smentirlo. */}
                     <FileInput
                       label={selezionata.contenuto.foto ? 'Cambia la copertina' : 'Aggiungi una copertina'}
+                      placeholder={
+                        caricando
+                          ? 'Sto caricando…'
+                          : selezionata.contenuto.foto
+                            ? 'Scegli un’altra immagine'
+                            : 'Scegli il file'
+                      }
                       mode="dropzone"
                       accept="image/*"
                       maxSize={8 * 1024 * 1024}
