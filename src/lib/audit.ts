@@ -46,6 +46,73 @@ export interface EsitoAudit {
 }
 
 /**
+ * I testi che un tema web si porta dietro dall'installazione, e che nessuno ha
+ * mai sostituito. Trovarne uno vuol dire che il sito e' stato montato e lasciato
+ * li': e' il rilievo piu' forte che sappiamo raccogliere senza guardare la
+ * grafica, perche' e' un FATTO CITABILE — al telefono si legge la riga.
+ *
+ * ⚠️ NIENTE PAROLE GENERICHE. "demo", "test", "esempio" da soli fanno falsi
+ * positivi a valanga (una pagina che dice "richiedi una demo" non e' un sito
+ * abbandonato). Ogni voce qui dentro e' una stringa che compare SOLO se nessuno
+ * l'ha tolta.
+ */
+const SEGNAPOSTO: Array<[RegExp, string]> = [
+  [/12345\s+North\s+Main\s+Street/i, 'indirizzo di esempio del tema'],
+  [/1\.888\.678\.9876|1-888-678-9876/i, 'numero verde di esempio del tema'],
+  [/info@your-domain\.com|email@example\.com|you@example\.com/i, 'email di esempio del tema'],
+  [/your-domain\.com|yourdomain\.com|www\.example\.com/i, 'dominio di esempio del tema'],
+  [/lorem\s+ipsum\s+dolor/i, 'testo Lorem Ipsum mai sostituito'],
+  [/Just\s+another\s+WordPress\s+site/i, 'sottotitolo WordPress mai cambiato'],
+  [/\bYour\s+(Company|Business|Store)\s+Name\b/i, 'nome azienda segnaposto'],
+  [/123[-\s]?456[-\s]?7890/i, 'numero di telefono di esempio'],
+];
+
+/**
+ * In che punto della pagina sta quel testo — e se un visitatore ce lo trova
+ * davanti o deve aprire qualcosa.
+ *
+ * ⚠️ PERCHE' ESISTE QUESTA FUNZIONE (01/09/2026). L'audit di La Peña diceva
+ * «guscio vuoto che mostra i dati dimostrativi». I segnaposto c'erano davvero,
+ * ma dentro il pannello scorrevole di Avada: chiusi finche' non ci clicchi
+ * sopra. Chi ha aperto la home per verificare non ha visto niente e ha concluso
+ * che il tool si inventasse le cose — giustamente, perche' «mostra» non era
+ * vero.
+ *
+ * La differenza fra «in home, sotto gli occhi» e «nel pannello che si apre col
+ * click» e' tutta la differenza fra un gancio che regge al telefono e uno che
+ * fa fare la figura. Quindi si dice dove, sempre.
+ */
+function posizione(html: string, indice: number): string {
+  const prima = html.slice(Math.max(0, indice - 4000), indice);
+  const contenitori = [...prima.matchAll(/<(\w+)[^>]*\b(?:id|class)="([^"]{0,120})"/gi)]
+    .slice(-8)
+    .map((m) => `${m[1]} ${m[2]}`.toLowerCase());
+  const contesto = contenitori.join(' ');
+
+  if (/slidingbar|off-?canvas|modal|popup|drawer|overlay|display:\s*none|hidden/.test(contesto)) {
+    return 'in un pannello che si apre col click (non si vede ad apertura pagina)';
+  }
+  if (/<footer|footer|copyright|colophon/.test(contesto)) return 'nel piede della pagina';
+  if (/<header|header|topbar|masthead|navbar|menu/.test(contesto)) return 'nella testata';
+  if (/<head\b/i.test(html.slice(0, indice)) && indice < html.toLowerCase().indexOf('<body')) {
+    return 'nel codice della pagina, non a schermo';
+  }
+  return 'nel corpo della pagina';
+}
+
+/** I segnaposto trovati, ognuno con la sua riga e il suo posto. */
+function segnaposto(html: string): string[] {
+  const trovati: string[] = [];
+  for (const [regola, cosa] of SEGNAPOSTO) {
+    const m = regola.exec(html);
+    if (!m || m.index === undefined) continue;
+    trovati.push(`"${m[0].trim()}" (${cosa}), ${posizione(html, m.index)}`);
+    if (trovati.length === 3) break; // Tre bastano per una telefonata.
+  }
+  return trovati;
+}
+
+/**
  * Cosa si vede del sito senza chiedere niente a nessuno.
  *
  * Questa parte e' vera anche quando l'AI e' giu', ed e' quella che risponde
@@ -73,11 +140,15 @@ async function scansione(sito: string | null): Promise<{ nota: string; html: str
     const minuscolo = html.toLowerCase();
     const viewport = minuscolo.includes('name="viewport"');
     const prenotazioni = minuscolo.includes('prenot') || minuscolo.includes('book');
+    const resti = segnaposto(html);
     return {
       nota:
         `Sito esistente (HTTP ${risposta.status}). ` +
         `Viewport mobile: ${viewport ? 'PRESENTE' : 'MANCANTE'}. ` +
-        `Form prenotazioni: ${prenotazioni ? 'PRESENTE' : 'MANCANTE'}.`,
+        `Form prenotazioni: ${prenotazioni ? 'PRESENTE' : 'MANCANTE'}. ` +
+        (resti.length
+          ? `Testi di esempio del tema ancora presenti: ${resti.join(' · ')}.`
+          : 'Nessun testo di esempio del tema rimasto in home.'),
       html,
       url,
     };
@@ -281,6 +352,20 @@ Compiti:
    letto al telefono a chi quel sito ce l'ha davanti. Il 31/08/2026 è successo
    con un sito responsive, di cui la scansione diceva "viewport PRESENTE": ne è
    uscito "non ottimizzato per i dispositivi recenti".
+   ⚠️ DI' SEMPRE DOVE. Ogni cosa che affermi deve dire in che punto del sito si
+   vede, con le stesse parole della scansione. "Nel piede della pagina c'è ancora
+   l'indirizzo di esempio del tema" si verifica in dieci secondi; "il sito mostra
+   dati dimostrativi" no, e chi la legge va a controllare, non trova niente e
+   smette di fidarsi del programma. Se la scansione dice che una cosa sta in un
+   pannello che si apre col click, NON scrivere che il sito la "mostra": scrivi
+   che c'è, e dove. Il 01/09/2026 è successo esattamente questo con un
+   ristorante: i segnaposto c'erano, ma dentro la barra scorrevole di Avada.
+
+   ⚠️ NIENTE AGGETTIVI CHE NON PUOI MOSTRARE. "Datato", "poco professionale",
+   "anonimo", "non accattivante" non sono nella scansione e non li hai visti:
+   sono giudizi sulla grafica, e la grafica è l'unica cosa che il cliente
+   conosce meglio di te. Descrivi il fatto e fermati.
+
    Se la scansione non rileva problemi, la risposta giusta è dirlo — e allora
    anche lo "score" deve essere basso, perché un'attività che sta bene non ha
    bisogno di niente con urgenza. Un punteggio alto con una scansione pulita è
