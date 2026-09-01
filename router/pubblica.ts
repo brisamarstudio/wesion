@@ -160,7 +160,18 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
           urlImmagine: foto,
           urlBottone: menu?.site_menu_page ?? null,
         });
-        await segna(bozzaId, 'gbp', 'ok', { risposta });
+        /**
+         * ⚠️ `searchUrl` E' L'UNICO LINK STABILE AL POST (01/09/2026).
+         *
+         * Google lo restituisce nella risposta ed e' l'indirizzo pubblico di
+         * QUEL post. L'URL che si copia dalla barra guardando i post dal
+         * proprio profilo non serve a niente: dentro ha `stick` e `mat`, token
+         * legati alla sessione di chi guarda, e a un'altra persona non aprono
+         * niente. Senza questo, lo storico diceva "uscito" e non aveva un modo
+         * di farti vedere cosa.
+         */
+        const link = (risposta as { searchUrl?: string })?.searchUrl ?? null;
+        await segna(bozzaId, 'gbp', 'ok', { risposta, url: link });
         destinazioni.push({ destinazione: 'gbp', esito: 'ok' });
       } catch (errore: unknown) {
         const motivo = errore instanceof Error ? errore.message : String(errore);

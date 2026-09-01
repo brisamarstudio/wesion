@@ -1076,7 +1076,13 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   ancora uscire: quella sta in Bozze.
                 </Text>
 
-                <Grid columns={{ minWidth: 280, repeat: 'fit' }} gap={4}>
+                {/* ⚠️ `fill` E NON `fit` (01/09/2026). Con `fit` le colonne
+                    vuote collassano e quelle rimaste si allargano: con UN post
+                    solo in elenco, la card prendeva tutta la larghezza dello
+                    schermo e la copertina veniva fuori gigantesca. `fill` tiene
+                    le colonne della loro misura, e una card resta una card
+                    anche quando è l'unica. */}
+                <Grid columns={{ minWidth: 260, repeat: 'fill' }} gap={4}>
                   {s.storico.map((v) => {
                     const riuscita = v.destinazioni.some((d) => d.esito === 'ok');
                     const link = v.destinazioni.find((d) => d.url)?.url ?? null;
