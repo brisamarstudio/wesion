@@ -29,7 +29,28 @@ import { pubblicaBozza, giroPubblicazioni } from './pubblica.ts';
 
 const PORTA = Number(process.env.ROUTER_PORT || process.env.PORT || 3010);
 const HOST = process.env.ROUTER_HOST || process.env.HOST || '172.17.0.1';
+
+/**
+ * ⚠️ SENZA SEGRETO NON SI PARTE, E LA GUARDIA STA QUI (01/09/2026).
+ *
+ * Prima era solo nel `docker-compose.yml` (`${ROUTER_SECRET:?}`), cioe' in UNO
+ * dei modi di avviare questo processo. Lanciandolo con `npm run router` — che
+ * e' come l'abbiamo provato in locale — partiva senza segreto e senza dire
+ * niente: il controllo piu' sotto e' scritto `if (SEGRETO && ...)`, quindi con
+ * il segreto vuoto non scattava mai e `/webhook` accettava qualunque
+ * richiesta. Un buco che non fa rumore e' il tipo di guasto che questo
+ * progetto esiste per non avere: la regola vale ovunque si avvii il programma,
+ * quindi vive nel programma.
+ */
 const SEGRETO = process.env.ROUTER_SECRET || '';
+if (!SEGRETO) {
+  console.error(
+    '[router] ROUTER_SECRET non impostata: mi fermo.\n' +
+      '         Senza, /webhook accetterebbe richieste da chiunque raggiunga la porta.\n' +
+      "         In sviluppo basta una stringa qualsiasi: ROUTER_SECRET=prova npm run router"
+  );
+  process.exit(1);
+}
 
 /** Oltre questo tempo un "SI" non pubblica più: non deve uscire il menù di ieri. */
 const MINUTI_VALIDITA = Number(process.env.DRAFT_TTL_MINUTES || 15);
@@ -377,7 +398,10 @@ const server = http.createServer((richiesta, risposta) => {
     return rispondiJson(404, { errore: 'non_trovato' });
   }
 
-  if (SEGRETO && richiesta.headers['x-router-secret'] !== SEGRETO) {
+  // Niente `SEGRETO &&`: adesso e' garantito non vuoto (si esce all'avvio se
+  // manca), e quella condizione era proprio il modo in cui il controllo si
+  // spegneva da solo senza dirlo.
+  if (richiesta.headers['x-router-secret'] !== SEGRETO) {
     return rispondiJson(401, { errore: 'vietato' });
   }
 
