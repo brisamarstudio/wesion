@@ -22,7 +22,7 @@
  */
 
 import { query } from '../src/lib/db.ts';
-import { pubblicaPost, statoPost } from '../src/lib/gbp.ts';
+import { pubblicaPost, statoPost, type AzioneBottone } from '../src/lib/gbp.ts';
 import { pubblicaArticolo, pubblicaMenu, type ConfigSito } from '../src/lib/sito.ts';
 
 /**
@@ -148,17 +148,35 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
 
   // ── La scheda Google ───────────────────────────────────────────────────────
   if (bozza.tipo === 'menu' || bozza.tipo === 'post_gbp') {
-    const gbp = servizio('post_gbp') as { gbp_account_id?: string; gbp_location_id?: string } | null;
+    const gbp = servizio('post_gbp') as
+      | { gbp_account_id?: string; gbp_location_id?: string; cta_tipo?: string; cta_url?: string }
+      | null;
     const menu = servizio('menu_del_giorno') as ConfigSito | null;
 
     if (gbp?.gbp_account_id && gbp?.gbp_location_id) {
       try {
+        /**
+         * Il bottone si decide QUI, non alla generazione.
+         *
+         * Ordine: quello scelto su questa bozza, poi quello di serie del
+         * cliente, e per un menu la sua pagina. Risolverlo al momento della
+         * pubblicazione e non quando la bozza nasce vuol dire che i
+         * diciassette post gia' in coda di un piano prendono il bottone appena
+         * lo imposti, senza rigenerarli.
+         */
+        const cta = (bozza.contenuto.cta ?? {}) as { tipo?: string; url?: string };
+        const azione = (cta.tipo || gbp.cta_tipo || (menu?.site_menu_page ? 'LEARN_MORE' : null)) as
+          | AzioneBottone
+          | null;
+        const urlBottone = cta.url || gbp.cta_url || menu?.site_menu_page || null;
+
         const risposta = await pubblicaPost({
           accountId: gbp.gbp_account_id,
           locationId: gbp.gbp_location_id,
           testo,
           urlImmagine: foto,
-          urlBottone: menu?.site_menu_page ?? null,
+          azioneBottone: azione,
+          urlBottone,
         });
         /**
          * ⚠️ `searchUrl` E' L'UNICO LINK STABILE AL POST (01/09/2026).

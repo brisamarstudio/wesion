@@ -36,15 +36,44 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
   const corpo = (await richiesta.json().catch(() => ({}))) as {
     azione?: string;
     testo?: string;
+    /** Il bottone scelto per QUESTA bozza, che vince su quello del cliente. */
+    cta?: { tipo?: string; url?: string } | null;
   };
 
-  if (corpo.azione !== 'approva' && corpo.azione !== 'rifiuta') {
+  /**
+   * ⚠️ L'AZIONE E' FACOLTATIVA (01/09/2026). Prima era obbligatoria, e aveva
+   * senso finche' questa rotta serviva solo a dire si' o no. Ma correggere il
+   * testo o scegliere il bottone sono modifiche al CONTENUTO, non decisioni
+   * sul suo destino: obbligare a decidere per salvarle vorrebbe dire che per
+   * cambiare un bottone bisogna approvare — cioe' far uscire una cosa nel
+   * mondo per sistemarne un dettaglio.
+   */
+  const decide = corpo.azione === 'approva' || corpo.azione === 'rifiuta';
+  if (corpo.azione !== undefined && !decide && corpo.azione !== 'nessuna') {
     return NextResponse.json({ errore: "azione deve essere 'approva' o 'rifiuta'" }, { status: 400 });
   }
 
   // Il testo corretto a mano si salva PRIMA di decidere: se l'operatore ha
   // tolto il telefono dal post e poi approva, deve uscire quello che ha letto
   // lui, non quello che aveva scritto il modello.
+  /**
+   * Il bottone della singola bozza.
+   *
+   * Si scrive dentro `contenuto.cta` e vince su quello di serie del cliente
+   * (`servizio.post_gbp.cta_*`). `null` lo toglie: e' diverso da "non
+   * specificato", che vuol dire "usa quello del cliente".
+   */
+  if (corpo.cta !== undefined) {
+    await query(
+      `UPDATE wesion.bozza
+          SET contenuto = CASE WHEN $2::jsonb IS NULL
+                               THEN contenuto - 'cta'
+                               ELSE contenuto || jsonb_build_object('cta', $2::jsonb) END
+        WHERE id = $1 AND stato = ANY($3)`,
+      [idBozza, corpo.cta ? JSON.stringify(corpo.cta) : null, DECIDIBILI]
+    );
+  }
+
   if (typeof corpo.testo === 'string') {
     await query(
       `UPDATE wesion.bozza
@@ -52,6 +81,12 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
         WHERE id = $1 AND stato = ANY($3)`,
       [idBozza, corpo.testo, DECIDIBILI]
     );
+  }
+
+  // Solo contenuto, nessuna decisione: si e' gia' scritto quello che c'era da
+  // scrivere e si esce senza toccare lo stato.
+  if (!decide) {
+    return NextResponse.json({ salvato: true });
   }
 
   const nuovoStato = corpo.azione === 'approva' ? 'approvata' : 'rifiutata';

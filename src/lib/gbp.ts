@@ -46,11 +46,39 @@ export async function tokenAccesso(): Promise<string> {
   return tokenInCache!;
 }
 
+/**
+ * I bottoni che Google mette sotto un post, con il nome che si legge davvero
+ * nel suo pannello.
+ *
+ * ⚠️ `CALL` NON VUOLE UN URL: usa il numero della scheda. Passargliene uno fa
+ * fallire la chiamata, ed e' l'unico della lista che si comporta cosi'.
+ */
+export const AZIONI_BOTTONE = {
+  LEARN_MORE: 'Scopri di più',
+  BOOK: 'Prenota',
+  ORDER: 'Ordina online',
+  SHOP: 'Acquista',
+  SIGN_UP: 'Iscriviti',
+  CALL: 'Chiama ora',
+} as const;
+
+export type AzioneBottone = keyof typeof AZIONI_BOTTONE;
+
+/** Vero per le azioni che pretendono un indirizzo. */
+export const VUOLE_URL = (a: string): boolean => a !== 'CALL';
+
 export interface PostGoogle {
   accountId: string;
   locationId: string;
   testo: string;
   urlImmagine?: string | null;
+  /**
+   * Il bottone sotto il post. Assente = nessun bottone, che e' quello che
+   * facevamo sempre prima del 01/09/2026 senza averlo deciso: `pubblicaPost`
+   * sapeva metterlo, ma glielo passava solo il menu del giorno. I diciassette
+   * post di un piano uscivano tutti senza, cioe' senza niente da cliccare.
+   */
+  azioneBottone?: AzioneBottone | null;
   urlBottone?: string | null;
 }
 
@@ -81,8 +109,19 @@ export async function pubblicaPost(post: PostGoogle): Promise<unknown> {
   if (post.urlImmagine && post.urlImmagine.startsWith('http')) {
     corpo.media = [{ mediaFormat: 'PHOTO', sourceUrl: post.urlImmagine }];
   }
-  if (post.urlBottone) {
-    corpo.callToAction = { actionType: 'LEARN_MORE', url: post.urlBottone };
+  /**
+   * Il bottone, se richiesto.
+   *
+   * `CALL` e' l'unico che NON vuole un url: Google usa il numero della scheda,
+   * e passargliene uno fa fallire la chiamata. Tutti gli altri senza url non
+   * hanno senso — un "Prenota" che non porta da nessuna parte e' peggio di
+   * nessun bottone — quindi in quel caso non si mette niente.
+   */
+  const azione = post.azioneBottone ?? (post.urlBottone ? 'LEARN_MORE' : null);
+  if (azione === 'CALL') {
+    corpo.callToAction = { actionType: 'CALL' };
+  } else if (azione && post.urlBottone) {
+    corpo.callToAction = { actionType: azione, url: post.urlBottone };
   }
 
   const risposta = await fetch(

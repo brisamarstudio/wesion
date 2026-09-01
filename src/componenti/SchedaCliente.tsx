@@ -40,6 +40,7 @@ import { Grid } from '@astryxdesign/core/Grid';
 import { Link } from '@astryxdesign/core/Link';
 import { ETICHETTA_DESTINAZIONE } from '@/lib/bozze';
 import { quandoBreve } from '@/lib/quando';
+import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { DateInput } from '@astryxdesign/core/DateInput';
 import type { Scheda } from '@/lib/scheda';
@@ -824,6 +825,44 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                           description="O l’agenzia non ne gestisce, o il token non ha i permessi giusti."
                         />
                       )
+                    ) : null}
+
+                    {/* ── IL BOTTONE SOTTO IL POST ──────────────────────────
+                        Google permette di mettere un pulsante sotto ogni post
+                        (Prenota, Ordina online, Scopri di più...). Wesion
+                        sapeva già farlo — `pubblicaPost` accetta l'azione — ma
+                        glielo passava SOLO il menù del giorno: i diciassette
+                        post di un piano uscivano tutti senza niente da
+                        cliccare, e non era una scelta, era una dimenticanza.
+
+                        Qui si imposta quello di serie, valido per tutti i post
+                        di questo cliente. Sulla singola bozza si può cambiare
+                        dalla consolle. Il valore si risolve al momento della
+                        pubblicazione, quindi vale anche per le bozze già in
+                        coda: non c'è niente da rigenerare. */}
+                    {eCliente && config('post_gbp').gbp_location_id ? (
+                      <VStack gap={2}>
+                        <Selector
+                          label="Bottone sotto i post"
+                          description="Quello di serie per questo cliente. Sulla singola bozza si può cambiare."
+                          value={config('post_gbp').cta_tipo || ''}
+                          onChange={(v) => cambiaServizio('post_gbp', { cta_tipo: String(v) })}
+                          options={[
+                            { value: '', label: 'Nessun bottone' },
+                            ...Object.entries(AZIONI_BOTTONE).map(([value, label]) => ({ value, label })),
+                          ]}
+                        />
+                        {/* «Chiama ora» usa il numero della scheda Google: un
+                            url lì dentro fa fallire la pubblicazione. */}
+                        {config('post_gbp').cta_tipo && VUOLE_URL(config('post_gbp').cta_tipo) ? (
+                          <TextInput
+                            label="Dove porta il bottone"
+                            description="La pagina del cliente a cui mandare chi clicca."
+                            value={config('post_gbp').cta_url || ''}
+                            onChange={(v) => cambiaServizio('post_gbp', { cta_url: v })}
+                          />
+                        ) : null}
+                      </VStack>
                     ) : null}
 
                     {/* Se in tabella c'e' gia' qualcosa di storto lo si vede

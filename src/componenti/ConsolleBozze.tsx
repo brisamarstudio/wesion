@@ -55,6 +55,7 @@ import {
 } from '@/lib/bozze';
 import { controllaBozza } from '@/lib/controlloTesto';
 import { quandoBreve, scadenza } from '@/lib/quando';
+import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
 
 /** Il colore dice a colpo d'occhio se la riga aspetta una persona o no. */
@@ -192,6 +193,25 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   async function togliFoto() {
     if (!selezionata) return;
     await fetch(`/api/bozze/${selezionata.id}/immagine`, { method: 'DELETE' });
+    router.refresh();
+  }
+
+  /**
+   * Il bottone di QUESTA bozza. Si salva subito, senza aspettare l'approvazione:
+   * è una scelta sul contenuto, non una decisione sul suo destino.
+   *
+   * Vuoto = «usa quello del cliente», che è diverso da «nessun bottone»: il
+   * primo eredita, il secondo lo toglie apposta. Per questo l'elenco ha due
+   * voci distinte e non una sola casella.
+   */
+  async function cambiaCta(tipo: string, url: string) {
+    if (!selezionata) return;
+    const cta = tipo === '' ? null : { tipo, url };
+    await fetch(`/api/bozze/${selezionata.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ azione: 'nessuna', cta }),
+    }).catch(() => undefined);
     router.refresh();
   }
 
@@ -589,6 +609,47 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                       onChange={() => undefined}
                       changeAction={caricaFoto}
                     />
+                  </HStack>
+
+                  {/* ── IL BOTTONE SOTTO IL POST ──────────────────────────────
+                      Solo per i post di Google: sul sito e su WhatsApp non
+                      esiste un pulsante da mettere.
+
+                      «Quello del cliente» e «Nessun bottone» sono due voci
+                      diverse apposta: la prima eredita il valore di serie
+                      (Servizi → Bottone sotto i post), la seconda lo toglie per
+                      questo post e basta. Con una casella sola non si potrebbe
+                      dire «questo no» senza cambiarlo per tutti. */}
+                  {selezionata.tipo === 'post_gbp' ? (
+                    <HStack gap={3} align="end" wrap="wrap">
+                      <Selector
+                        label="Bottone sotto il post"
+                        value={(selezionata.contenuto.cta as { tipo?: string } | undefined)?.tipo ?? ''}
+                        onChange={(v) =>
+                          void cambiaCta(
+                            String(v),
+                            (selezionata.contenuto.cta as { url?: string } | undefined)?.url ?? ''
+                          )
+                        }
+                        options={[
+                          { value: '', label: 'Quello del cliente' },
+                          ...Object.entries(AZIONI_BOTTONE).map(([value, label]) => ({ value, label })),
+                        ]}
+                      />
+                      {(() => {
+                        const cta = selezionata.contenuto.cta as { tipo?: string; url?: string } | undefined;
+                        return cta?.tipo && VUOLE_URL(cta.tipo) ? (
+                          <TextInput
+                            label="Dove porta"
+                            value={cta.url ?? ''}
+                            onChange={(v) => void cambiaCta(cta.tipo!, v)}
+                          />
+                        ) : null;
+                      })()}
+                    </HStack>
+                  ) : null}
+
+                  <HStack>
                   </HStack>
                 </VStack>
               ) : null}
