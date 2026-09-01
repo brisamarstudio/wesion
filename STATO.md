@@ -165,6 +165,22 @@ di aggiungerne una a mano. Da lì:
    > risponde 400 sul corpo vuoto, con segreto sbagliato 401. Se serve provare la catena
    > del blog prima di sistemare mywebby.it, si prova lì senza rischiare niente.
 
+### Prima che entri altra gente
+
+6. **I ruoli non esistono: chi entra può fare tutto.** ⚠️ Deciso il 01/09/2026 di
+   procedere lo stesso — due collaboratori commerciali con accesso pieno — ma è una
+   scelta con una data di scadenza, non una conclusione.
+
+   Un accesso oggi permette di: **pubblicare sulle schede Google dei clienti**,
+   cancellare **gruppi interi** di aziende, cambiare i segreti dei servizi. A chi fa
+   ricerca clienti serve solo Campagne e Aziende: chiamare, segnare com'è andata,
+   portare un lead a cliente.
+
+   Il ruolo da fare si chiama **commerciale**: vede Campagne e Aziende, modifica lo stato
+   e i contatti, e non vede Bozze/Piano/Servizi. È la stessa regola dell'ultimo bottone,
+   applicata a chi lo preme: *chi non deve, non può*. Oggi la protezione è la fiducia, che
+   funziona finché qualcuno non clicca «Elimina il gruppo» per sbaglio.
+
 ### Quando serve — non blocca
 
 5. **Arricchimento social (FB/IG)**: non fatto perche' serve sapere quali API usa il tuo

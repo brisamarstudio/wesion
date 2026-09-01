@@ -498,6 +498,54 @@ export function ElencoAziende({
         <LayoutContent padding={0}>
           <VStack gap={0}>
             <VStack padding={3} gap={3}>
+              {/* ── LA LEGENDA ────────────────────────────────────────────────
+                  ⚠️ SCRITTA PER CHI ARRIVA OGGI (01/09/2026). Detto da chi la
+                  usa, guardando questa pagina: «noi umani se guardiamo sta
+                  pagina non ci capiamo nulla». Aveva ragione: la riga dice
+                  «95», «★ 4.9 · 10», «senza sito» e nessuna delle tre e'
+                  spiegata da nessuna parte. Erano leggibili solo per chi le
+                  aveva costruite.
+
+                  Sta CHIUSA di serie: chi lavora qui tutti i giorni non deve
+                  scavalcarla ogni volta. Ma sta in cima, dove chi non sa
+                  guarda per primo, e non in una pagina di aiuto che bisogna
+                  sapere di dover cercare. */}
+              <Banner
+                status="info"
+                container="card"
+                defaultIsExpanded={false}
+                title="Chi chiamo per primo?"
+                description="Punteggio alto e «senza sito»: sono quelli a cui serve di più. Apri una riga per il numero e per cosa dirgli."
+                endContent={<Text type="supporting">cosa vuol dire?</Text>}
+              >
+                <MetadataList>
+                  <MetadataListItem label="95 (giallo)">
+                    Il voto dell’audit: quanto è messo male il sito che ha adesso. Più è alto,
+                    più ha bisogno di noi. «—» vuol dire che non l’abbiamo ancora guardato:
+                    lo fai con «Analizza le mancanti».
+                  </MetadataListItem>
+                  <MetadataListItem label="★ 4.9 · 10">
+                    Le recensioni su Google: prima il voto, poi quante ne ha. Dieci recensioni
+                    e cinque stelle non sono la stessa cosa di seicento.
+                  </MetadataListItem>
+                  <MetadataListItem label="senza sito (rosso)">
+                    Non ha un sito. Il rosso non è un problema tuo: è il motivo per cui lo
+                    chiami.
+                  </MetadataListItem>
+                  <MetadataListItem label="occasione (verde)">
+                    Nessun sito, ma già tante recensioni buone: ha i clienti e non ha la
+                    vetrina. È il caso migliore che puoi trovare.
+                  </MetadataListItem>
+                  <MetadataListItem label="Da contattare">
+                    A che punto sei con lui. Dopo la telefonata lo cambi tu, dalla riga.
+                  </MetadataListItem>
+                  <MetadataListItem label="Dividi per">
+                    Raggruppa l’elenco: per campagna, per città o per categoria. Non cambia
+                    cosa vedi, cambia come è impilato.
+                  </MetadataListItem>
+                </MetadataList>
+              </Banner>
+
               <HStack gap={2} align="end" wrap="wrap">
                 <TextInput
                   label="Cerca"
