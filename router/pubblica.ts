@@ -22,7 +22,7 @@
  */
 
 import { query } from '../src/lib/db.ts';
-import { pubblicaPost } from '../src/lib/gbp.ts';
+import { pubblicaPost, statoPost } from '../src/lib/gbp.ts';
 import { pubblicaArticolo, pubblicaMenu, type ConfigSito } from '../src/lib/sito.ts';
 
 /**
@@ -337,6 +337,78 @@ export async function giroPubblicazioni(): Promise<EsitoPubblicazione[]> {
     } catch (errore: unknown) {
       // Una bozza che esplode non deve fermare le altre diciannove.
       console.error(`[router] bozza ${id} non pubblicata:`, errore instanceof Error ? errore.message : errore);
+    }
+  }
+  return esiti;
+}
+
+/**
+ * ── IL RICONTROLLO ──────────────────────────────────────────────────────────
+ *
+ * ⚠️ ESISTE PERCHE' 200 NON VUOL DIRE ONLINE, e ce l'ha insegnato la prima
+ * pubblicazione vera (01/09/2026). Google ha risposto 200, abbiamo scritto
+ * `esito='ok'`, e il post era in `state: PROCESSING`: la revisione e' arrivata
+ * dopo. E' finita bene — `LIVE` cinque minuti dopo — ma poteva finire in
+ * `REJECTED`, e in dashboard avremmo continuato a leggere "uscito · ok" per
+ * sempre. E' il guasto muto applicato all'unica cosa che esce nel mondo.
+ *
+ * Non e' un rischio teorico: il 20/07/2026 Google ha rimosso un post e
+ * sospeso la pubblicazione su una scheda (`gbp-autoposter/STATO.md`). Una
+ * scheda non si sospende per un post solo — si sospende per un profilo che ne
+ * accumula. Accorgersene al primo e' la differenza fra correggere e riaprire.
+ *
+ * Cosa NON fa: non ripubblica e non corregge niente da solo. Scrive quello che
+ * Google dice, e lascia che siano le spie a farlo notare a una persona.
+ */
+export interface EsitoVerifica {
+  pubblicazioneId: number;
+  stato: string;
+  cambiato: boolean;
+}
+
+export async function giroVerifiche(): Promise<EsitoVerifica[]> {
+  const daVedere = await query<{ id: number; nome: string; stato_remoto: string | null }>(
+    `SELECT p.id, p.risposta->>'name' AS nome, p.stato_remoto
+       FROM wesion.pubblicazione p
+      WHERE p.destinazione = 'gbp'
+        AND p.esito = 'ok'
+        AND p.risposta->>'name' IS NOT NULL
+        -- Dopo un mese un post e' storia: Google lo tiene, ma ricontrollarlo
+        -- ogni giorno per sempre costa chiamate e non cambia piu' niente.
+        AND p.eseguita_at > now() - INTERVAL '30 days'
+        -- Mai visto, oppure visto piu' di sei ore fa. Piu' spesso di cosi' non
+        -- serve: la revisione di Google ci mette minuti, non secondi, e un post
+        -- rimosso resta rimosso.
+        AND (p.verificata_at IS NULL OR p.verificata_at < now() - INTERVAL '6 hours')
+      ORDER BY p.verificata_at NULLS FIRST
+      LIMIT 20`
+  );
+
+  const esiti: EsitoVerifica[] = [];
+  for (const riga of daVedere) {
+    try {
+      const risposta = await statoPost(riga.nome);
+      // 404: il post non c'e' piu'. E' una risposta, non un guasto nostro.
+      const stato = risposta ? risposta.stato : 'RIMOSSO';
+      const cambiato = stato !== riga.stato_remoto;
+
+      await query(
+        `UPDATE wesion.pubblicazione SET stato_remoto = $2, verificata_at = now() WHERE id = $1`,
+        [riga.id, stato]
+      );
+
+      if (cambiato && stato !== 'LIVE' && stato !== 'PROCESSING') {
+        console.log(`[router] pubblicazione ${riga.id}: Google adesso dice ${stato}`);
+      }
+      esiti.push({ pubblicazioneId: riga.id, stato, cambiato });
+    } catch (errore: unknown) {
+      // Non aver POTUTO chiedere e' diverso da "il post non c'e' piu'": non si
+      // scrive niente, si riprova al giro dopo. Scrivere "sconosciuto" qui
+      // vorrebbe dire trasformare un problema di rete in un allarme sul post.
+      console.error(
+        `[router] verifica ${riga.id} non riuscita:`,
+        errore instanceof Error ? errore.message : errore
+      );
     }
   }
   return esiti;

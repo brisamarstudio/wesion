@@ -232,6 +232,55 @@ async function idGoogleMalformati(): Promise<Spia | null> {
   };
 }
 
+/**
+ * Post che Google ha tolto, o respinto dopo averli accettati.
+ *
+ * ⚠️ LA SPIA CHE MANCAVA IL GIORNO DELLA PRIMA PUBBLICAZIONE (01/09/2026).
+ * Google risponde 200 e mette il post in `PROCESSING`: la revisione arriva
+ * dopo, e puo' finire in `REJECTED` senza dirlo a nessuno. La riga in tabella
+ * resta `esito='ok'` — vera al momento dell'invio, e mai piu' riletta. Adesso
+ * il router richiede lo stato ogni mezz'ora e lo scrive; questa lo guarda.
+ *
+ * Non e' pignoleria: il 20/07/2026 Google ha rimosso un post e sospeso la
+ * pubblicazione su una scheda. Una scheda non si sospende per un post solo, si
+ * sospende per un profilo che ne accumula — accorgersene al primo e' la
+ * differenza fra correggere e riaprire una pratica.
+ */
+async function postSpariti(): Promise<Spia | null> {
+  const righe = await query<{ azienda_id: number; azienda: string; stato: string; quando: string }>(
+    `SELECT a.id AS azienda_id, a.nome AS azienda, p.stato_remoto AS stato,
+            to_char(p.eseguita_at, 'DD/MM') AS quando
+       FROM wesion.pubblicazione p
+       JOIN wesion.bozza b   ON b.id = p.bozza_id
+       JOIN wesion.azienda a ON a.id = b.azienda_id
+      WHERE p.destinazione = 'gbp'
+        AND p.esito = 'ok'
+        AND p.stato_remoto IS NOT NULL
+        -- PROCESSING non e' un guasto: e' Google che sta ancora guardando.
+        AND p.stato_remoto NOT IN ('LIVE', 'PROCESSING')
+        AND p.eseguita_at > now() - INTERVAL '60 days'
+      ORDER BY p.eseguita_at DESC`
+  );
+  if (!righe.length) return null;
+  return {
+    chiave: 'post-spariti',
+    famiglia: 'guasto',
+    colore: 'rossa',
+    titolo: `${righe.length} post non sono più sulla scheda Google`,
+    dettaglio:
+      'Google li aveva accettati e poi li ha tolti o respinti in revisione: sulla scheda del ' +
+      'cliente non ci sono più, e in dashboard risultavano usciti. Di solito è il testo — ' +
+      'contatti, orari, troppi emoji. Conviene leggere cosa contenevano prima di ripubblicare: ' +
+      'una scheda non viene sospesa per un post solo, ma per un profilo che ne accumula.',
+    quanti: righe.length,
+    esempi: righe.slice(0, 5).map((r) => ({
+      etichetta: `${r.azienda} (${r.quando}, Google dice ${r.stato})`,
+      href: `/aziende/${r.azienda_id}?tab=storico`,
+    })),
+    dal: null,
+  };
+}
+
 /** Bozze scadute senza che nessuno le abbia decise: il sì non è mai arrivato. */
 async function bozzeScadute(): Promise<Spia | null> {
   const righe = await query<{ azienda: string; tipo: string }>(
@@ -554,6 +603,7 @@ async function generatoreRaggiungibile(): Promise<Spia | null> {
 
 const CONTROLLI: Array<[string, Spia['famiglia'], Controllo]> = [
   ['pubblicazioni-fallite', 'guasto', pubblicazioniFallite],
+  ['post-spariti', 'guasto', postSpariti],
   ['bozze-approvate-ferme', 'guasto', bozzeApprovateFerme],
   ['id-google-malformati', 'guasto', idGoogleMalformati],
   ['bozze-scadute', 'guasto', bozzeScadute],

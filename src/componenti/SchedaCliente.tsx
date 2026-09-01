@@ -1098,9 +1098,36 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                           ) : null}
                           <VStack gap={2} padding={4}>
                             <HStack gap={2} vAlign="center" wrap="wrap">
+                              {/* ⚠️ "Uscito" e "ancora online" sono due cose
+                                  diverse: la prima dice che Google l'ha
+                                  accettato quel giorno, la seconda che c'e'
+                                  ancora adesso. Un post respinto dalla
+                                  revisione sparisce senza avvisare nessuno, e
+                                  fino al 01/09/2026 qui avrebbe continuato a
+                                  dire "uscito" per sempre. */}
                               <Badge
-                                variant={riuscita ? 'success' : 'error'}
-                                label={riuscita ? 'uscito' : 'non uscito'}
+                                variant={
+                                  !riuscita
+                                    ? 'error'
+                                    : v.stato_remoto === 'LIVE'
+                                      ? 'success'
+                                      : v.stato_remoto && v.stato_remoto !== 'PROCESSING'
+                                        ? 'error'
+                                        : 'neutral'
+                                }
+                                label={
+                                  !riuscita
+                                    ? 'non uscito'
+                                    : v.stato_remoto === 'LIVE'
+                                      ? 'online'
+                                      : v.stato_remoto === 'PROCESSING'
+                                        ? 'in revisione'
+                                        : v.stato_remoto === 'RIMOSSO'
+                                          ? 'rimosso da Google'
+                                          : v.stato_remoto
+                                            ? `Google dice: ${v.stato_remoto}`
+                                            : 'uscito'
+                                }
                               />
                               {v.destinazioni.map((d, i) => (
                                 <Badge

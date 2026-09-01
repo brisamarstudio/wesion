@@ -98,6 +98,37 @@ export async function pubblicaPost(post: PostGoogle): Promise<unknown> {
   return risposta.json();
 }
 
+/**
+ * Come sta ADESSO un post che abbiamo gia' mandato.
+ *
+ * ⚠️ ESISTE PERCHE' "ACCETTATO" NON VUOL DIRE "ONLINE". `pubblicaPost` torna 200
+ * con `state: PROCESSING`: Google lo revisiona dopo, e puo' respingerlo senza
+ * dirlo a nessuno. Senza questa lettura, una riga scritta `esito='ok'` al
+ * momento dell'invio resta "uscito" per sempre, anche se sulla scheda del
+ * cliente non c'e' piu' niente.
+ *
+ * `null` quando Google risponde 404: il post non c'e' piu'. E' una risposta,
+ * non un errore — chi chiama deve poterla distinguere da "non ho potuto
+ * chiedere", che invece lancia.
+ */
+export async function statoPost(nome: string): Promise<{ stato: string } | null> {
+  const token = await tokenAccesso();
+  const risposta = await fetch(`https://mybusiness.googleapis.com/v4/${nome}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (risposta.status === 404) return null;
+  if (!risposta.ok) {
+    throw new Error(`Google API ${risposta.status}: ${(await risposta.text()).slice(0, 200)}`);
+  }
+
+  const dato = (await risposta.json()) as { state?: string };
+  // Uno stato vuoto non e' "sconosciuto per sempre": e' una risposta che non
+  // sappiamo leggere, e va detto invece di scriverci sopra "LIVE".
+  return { stato: String(dato.state || 'SCONOSCIUTO') };
+}
+
 export interface SchedaGoogle {
   accountId: string;
   locationId: string;

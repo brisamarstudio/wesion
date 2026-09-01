@@ -25,7 +25,7 @@ import { mandaTesto, scaricaMedia, caricaPubblico } from '../src/lib/waha.ts';
 import { ripristinaMenu, type ConfigSito } from '../src/lib/sito.ts';
 import { riconosci, candidati, type Mittente } from './riconosci.ts';
 import { cercaLead, gestisciLead } from './lead.ts';
-import { pubblicaBozza, giroPubblicazioni } from './pubblica.ts';
+import { pubblicaBozza, giroPubblicazioni, giroVerifiche } from './pubblica.ts';
 
 const PORTA = Number(process.env.ROUTER_PORT || process.env.PORT || 3010);
 const HOST = process.env.ROUTER_HOST || process.env.HOST || '172.17.0.1';
@@ -60,6 +60,9 @@ const MAX_PIATTI = Number(process.env.MAX_ITEMS || 12);
 
 /** Ogni quanto si va a vedere se la dashboard ha approvato qualcosa. */
 const SECONDI_GIRO = Number(process.env.SECONDI_GIRO || 30);
+
+/** Ogni quanto si richiede a Google com'e' finita davvero. Vedi `avviaVerifiche`. */
+const MINUTI_VERIFICA = Number(process.env.MINUTI_VERIFICA || 30);
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -458,9 +461,42 @@ async function avviaGiro(): Promise<void> {
   }
 }
 
+/**
+ * Il ricontrollo: cosa dice GOOGLE ADESSO dei post che abbiamo mandato.
+ *
+ * ⚠️ Un giro a parte, e piu' lento, apposta. Pubblicare e' urgente — un "SI" su
+ * WhatsApp deve uscire mentre il titolare ha ancora il telefono in mano — ma la
+ * revisione di Google ci mette minuti e un post respinto resta respinto: farlo
+ * ogni trenta secondi vorrebbe dire spendere chiamate all'API per riscrivere lo
+ * stesso valore. Mezz'ora e' abbastanza spesso perche' una persona se ne
+ * accorga in giornata.
+ */
+let verificaInCorso = false;
+async function avviaVerifiche(): Promise<void> {
+  if (verificaInCorso) return;
+  verificaInCorso = true;
+  try {
+    const esiti = await giroVerifiche();
+    const cambiati = esiti.filter((e) => e.cambiato);
+    if (cambiati.length) {
+      console.log(`[router] ricontrollo: ${cambiati.length} pubblicazioni hanno cambiato stato`);
+    }
+  } catch (errore: unknown) {
+    console.error('[router] ricontrollo fallito:', errore instanceof Error ? errore.message : errore);
+  } finally {
+    verificaInCorso = false;
+  }
+}
+
 server.listen(PORTA, HOST, () => {
   console.log(`[router] Wesion in ascolto su http://${HOST}:${PORTA}`);
   console.log(`[router] giro delle approvazioni ogni ${SECONDI_GIRO}s`);
+  console.log(`[router] ricontrollo su Google ogni ${MINUTI_VERIFICA} minuti`);
   setInterval(avviaGiro, SECONDI_GIRO * 1000);
+  setInterval(avviaVerifiche, MINUTI_VERIFICA * 60_000);
   void avviaGiro();
+  // Il primo ricontrollo dopo un minuto e non subito: all'avvio c'e' gia' il
+  // giro delle pubblicazioni che parla con Google, e partire insieme vorrebbe
+  // dire due raffiche di chiamate nello stesso istante per niente.
+  setTimeout(avviaVerifiche, 60_000);
 });

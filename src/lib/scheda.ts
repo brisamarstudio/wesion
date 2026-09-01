@@ -94,6 +94,15 @@ export interface VoceStorico {
   uscito_at: string | null;
   /** Le destinazioni toccate, con l'esito di ciascuna. */
   destinazioni: Array<{ destinazione: string; esito: string; url: string | null; errore: string | null }>;
+  /**
+   * Cosa dice GOOGLE ADESSO, non cosa disse all'invio.
+   *
+   * `LIVE` = ancora online. `REJECTED`/`RIMOSSO` = non c'e' piu', e nessuno lo
+   * saprebbe senza chiederlo (il router lo richiede ogni mezz'ora). Nullo
+   * finche' non e' mai stato ricontrollato, o per le destinazioni che non sono
+   * Google.
+   */
+  stato_remoto: string | null;
 }
 
 export const VOCE_VUOTA: Scheda['voce'] = {
@@ -184,6 +193,9 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
             b.contenuto->>'testo'  AS testo,
             b.contenuto->>'foto'   AS foto,
             (SELECT max(p.eseguita_at) FROM wesion.pubblicazione p WHERE p.bozza_id = b.id) AS uscito_at,
+            (SELECT p.stato_remoto FROM wesion.pubblicazione p
+              WHERE p.bozza_id = b.id AND p.stato_remoto IS NOT NULL
+              ORDER BY p.eseguita_at DESC LIMIT 1) AS stato_remoto,
             COALESCE((
               SELECT json_agg(json_build_object(
                        'destinazione', p.destinazione,

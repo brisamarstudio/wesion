@@ -316,3 +316,28 @@ ALTER TABLE wesion.bozza
 -- Il giro del router chiede "cosa e' maturo adesso": deve costare poco.
 CREATE INDEX IF NOT EXISTS idx_bozza_da_pubblicare ON wesion.bozza (pubblica_at)
   WHERE stato = 'approvata';
+
+-- Cosa dice GOOGLE ADESSO di un post che abbiamo mandato.
+--
+-- ⚠️ "ACCETTATO" NON VUOL DIRE "ONLINE". Google risponde 200 e mette il post in
+-- `state: PROCESSING`: la revisione arriva dopo, e puo' finire in `REJECTED`
+-- senza avvisare nessuno. Il 01/09/2026, alla prima pubblicazione vera, la
+-- riga in `pubblicazione` diceva `esito='ok'` mentre il post era ancora in
+-- lavorazione — vero al momento dell'invio, e mai piu' riletto.
+--
+-- Senza queste due colonne un post respinto resta "uscito · ok" per sempre in
+-- dashboard: e' il guasto muto applicato all'unica cosa che esce nel mondo. E
+-- non e' teorico — il 20/07/2026 Google ha rimosso un post e sospeso la
+-- pubblicazione su una scheda (vedi gbp-autoposter/STATO.md).
+--
+--   stato_remoto   l'ultimo `state` letto da Google (LIVE, PROCESSING, REJECTED...)
+--   verificata_at  quando gliel'abbiamo chiesto l'ultima volta
+ALTER TABLE wesion.pubblicazione
+  ADD COLUMN IF NOT EXISTS stato_remoto  TEXT,
+  ADD COLUMN IF NOT EXISTS verificata_at TIMESTAMPTZ;
+
+-- Il giro delle verifiche cerca "quali sono da ricontrollare": le riuscite su
+-- Google, mai verificate o verificate da un pezzo.
+CREATE INDEX IF NOT EXISTS idx_pubbl_da_verificare
+  ON wesion.pubblicazione (verificata_at NULLS FIRST)
+  WHERE destinazione = 'gbp' AND esito = 'ok';
