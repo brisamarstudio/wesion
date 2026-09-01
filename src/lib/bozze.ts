@@ -323,6 +323,14 @@ export const SQL_BOZZE = `
     -- Quello che aspetta una persona sta in cima: e' l'unica coda che si ferma
     -- se nessuno la guarda. Il resto e' storia e puo' scorrere sotto.
     (b.stato = 'attesa_approvazione') DESC,
+    -- ⚠️ E FRA QUELLE, PRIMA QUELLE IL CUI TURNO E' GIA' ARRIVATO (01/09/2026).
+    -- Con il solo ordine di creazione, un piano del mese metteva in cima i post
+    -- del 29 settembre e in FONDO l'unico che andava deciso oggi: sedici righe
+    -- da scorrere per arrivare all'unica che chiedeva qualcosa. Chi apre questa
+    -- pagina ha poco tempo e la prima riga dev'essere quella che costa di piu'
+    -- ignorare — la stessa regola gia' applicata alle spie.
+    CASE WHEN b.stato = 'attesa_approvazione'
+         THEN COALESCE(b.pubblica_at, '-infinity'::timestamptz) END ASC NULLS LAST,
     b.creata_at DESC
   LIMIT 300
 `;
