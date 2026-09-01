@@ -76,6 +76,14 @@ export const ETICHETTA_STATO: Record<string, string> = {
   scaduta: 'Scaduta',
 };
 
+/** Dove può finire una pubblicazione — `wesion.pubblicazione.destinazione`. */
+export const ETICHETTA_DESTINAZIONE: Record<string, string> = {
+  sito: 'Sito',
+  gbp: 'Google',
+  blog: 'Blog',
+  whatsapp: 'WhatsApp',
+};
+
 /**
  * Il testo leggibile dentro `contenuto`, che ha una forma per tipo.
  *

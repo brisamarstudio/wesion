@@ -1,6 +1,8 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 27/08/2026, fine giornata. 19 commit, 10.636 righe.*
+*Ultimo aggiornamento: 01/09/2026. Il commit più recente è ancora quello del
+30/08 (`docs(blog)`) — tutto quello che segue in §0.1 è nella working tree,
+non ancora committato.*
 
 Se apri questo progetto adesso, **leggi solo questo file**.
 
@@ -19,6 +21,63 @@ npm run router   ->  il router WhatsApp, su 172.17.0.1:3010
 npm run cliente  ->  prepara un cliente da riga di comando
 npm run utente   ->  crea un accesso alla dashboard
 ```
+
+## 0.1 Cosa è cambiato dal 27/08 (non ancora committato)
+
+Due giornate di lavoro che questo file non raccontava ancora.
+
+**Il 31/08**, provando a inserire MyWebby stessa come cliente per un primo test
+vero, si è visto che un'azienda nasceva SOLO dallo scraper Apify — nessun modo
+di aggiungerne una a mano. Da lì:
+
+- **Anagrafica manuale** (`src/lib/anagrafica.ts`, `ModuloAzienda.tsx`,
+  `POST/PATCH /api/aziende`): crea e corregge un'azienda dalla dashboard,
+  Place ID come identità anche qui (stesso principio di §9).
+- **Pubblicazione su WordPress**, non solo sul contratto Astro di
+  `CONTRATTO-SITO.md`: un cliente col sito già fatto (WordPress) può ricevere
+  articoli via REST API + password per applicazioni, senza toccare il suo
+  sito. `src/lib/sito.ts` smista in base a `servizio.blog.config.tipo`.
+- **Azioni in blocco** sull'elenco aziende (elimina/archivia righe spuntate,
+  elimina un gruppo intero) — proteggono chi ha già lavoro dentro.
+- **Bug corretto in audit**: la dashboard mostrava la prosa del modello sotto
+  l'etichetta "cosa si è visto", buttando via la scansione deterministica
+  (viewport, form...). Aggiunta la colonna `audit.scansione` per tenerle separate.
+- **Tema "gothic"** al posto del neutro di Astryx (`src/tema/`): la scelta del
+  punto 8 qui sotto è stata presa — scuro, blu-grigi profondi, palette
+  semantica alzata di saturazione perché sull'elenco aziende i badge di stato
+  si confondevano tutti nello stesso beige.
+
+**Il 01/09** (login e primo giro su "Spie", con MyWebby come primo caso vero):
+
+- **Login rifatto**: split-screen (il modulo a sinistra, la catena
+  fatto→voce→bozza→approvazione→pubblicazione a destra), il logo vero di
+  MyWebby al posto di una scritta, occhiolino mostra/nascondi password,
+  "ricordami" con sessione di 30 giorni invece delle 12 ore di sempre.
+  Corretto anche un bug vero nel farlo: i font del tema (`Fustat`,
+  `Manufacturing Consent`) erano dichiarati ma mai caricati da nessuna parte —
+  ora via `next/font/google`, in tutta l'app, non solo nel login.
+- **Il logout non esisteva.** `DELETE /api/entra` c'era da quando c'è il
+  login, ma senza un bottone da nessuna parte: chi entrava non poteva uscire.
+  Ora è nel `Telaio`, sempre visibile.
+- **L'atterraggio è "Da fare" (`/insights`), non più "Aziende".** Chi entra
+  vedeva 78 righe di lead senza un rigo di contesto. `/insights` è già "cosa
+  faccio adesso" con un numero e un link; sopra ha anche la catena come mappa
+  muta, per chi non sa ancora cosa vuol dire "bozza" o "approvazione".
+- **"Pubblicazioni recenti" dentro `/spie`.** La tabella `pubblicazione`
+  esisteva da sempre ma non aveva mai uno schermo: per vederla per intero
+  bisognava aprire il database a mano (è successo, cercando un guasto vero su
+  MyWebby — vedi sotto). Non ricontrolla con Google (asincrono: resta legato
+  al TODO 1).
+- **Ogni spia porta dove si sistema.** Prima erano solo nomi in una lista;
+  ora ogni esempio ha un link — alla linguetta Servizi se manca un id Google o
+  un servizio è spento, a "Il mese" se la coda è vuota, a `/bozze` se c'è da
+  decidere. Corretto anche il contrasto del banner rosso: il testo scuro
+  (`--color-text-red`, tarato per i badge) su un fondo diventato più acceso il
+  31/08 era sotto la soglia leggibile — ora usa `--color-on-error`.
+- **Il primo caso vero**: MyWebby stessa, cliente in tabella (id 82). Un post
+  Google approvato il 31/08 non è mai uscito — non un bug, il router non è mai
+  stato acceso in questa working tree e il servizio `post_gbp` di MyWebby è
+  spento. È il TODO 1, visto dal vivo invece che sulla carta.
 
 ## 1. IL TODO, in ordine
 
@@ -47,21 +106,33 @@ npm run utente   ->  crea un accesso alla dashboard
 6. **La chat** e **sync Instagram**: non ho capito che lavoro fanno nel giro quotidiano.
 7. **OAuth Google/Facebook dalla dashboard**: oggi il refresh token sta nel `.env`.
    Serve solo per collegare account nuovi senza toccare il server.
-8. **Il look**: Wesion usa il tema neutro di Astryx (sobrio, accento blu). La Master Suite
-   e' nera con accenti viola. Si cambia con `astryx theme`, ma e' una scelta di identita'
-   e va presa apposta.
+8. ~~**Il look**~~ — deciso il 31/08: tema "gothic" (`src/tema/`), scuro con blu-grigi
+   profondi. Vedi §0.1. Fonte: `src/tema/gothicTheme.ts` — ricompilare con
+   `npm run astryx -- theme build src/tema/gothicTheme.ts` dopo ogni modifica, l'app legge
+   il compilato (`gothic.js`/`gothic.css`), non il sorgente.
 
 ## 2. Cosa c'e' in tabella adesso
 
+*Numeri veri, contati il 01/09/2026 — non le stime della sera del 27/08.*
+
 | | |
 |---|---|
-| aziende | 76 prospect · **1 cliente** (finto) |
-| bozze | 19, tutte da approvare |
-| audit | 36 · campagne 2 · utenti 1 |
-| **pubblicazioni** | **0 — niente e' mai uscito** |
+| aziende | 78, di cui **2 clienti** |
+| bozze | 37, di cui 36 da approvare |
+| audit | 73 · campagne 2 · utenti 1 |
+| **pubblicazioni** | **0 — niente e' mai uscito davvero** |
 
-Il cliente finto e' **Trattoria La Fenice (prova)**, slug `zzz-piano-fenice`: 8 fatti veri,
-18 post di dicembre + 1 articolo. Serviva a misurare. Si cancella con:
+I due clienti sono entrambi di prova, per motivi diversi:
+
+- **Trattoria La Fenice (prova)**, slug `zzz-piano-fenice`: 8 fatti veri, 18 post di
+  dicembre + 1 articolo. Serviva a misurare la catena dei generatori (§5).
+- **MyWebby** (id 82, slug `mywebby`), aggiunta il 31/08 con l'anagrafica manuale (§0.1):
+  17 post Google generati dal piano del mese, un articolo pronto per il blog, un post
+  approvato (id 75) mai pubblicato — vedi il TODO 1 e la nota su `post_gbp` spento.
+  ⚠️ **Questa NON si cancella**: è il primo caso vero (agenzia su se stessa), non uno
+  scarto di misurazione come La Fenice.
+
+La Fenice, quando non serve più, si cancella con:
 
 ```sql
 DELETE FROM wesion.evento WHERE azienda_id = (SELECT id FROM wesion.azienda WHERE slug='zzz-piano-fenice');
@@ -107,6 +178,11 @@ mezzanotte italiana quest'ultimo da' il giorno prima, e le colonne timestamptz t
 
 **Gli id di Google non si digitano mai**: si leggono da Google (bottone nella scheda). E' la
 regola del guasto del 21/07/2026, e la prima versione di quella pagina la violava.
+
+**Il middleware deve escludere ogni path con un'estensione**, non solo `_next/static` e
+`_next/image`. Trovato il 01/09/2026: il logo su `/entra` veniva rimandato su se stesso
+(redirect a `/entra` da dentro `/entra`) perche' `public/` non era escluso — e proprio chi
+non e' ancora entrato e' l'unico che vede quella pagina.
 
 ## 5. La catena dei generatori, misurata
 

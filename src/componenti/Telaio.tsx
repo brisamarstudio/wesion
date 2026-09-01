@@ -16,18 +16,32 @@
  * contentPadding={0} perche' il contenuto dominante sono tabelle: sono le celle
  * a possedere il proprio incavo, e una padding qui creerebbe un doppio margine.
  */
+import { useRouter } from 'next/navigation';
 import { AppShell } from '@astryxdesign/core/AppShell';
 import { SideNav, SideNavHeading, SideNavItem } from '@astryxdesign/core/SideNav';
+import { Button } from '@astryxdesign/core/Button';
+import { Icon } from '@astryxdesign/core/Icon';
+import { Megaphone, Building2, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+/**
+ * Le icone servono a ritrovare la voce senza rileggerla, quindi ognuna dice il
+ * MESTIERE della pagina e non la sua categoria: il megafono e' il lavoro che
+ * esce (campagne), la penna e' il lavoro che aspetta un giudizio (bozze), la
+ * sirena e' l'unica che chiede di essere guardata subito (spie).
+ *
+ * Sono componenti Lucide passati diretti: `icon` di SideNavItem accetta un nome
+ * semantico OPPURE un componente SVG (`astryx docs icons`). I nomi semantici li
+ * mappa gia' il tema, ma nessuno di quei 26 nomi vuol dire "piano editoriale".
+ */
 const VOCI = [
-  { href: '/campagne', label: 'Campagne' },
-  { href: '/aziende', label: 'Aziende' },
-  { href: '/calendario', label: 'Calendario' },
-  { href: '/piano', label: 'Piano' },
-  { href: '/bozze', label: 'Bozze' },
-  { href: '/spie', label: 'Spie' },
-  { href: '/insights', label: 'Insights' },
+  { href: '/campagne', label: 'Campagne', icona: Megaphone },
+  { href: '/aziende', label: 'Aziende', icona: Building2 },
+  { href: '/calendario', label: 'Calendario', icona: CalendarDays },
+  { href: '/piano', label: 'Piano', icona: LayoutGrid },
+  { href: '/bozze', label: 'Bozze', icona: PenLine },
+  { href: '/spie', label: 'Spie', icona: Siren },
+  { href: '/insights', label: 'Da fare', icona: TrendingUp },
 ];
 
 export function Telaio({
@@ -37,6 +51,22 @@ export function Telaio({
   children: ReactNode;
   attiva: string;
 }) {
+  const router = useRouter();
+
+  /**
+   * L'uscita, aggiunta il 01/09/2026: la rotta `DELETE /api/entra` che cancella
+   * il cookie esisteva da quando c'e' il login, ma non era agganciata a NESSUN
+   * bottone — chi entrava non aveva un modo di uscire da nessuna parte
+   * dell'interfaccia. Qui, non nella pagina di login, perche' e' l'unico posto
+   * che vede sempre chi e' dentro. `clickAction` (non `onClick`) mostra da
+   * solo lo spinner finche' la promise non finisce.
+   */
+  async function esci() {
+    await fetch('/api/entra', { method: 'DELETE' });
+    router.push('/entra');
+    router.refresh();
+  }
+
   return (
     <AppShell
       height="fill"
@@ -62,12 +92,22 @@ export function Telaio({
            * succedeva, solo senza l'errore in console.
            */
           resizable={{ defaultWidth: 256, minWidth: 200, maxWidth: 360 }}
+          footer={
+            <Button
+              label="Esci"
+              icon={<Icon icon={LogOut} />}
+              variant="ghost"
+              width="100%"
+              clickAction={esci}
+            />
+          }
         >
           {VOCI.map((v) => (
             <SideNavItem
               key={v.href}
               label={v.label}
               href={v.href}
+              icon={v.icona}
               isSelected={attiva === v.href}
             />
           ))}

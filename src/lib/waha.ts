@@ -131,8 +131,34 @@ export async function scaricaMedia(url: string): Promise<{ dati: Buffer; mime: s
  * ⚠️ `formato: jpg` e non webp: i post della scheda Google vogliono JPEG o PNG,
  * e con un webp l'API risponde 500 "Internal error" senza dire cosa non va.
  * upload.php converte in webp di default e accetta questo interruttore apposta.
+ *
+ * ⚠️ LA CARTELLA E' PER CLIENTE, e fino al 31/08/2026 non lo era: ogni foto
+ * finiva in `clienti/wesion/`, cioe' le immagini di tutti i clienti mescolate
+ * in un mucchio solo. Il vecchio `gbp-autoposter` ha la stessa cicatrice
+ * scritta in `api/upload/route.ts`: aveva un default ('da-andrea') che faceva
+ * finire le foto di ogni cliente nella cartella di uno, e il guasto non si
+ * notava perche' l'immagine si vede lo stesso. Si scopre il giorno che devi
+ * togliere una foto di un cliente, o dirgli quali immagini sono sue.
+ *
+ * Lo slug arriva da chi chiama e viene ricontrollato qui: e' un pezzo di
+ * percorso sul filesystem del media server, non un'etichetta.
  */
-export async function caricaPubblico(dati: Buffer, mime: string): Promise<string | null> {
+
+/** Minuscole, cifre e trattini: e' il nome di una cartella, non un titolo. */
+const SLUG_MEDIA = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/;
+
+export interface DoveVaLaFoto {
+  /** Lo slug dell'azienda. Se manca o non e' valido si ripiega su 'wesion'. */
+  cliente?: string | null;
+  /** Sottocartella: 'menu', 'gbp', 'blog'. */
+  tipo?: string;
+}
+
+export async function caricaPubblico(
+  dati: Buffer,
+  mime: string,
+  dove: DoveVaLaFoto = {}
+): Promise<string | null> {
   const url = process.env.MEDIA_UPLOAD_URL || 'https://media.mywebby.it/upload.php';
   const token = process.env.MEDIA_UPLOAD_TOKEN;
   if (!token) {
@@ -140,11 +166,15 @@ export async function caricaPubblico(dati: Buffer, mime: string): Promise<string
     return null;
   }
 
+  const proposto = String(dove.cliente ?? '').trim().toLowerCase();
+  const cliente = SLUG_MEDIA.test(proposto) ? proposto : process.env.MEDIA_CLIENT || 'wesion';
+  const tipo = dove.tipo && SLUG_MEDIA.test(dove.tipo) ? dove.tipo : 'menu';
+
   const estensione = String(mime).includes('png') ? 'png' : 'jpg';
   const modulo = new FormData();
-  modulo.append('file', new Blob([new Uint8Array(dati)], { type: mime }), `menu-${Date.now()}.${estensione}`);
-  modulo.append('cliente', process.env.MEDIA_CLIENT || 'wesion');
-  modulo.append('tipo', 'menu');
+  modulo.append('file', new Blob([new Uint8Array(dati)], { type: mime }), `${tipo}-${Date.now()}.${estensione}`);
+  modulo.append('cliente', cliente);
+  modulo.append('tipo', tipo);
   modulo.append('formato', 'jpg');
 
   try {

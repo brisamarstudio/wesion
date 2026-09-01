@@ -97,6 +97,7 @@ export default async function PaginaAziende({
        a.id, a.slug, a.nome, a.categoria, a.citta, a.provincia, a.stato, a.maps_url,
        camp.nome AS campagna,
        ultimo.score, ultimo.note AS audit_note, ultimo.hook AS audit_hook,
+       ultimo.scansione AS audit_scansione, ultimo.modello AS audit_modello,
        ultimo.eseguito_at AS audit_quando,
        (SELECT y.errore FROM wesion.audit y
          WHERE y.azienda_id = a.id ORDER BY y.eseguito_at DESC LIMIT 1) AS audit_errore,
@@ -112,14 +113,27 @@ export default async function PaginaAziende({
          ORDER BY c.id LIMIT 1)                                         AS email,
        (SELECT c.normalizzato FROM wesion.contatto c
          WHERE c.azienda_id = a.id AND c.tipo = 'sito'
-         ORDER BY c.id LIMIT 1)                                         AS sito
+         ORDER BY c.id LIMIT 1)                                         AS sito,
+       /*
+        * Il voto e le recensioni di Google, che lo scraper porta a casa da
+        * sempre dentro raw_json e che nessuno guardava.
+        * (Niente backtick qui dentro: chiuderebbero il template literal.)
+        *
+        * ⚠️ E' il segnale piu' forte che abbiamo per scegliere chi chiamare, ed
+        * era li' inutilizzato: un'attivita' con 4.7 stelle su 629 recensioni e
+        * nessun sito ha gia' i clienti e la reputazione — le manca solo la
+        * vetrina. Il punteggio dell'audit da solo non lo dice: quello guarda il
+        * sito, non quanta gente li' dentro ci va contenta.
+        */
+       (a.raw_json->>'totalScore')::numeric   AS voto,
+       (a.raw_json->>'reviewsCount')::int     AS recensioni
      FROM wesion.azienda a
      LEFT JOIN wesion.campagna camp ON camp.id = a.campagna_id
      -- LATERAL e non tre sottoquery uguali: punteggio, note e gancio devono
      -- venire tutti DALLO STESSO audit, o un giorno il punteggio è di un giro
      -- e il gancio di un altro e nessuno se ne accorge.
      LEFT JOIN LATERAL (
-       SELECT x.score, x.note, x.hook, x.eseguito_at FROM wesion.audit x
+       SELECT x.score, x.note, x.scansione, x.modello, x.hook, x.eseguito_at FROM wesion.audit x
         WHERE x.azienda_id = a.id AND x.esito = 'ok'
         ORDER BY x.eseguito_at DESC LIMIT 1
      ) ultimo ON true
@@ -151,7 +165,9 @@ export default async function PaginaAziende({
          WHEN 'campagna'  THEN COALESCE(camp.nome, 'zzz')
          ELSE ''
        END,
-       ultimo.score DESC NULLS LAST, a.nome
+       /* A parita' di punteggio vince chi ha piu' recensioni: fra due locali
+          senza sito, quello con 629 clienti contenti si chiama per primo. */
+       ultimo.score DESC NULLS LAST, recensioni DESC NULLS LAST, a.nome
      LIMIT $8 OFFSET $9`,
       [...filtri, gruppo, PER_PAGINA, (pagina - 1) * PER_PAGINA]
     ),

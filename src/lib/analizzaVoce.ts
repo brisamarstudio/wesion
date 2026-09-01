@@ -28,7 +28,7 @@
 
 import { generaJson } from './generatore';
 import { leggiProfiloGoogle, leggiRecensioni } from './gbp';
-import { leggiTestoSito } from './leggiSito';
+import { leggiSitoIntero } from './leggiSito';
 import { query } from './db';
 import type { VoceCliente } from './voce';
 
@@ -104,12 +104,27 @@ export async function raccogliMateriale(aziendaId: number, incollato = ''): Prom
     }
   }
 
-  // 3. Il sito. Tagliato corto apposta: serve a sapere cosa vende, non a
-  //    dettare il tono, e più testo entra più il gergo da vetrina pesa.
+  /**
+   * 3. Il sito, su più pagine.
+   *
+   * Fino al 31/08/2026 si leggeva solo la home, tagliata a 10.000 caratteri.
+   * Su un sito magro bastava; su uno corposo la home è la vetrina — dice il
+   * mestiere in una riga e rimanda a «Servizi» per tutto il resto. Il risultato
+   * era un `cosa_fa` giusto e poi tre elenchi vuoti, cioè una scheda che resta
+   * sotto i quattro fatti minimi e un piano che esce generico.
+   *
+   * Il testo in più NON tocca la voce: `estraiVoce` il sito non lo vede
+   * proprio, ed è la difesa strutturale spiegata in cima al file. Qui alimenta
+   * solo la domanda sui fatti, dove più materiale vero è meglio.
+   */
   if (a.sito) {
-    m.testoSito = await leggiTestoSito(a.sito, 10000);
-    if (m.testoSito) m.fonti.push('sito web');
-    else m.avvisi.push('Sito non raggiungibile o vuoto.');
+    const sito = await leggiSitoIntero(a.sito, { pagine: 6, perPagina: 6000 });
+    m.testoSito = sito.testo;
+    if (sito.testo) {
+      m.fonti.push(sito.lette.length > 1 ? `sito web (${sito.lette.length} pagine)` : 'sito web');
+    } else {
+      m.avvisi.push('Sito non raggiungibile o vuoto.');
+    }
   }
 
   // 4. Quello che ha incollato una persona: didascalie, appunti, la telefonata.
@@ -209,8 +224,17 @@ Restituisci SOLO il JSON.`,
   return Array.isArray(v) ? v.map(String).map((x) => x.trim()).filter(Boolean).slice(0, 6) : [];
 }
 
+/** I cinque tag ammessi da `ricorrenze.ts`. Il modello sceglie fra questi, non inventa. */
+const SETTORI = ['ristorazione', 'artigianato', 'casa', 'servizi', 'locale'] as const;
+
 /** Domanda 3 — cosa vende. Vede sito e descrizione: sono fatti, non voce. */
-async function estraiFatti(m: Materiale): Promise<{ cosa_fa: string; offerta: string[]; materiali: string[] }> {
+async function estraiFatti(m: Materiale): Promise<{
+  cosa_fa: string;
+  offerta: string[];
+  materiali: string[];
+  punti_forza: string[];
+  settore: string[];
+}> {
   const materiale = [
     m.descrizioneGoogle && `DESCRIZIONE DELLA SCHEDA:\n"${m.descrizioneGoogle}"`,
     m.categoria && `CATEGORIA GOOGLE: ${m.categoria}`,
@@ -219,20 +243,37 @@ async function estraiFatti(m: Materiale): Promise<{ cosa_fa: string; offerta: st
     .filter(Boolean)
     .join('\n\n');
 
-  if (!materiale) return { cosa_fa: '', offerta: [], materiali: [] };
+  if (!materiale) return { cosa_fa: '', offerta: [], materiali: [], punti_forza: [], settore: [] };
 
   const esito = await generaJson(
     SISTEMA_ANALISTA,
-    `Qui sotto c'è del materiale su un'attività. Serve a capire COSA FA e COSA VENDE.
+    `Qui sotto c'è del materiale su un'attività — può essere più di una pagina del suo sito, e in
+quel caso ogni pezzo inizia con "PAGINA:". Serve a capire COSA FA e COSA VENDE.
 
 ${materiale}
 
-Restituisci un JSON: { "cosa_fa": "", "offerta": [], "materiali": [] }
+Restituisci un JSON:
+{ "cosa_fa": "", "offerta": [], "materiali": [], "punti_forza": [], "settore": [] }
 
 - "cosa_fa": l'attività in concreto, in una riga. "trattoria con cucina pavese e pasta fatta in
   casa", non "eccellenza della ristorazione".
 - "offerta": prodotti o servizi principali, massimo 8, chiamati col loro nome.
-- "materiali": ingredienti, materiali, metodi di lavorazione nominati esplicitamente. Massimo 8.
+- "materiali": ingredienti, materiali, metodi di lavorazione, strumenti o tecnologie nominati
+  esplicitamente. Massimo 8.
+- "punti_forza": cosa lo distingue DAVVERO da chi fa lo stesso mestiere. Massimo 6.
+  Vale solo ciò che è verificabile e specifico: un numero ("vent'anni di lavoro", "consegna in
+  48 ore"), una competenza rara, un modo di lavorare che gli altri non hanno, una garanzia
+  precisa. NON valgono i superlativi ("massima qualità", "grande esperienza", "attenzione al
+  cliente"): li scrive chiunque, e in un post non dicono niente. Se dal materiale non emerge
+  niente di distintivo, lascia la lista vuota: è una risposta corretta.
+- "settore": zero o più valori SCELTI SOLO fra questi cinque, nessun altro:
+  "ristorazione" (bar, ristoranti, pizzerie, gastronomie),
+  "artigianato" (chi produce o ripara con le mani),
+  "casa" (edilizia, impianti, arredo, giardini, pulizie),
+  "servizi" (professionisti, agenzie, consulenza, informatica, marketing),
+  "locale" (attività di quartiere che vive del passaggio e del paese).
+  Servono a scegliere quali ricorrenze del calendario hanno senso per lui, quindi mettine uno o
+  due, quelli giusti — non tutti per sicurezza.
 
 ⚠️ Solo cose SCRITTE nel materiale. Questa roba finirà nei post come se fosse verificata: se
 deduci o abbellisci, il cliente si ritrova ad affermare pubblicamente cose che non ha mai detto.
@@ -243,18 +284,27 @@ Restituisci SOLO il JSON.`,
   );
 
   const d = esito.dato;
-  const lista = (v: unknown) =>
-    Array.isArray(v) ? v.map(String).map((x) => x.trim()).filter(Boolean).slice(0, 8) : [];
+  const lista = (v: unknown, quante = 8) =>
+    Array.isArray(v) ? v.map(String).map((x) => x.trim()).filter(Boolean).slice(0, quante) : [];
+
   return {
     cosa_fa: typeof d.cosa_fa === 'string' ? d.cosa_fa.trim() : '',
     offerta: lista(d.offerta),
     materiali: lista(d.materiali),
+    punti_forza: lista(d.punti_forza, 6),
+    // Il modello propone, la lista chiusa decide: un tag inventato non
+    // corrisponderebbe a nessuna ricorrenza e sparirebbe in silenzio.
+    settore: lista(d.settore, 5)
+      .map((x) => x.toLowerCase())
+      .filter((x): x is (typeof SETTORI)[number] => (SETTORI as readonly string[]).includes(x)),
   };
 }
 
 export interface EsitoAnalisi {
   voce: Partial<VoceCliente>;
-  fatti: { cosa_fa: string; offerta: string[]; materiali: string[] };
+  fatti: { cosa_fa: string; offerta: string[]; materiali: string[]; punti_forza: string[] };
+  /** Proposto, non applicato: sceglie quali ricorrenze del calendario hanno senso. */
+  settore: string[];
   fonti: string[];
   avvisi: string[];
 }
@@ -280,7 +330,7 @@ export async function analizzaVoce(aziendaId: number, incollato = ''): Promise<E
     }),
     estraiFatti(m).catch((e) => {
       m.avvisi.push(`Fatti non ricavati: ${e instanceof Error ? e.message : e}`);
-      return { cosa_fa: '', offerta: [], materiali: [] };
+      return { cosa_fa: '', offerta: [], materiali: [], punti_forza: [], settore: [] };
     }),
   ]);
 
@@ -290,5 +340,6 @@ export async function analizzaVoce(aziendaId: number, incollato = ''): Promise<E
     );
   }
 
-  return { voce: { ...voce, apprezzato }, fatti, fonti: m.fonti, avvisi: m.avvisi };
+  const { settore, ...soloFatti } = fatti;
+  return { voce: { ...voce, apprezzato }, fatti: soloFatti, settore, fonti: m.fonti, avvisi: m.avvisi };
 }

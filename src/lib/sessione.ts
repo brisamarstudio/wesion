@@ -19,8 +19,24 @@
 
 export const NOME_COOKIE = 'wesion_sessione';
 
-/** Quanto dura una sessione: una giornata di lavoro con un margine. */
+/** Quanto dura una sessione normale: una giornata di lavoro con un margine. */
 const DURATA_ORE = 12;
+/** Con "ricordami": un mese, per chi entra dallo stesso computer ogni giorno. */
+const DURATA_RICORDAMI_ORE = 30 * 24;
+
+/**
+ * Esportate in secondi perche' le legge anche `route.ts`, per il `maxAge` del
+ * cookie nel browser — che e' una cosa DIVERSA da `scade` qui sotto.
+ *
+ * ⚠️ LE DUE DURATE DEVONO MUOVERSI INSIEME. `scade` (nel payload firmato) dice
+ * quanto la SESSIONE resta valida; `maxAge` (nell'header Set-Cookie) dice
+ * quanto il BROWSER tiene il cookie prima di buttarlo da solo. Se il primo
+ * dicesse 30 giorni e il secondo restasse a 12 ore, il browser cancellerebbe
+ * il cookie a mezzanotte e il "ricordami" non ricorderebbe niente — nessun
+ * errore, solo un utente disconnesso che giura di aver spuntato la casella.
+ */
+export const DURATA_SECONDI = DURATA_ORE * 3600;
+export const DURATA_RICORDAMI_SECONDI = DURATA_RICORDAMI_ORE * 3600;
 
 function segreto(): string {
   const s = process.env.SESSION_SECRET;
@@ -73,8 +89,9 @@ export interface Sessione {
   scade: number;
 }
 
-export async function creaCookie(email: string, nome: string | null): Promise<string> {
-  const corpo: Sessione = { email, nome, scade: Date.now() + DURATA_ORE * 3600_000 };
+export async function creaCookie(email: string, nome: string | null, ricordami = false): Promise<string> {
+  const durataMs = (ricordami ? DURATA_RICORDAMI_SECONDI : DURATA_SECONDI) * 1000;
+  const corpo: Sessione = { email, nome, scade: Date.now() + durataMs };
   const dati = b64url(new TextEncoder().encode(JSON.stringify(corpo)));
   return `${dati}.${await firma(dati)}`;
 }

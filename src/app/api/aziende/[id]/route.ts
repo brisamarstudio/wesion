@@ -11,6 +11,40 @@
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { aggiornaAzienda, leggiAnagrafica, type DatiAzienda } from '@/lib/anagrafica';
+
+/**
+ * Leggere e correggere l'anagrafica: nome, indirizzo, categoria, contatti.
+ *
+ * Sta qui e non in `/scheda` perche' sono due mestieri diversi: la scheda e'
+ * come il cliente PARLA e cosa gli facciamo, questa e' chi e' e dove sta. Chi
+ * corregge un numero di telefono non deve passare da una pagina che parla di
+ * voce e di fatti.
+ */
+export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
+  const { id } = await contesto.params;
+  const aziendaId = Number(id);
+  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+
+  const anagrafica = await leggiAnagrafica(aziendaId);
+  if (!anagrafica) return NextResponse.json({ errore: 'azienda inesistente' }, { status: 404 });
+  return NextResponse.json(anagrafica);
+}
+
+export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
+  const { id } = await contesto.params;
+  const aziendaId = Number(id);
+  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+
+  try {
+    const corpo = (await richiesta.json()) as Partial<DatiAzienda>;
+    const anagrafica = await aggiornaAzienda(aziendaId, corpo);
+    if (!anagrafica) return NextResponse.json({ errore: 'azienda inesistente' }, { status: 404 });
+    return NextResponse.json(anagrafica);
+  } catch (errore: unknown) {
+    return NextResponse.json({ errore: errore instanceof Error ? errore.message : String(errore) }, { status: 400 });
+  }
+}
 
 export async function DELETE(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;

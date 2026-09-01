@@ -31,6 +31,8 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { TabList, Tab } from '@astryxdesign/core/TabList';
+import { Trash2 } from 'lucide-react';
 import { quandoBreve } from '@/lib/quando';
 
 export interface CampagnaRiga {
@@ -50,6 +52,14 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
   const [citta, setCitta] = useState('');
   const [quanti, setQuanti] = useState('50');
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
+  /**
+   * Due mestieri diversi, non due sezioni della stessa pagina: cercare gente
+   * nuova e tornare a raccogliere un run partito ieri. Impilati uno sotto
+   * l'altro si scorreva sempre, e chi apriva per raccogliere passava ogni volta
+   * davanti a un modulo che non gli serviva. Si apre su «Fatte» quando ce ne
+   * sono: se torni qui, quasi sempre e' per quelle.
+   */
+  const [scheda, setScheda] = useState(campagne.length ? 'fatte' : 'cerca');
 
   async function avvia() {
     setMessaggio(null);
@@ -132,11 +142,16 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
       height="fill"
       header={
         <LayoutHeader hasDivider>
-          <HStack gap={3} align="center">
+          <HStack gap={5} align="center" wrap="wrap">
             <Heading level={2}>Campagne</Heading>
-            <Text color="secondary">
-              {campagne.length === 0 ? 'nessuna ancora' : `${campagne.length} fatte`}
-            </Text>
+            <TabList value={scheda} onChange={setScheda}>
+              <Tab value="cerca" label="Cerca" />
+              <Tab
+                value="fatte"
+                label="Fatte"
+                endContent={campagne.length ? <Badge variant="neutral" label={String(campagne.length)} /> : null}
+              />
+            </TabList>
           </HStack>
         </LayoutHeader>
       }
@@ -152,59 +167,45 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
               />
             ) : null}
 
-            <VStack gap={3}>
-              <VStack gap={1}>
-                <Heading level={3}>Cerca potenziali clienti</Heading>
-                <Text type="supporting">
-                  Categoria e città come le scriveresti su Google Maps. Ogni risultato diventa un’azienda in stato
-                  «da contattare», con i suoi contatti — e da lì si può far girare l’audit.
-                </Text>
-              </VStack>
-
+            {/* I campi dicono cosa vogliono con l'esempio dentro, non con una
+                riga di spiegazione sotto: «Pavia, Vigevano» insegna la virgola
+                meglio di «più città separate da virgola». */}
+            {scheda === 'cerca' ? (
               <HStack gap={3} align="end" wrap="wrap">
                 <TextInput
-                  label="Categoria"
-                  placeholder="ristoranti, dentisti, falegnamerie…"
+                  label="Cosa cerchi"
+                  placeholder="dentisti"
                   value={categoria}
                   onChange={setCategoria}
                 />
-                <TextInput
-                  label="Città"
-                  description="Più città separate da virgola."
-                  placeholder="Pavia, Vigevano"
-                  value={citta}
-                  onChange={setCitta}
-                />
-                <TextInput
-                  label="Quanti al massimo"
-                  description="Un tetto c’è sempre: senza, un refuso costa un run enorme."
-                  value={quanti}
-                  onChange={setQuanti}
-                />
+                <TextInput label="Dove" placeholder="Pavia, Vigevano" value={citta} onChange={setCitta} />
+                <TextInput label="Massimo" placeholder="50" value={quanti} onChange={setQuanti} />
                 <Button
-                  label="Avvia la ricerca"
+                  label="Cerca"
                   variant="primary"
                   isDisabled={!categoria.trim() || !citta.trim()}
-                  tooltip={!categoria.trim() || !citta.trim() ? 'Servono categoria e città.' : undefined}
+                  tooltip={!categoria.trim() || !citta.trim() ? 'Servono cosa e dove.' : undefined}
                   clickAction={avvia}
                 />
               </HStack>
-            </VStack>
+            ) : null}
 
-            <VStack gap={3}>
-              <Heading level={3}>Le campagne fatte</Heading>
-              {campagne.length === 0 ? (
+            {scheda === 'fatte' ? (
+              campagne.length === 0 ? (
                 <EmptyState
                   title="Nessuna campagna"
-                  description="Le 46 aziende che ci sono adesso sono arrivate dalla migrazione di leadgen, non da qui."
+                  description="Cercane una dalla linguetta «Cerca»."
                 />
               ) : (
                 <List hasDividers density="balanced">
                   {campagne.map((c) => (
                     <ListItem
                       key={c.id}
-                      label={c.nome}
-                      description={`${c.categoria} · ${c.citta.join(', ')} · ${quandoBreve(c.creata_at)}`}
+                      /* Il nome vero della campagna e' spesso una stringa da
+                         macchina («ristorante_vigevano_20260727_075808»): si
+                         mostra cosa cercava, che e' quello che uno ricorda. */
+                      label={`${c.categoria} · ${c.citta.join(', ')}`}
+                      description={quandoBreve(c.creata_at)}
                       /* Cliccare la riga APRE la lista, filtrata su questa
                          campagna. Era la cosa che mancava: si raccoglievano
                          trenta lead e poi bisognava andarli a cercare a mano
@@ -227,10 +228,16 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
                           ) : (
                             <Text type="supporting">senza run</Text>
                           )}
+                          {/* Icona e non bottone rosso a tutta parola: su ogni
+                              riga di un elenco, «Cancella» scritto per esteso
+                              e' la cosa piu' vistosa dello schermo, e non e'
+                              quella che si fa piu' spesso. */}
                           <Button
-                            label="Cancella"
+                            label="Cancella la campagna"
+                            isIconOnly
+                            icon={<Trash2 size={16} />}
                             size="sm"
-                            variant="destructive"
+                            variant="ghost"
                             clickAction={() => cancella(c)}
                           />
                         </HStack>
@@ -238,8 +245,8 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
                     />
                   ))}
                 </List>
-              )}
-            </VStack>
+              )
+            ) : null}
           </VStack>
         </LayoutContent>
       }

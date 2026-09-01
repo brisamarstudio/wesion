@@ -12,17 +12,60 @@
  */
 import { Telaio } from '@/componenti/Telaio';
 import { leggiSpie, type Spia } from '@/lib/spie';
-import { daQuando } from '@/lib/quando';
+import { daQuando, quandoBreve } from '@/lib/quando';
+import { query } from '@/lib/db';
+import { ETICHETTA_TIPO, ETICHETTA_DESTINAZIONE } from '@/lib/bozze';
 import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
 import { Banner } from '@astryxdesign/core/Banner';
+import { Badge } from '@astryxdesign/core/Badge';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { List, ListItem } from '@astryxdesign/core/List';
 
 export const dynamic = 'force-dynamic';
+
+interface RigaPubblicazione {
+  id: number;
+  azienda_id: number;
+  azienda: string;
+  tipo: string;
+  contenuto: Record<string, unknown>;
+  destinazione: string;
+  esito: 'ok' | 'errore';
+  errore: string | null;
+  tentativi: number;
+  eseguita_at: string;
+}
+
+/**
+ * Le ultime uscite, riuscite o no — ispirata alla "Coda Pubblicazione AI" di
+ * gbp-autoposter (01/09/2026), ma sopra lo schema vero di Wesion: una riga per
+ * DESTINAZIONE, non uno stato composito su una tabella `posts`. `pubblicazione`
+ * esisteva da sempre ma non aveva mai una schermata — la leggevano solo
+ * `/calendario` (due booleani) e la consolle bozze (nascosta nel dettaglio):
+ * per vederla per intero bisognava aprire il database a mano.
+ *
+ * ⚠️ QUESTO NON RICONTROLLA CON GOOGLE. Google approva i post in modo
+ * asincrono: un `esito='ok'` qui vuol dire "Google l'ha accettato all'invio",
+ * non "è ancora live adesso" — gbp-autoposter l'ha imparato a sue spese (il
+ * suo STATO.md: un post accettato e poi respinto in silenzio dalla revisione).
+ * Un ricontrollo vero tocca `router/pubblica.ts` + `src/lib/gbp.ts` e serve il
+ * router acceso: resta un lavoro a parte, non fatto qui.
+ */
+async function leggiPubblicazioniRecenti(): Promise<RigaPubblicazione[]> {
+  return query<RigaPubblicazione>(
+    `SELECT p.id, b.azienda_id, a.nome AS azienda, b.tipo, b.contenuto,
+            p.destinazione, p.esito, p.errore, p.tentativi, p.eseguita_at
+       FROM wesion.pubblicazione p
+       JOIN wesion.bozza b ON b.id = p.bozza_id
+       JOIN wesion.azienda a ON a.id = b.azienda_id
+      ORDER BY p.eseguita_at DESC
+      LIMIT 30`
+  );
+}
 
 const TITOLO_FAMIGLIA: Record<Spia['famiglia'], string> = {
   guasto: 'Guasti',
@@ -38,7 +81,9 @@ const SOTTOTITOLO_FAMIGLIA: Record<Spia['famiglia'], string> = {
 };
 
 export default async function PaginaSpie() {
-  const spie = await leggiSpie();
+  // Le due indipendenti insieme, non in fila: nessuna usa il risultato
+  // dell'altra (stessa regola di `insights/page.tsx`).
+  const [spie, pubblicazioni] = await Promise.all([leggiSpie(), leggiPubblicazioniRecenti()]);
   // Pagina server: l'ora si prende una volta sola qui, e finisce nell'HTML.
   // Nessuna idratazione di mezzo, quindi nessun rischio di due valori diversi.
   const adesso = Date.now();
@@ -64,6 +109,7 @@ export default async function PaginaSpie() {
         }
         content={
           <LayoutContent padding={4}>
+            <VStack gap={8}>
             {spie.length === 0 ? (
               <EmptyState
                 title="Nessuna spia accesa"
@@ -98,7 +144,7 @@ export default async function PaginaSpie() {
                             {s.esempi.length > 0 ? (
                               <List hasDividers density="compact">
                                 {s.esempi.map((e, i) => (
-                                  <ListItem key={i} label={e} />
+                                  <ListItem key={i} label={e.etichetta} href={e.href} />
                                 ))}
                                 {s.quanti > s.esempi.length ? (
                                   <ListItem
@@ -119,6 +165,48 @@ export default async function PaginaSpie() {
                 })}
               </VStack>
             )}
+
+            <VStack gap={3}>
+              <VStack gap={1}>
+                <Heading level={3}>Pubblicazioni recenti</Heading>
+                <Text type="supporting">
+                  Le ultime uscite, riuscite o no — su tutti i clienti insieme.
+                </Text>
+              </VStack>
+
+              {pubblicazioni.length === 0 ? (
+                <EmptyState
+                  isCompact
+                  title="Ancora niente"
+                  description="Zero righe in pubblicazione: non è mai uscito niente, da nessuna parte."
+                />
+              ) : (
+                <List hasDividers density="balanced">
+                  {pubblicazioni.map((p) => (
+                    <ListItem
+                      key={p.id}
+                      label={`${p.azienda} — ${
+                        (p.contenuto?.titolo as string | undefined) ||
+                        ETICHETTA_TIPO[p.tipo] ||
+                        p.tipo
+                      }`}
+                      description={`${ETICHETTA_DESTINAZIONE[p.destinazione] ?? p.destinazione}${
+                        p.esito === 'errore' && p.errore ? ` · ${p.errore}` : ''
+                      }${p.tentativi > 1 ? ` · tentativo ${p.tentativi}` : ''}`}
+                      href={`/aziende/${p.azienda_id}`}
+                      startContent={
+                        <Badge
+                          variant={p.esito === 'ok' ? 'success' : 'error'}
+                          label={p.esito === 'ok' ? 'ok' : 'errore'}
+                        />
+                      }
+                      endContent={<Text type="supporting">{quandoBreve(p.eseguita_at)}</Text>}
+                    />
+                  ))}
+                </List>
+              )}
+            </VStack>
+            </VStack>
           </LayoutContent>
         }
       />

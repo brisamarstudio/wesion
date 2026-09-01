@@ -13,16 +13,17 @@
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { creaCookie, NOME_COOKIE } from '@/lib/sessione';
+import { creaCookie, NOME_COOKIE, DURATA_SECONDI, DURATA_RICORDAMI_SECONDI } from '@/lib/sessione';
 import { impastaPassword, verificaPassword } from '@/lib/password';
 
 /** Un hash valido ma di nessuno: serve a spendere lo stesso tempo. */
 let hashFinto: string | null = null;
 
 export async function POST(richiesta: Request) {
-  const { email, password } = (await richiesta.json().catch(() => ({}))) as {
+  const { email, password, ricordami } = (await richiesta.json().catch(() => ({}))) as {
     email?: string;
     password?: string;
+    ricordami?: boolean;
   };
 
   if (!email || !password) {
@@ -44,14 +45,16 @@ export async function POST(richiesta: Request) {
   await query(`UPDATE wesion.utente SET ultimo_accesso_at = now() WHERE lower(email) = lower($1)`, [email]);
 
   const risposta = NextResponse.json({ email: utente.email, nome: utente.nome });
-  risposta.cookies.set(NOME_COOKIE, await creaCookie(utente.email, utente.nome), {
+  risposta.cookies.set(NOME_COOKIE, await creaCookie(utente.email, utente.nome, Boolean(ricordami)), {
     httpOnly: true,
     sameSite: 'lax',
     // Solo in produzione: in sviluppo si gira su http://localhost e un cookie
     // `secure` non verrebbe mai mandato indietro.
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 12 * 3600,
+    // Stessa durata di `scade` dentro al cookie firmato — vedi il commento su
+    // DURATA_SECONDI in sessione.ts sul perche' le due non possono divergere.
+    maxAge: ricordami ? DURATA_RICORDAMI_SECONDI : DURATA_SECONDI,
   });
   return risposta;
 }

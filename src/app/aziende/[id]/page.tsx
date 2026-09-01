@@ -4,6 +4,7 @@
  * Componente server: legge la scheda e la passa. Tutto il resto e' un form, che
  * per forza vive nel browser.
  */
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { Telaio } from '@/componenti/Telaio';
 import { SchedaCliente } from '@/componenti/SchedaCliente';
@@ -21,7 +22,11 @@ export default async function PaginaCliente({ params }: { params: Promise<{ id: 
 
   return (
     <Telaio attiva="/aziende">
-      <SchedaCliente scheda={scheda} />
+      {/* useSearchParams (per ?tab=, vedi SchedaCliente) vuole un confine di
+          Suspense, o il build si ferma — stessa regola di piano/page.tsx. */}
+      <Suspense>
+        <SchedaCliente scheda={scheda} />
+      </Suspense>
     </Telaio>
   );
 }

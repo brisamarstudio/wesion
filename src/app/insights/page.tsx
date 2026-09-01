@@ -1,17 +1,27 @@
 /**
- * Insights — dove si è fermato il lavoro, e cosa lo sblocca.
+ * Da fare — le cose ferme, e un click per andarci.
  *
- * ⚠️ NON È UN CRUSCOTTO DI VANITÀ. Ogni riga qui deve rispondere a «cosa faccio
- * adesso», altrimenti è un numero che si guarda una volta e poi non si guarda
- * più. Per questo non c'è nessun grafico e nessun totale cumulativo: ci sono le
- * cose ferme e dove si riprendono.
+ * ⚠️ NON È UN CRUSCOTTO DI VANITÀ. Ogni riga deve rispondere a «cosa faccio
+ * adesso»: niente grafici, niente totali cumulativi.
+ *
+ * ⚠️ E NON SI SPIEGA AL LETTORE PERCHÉ LA PAGINA È FATTA COSÌ (31/08/2026).
+ * Questa pagina aveva sotto ogni titolo un paragrafo che raccontava le mie
+ * scelte di progetto — «"senza sito" è la colonna che conta per chi vende siti:
+ * sono i lead dove il problema è evidente prima ancora di chiamare». È una nota
+ * di progettazione: sta bene qui, in un commento, dove questo progetto ha la
+ * regola di scrivere il PERCHÉ. Su uno schermo dove qualcuno deve solo decidere
+ * chi chiamare è rumore che allontana il numero dall'occhio. Chi usa lo
+ * strumento non deve imparare come l'ho pensato.
+ *
+ * Regola per chi tocca questa pagina: etichetta corta, numero grosso, e la riga
+ * PORTA dove si lavora invece di dire a parole dove andare.
  *
  * Pagina server: sono query, non interazione.
  */
 import { query } from '@/lib/db';
 import { Telaio } from '@/componenti/Telaio';
+import { CatenaStriscia } from '@/componenti/CatenaStriscia';
 import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
-import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
@@ -19,6 +29,7 @@ import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Divider } from '@astryxdesign/core/Divider';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,40 +116,40 @@ export default async function PaginaInsights() {
    * dove andare, invece di sapere solo che qualcosa non va.
    */
   const daFare = [
-    conti.caldi_non_contattati && {
-      testo: `${conti.caldi_non_contattati} lead con punteggio 80 o più non sono ancora stati contattati`,
-      dove: 'Aziende → «Da contattare». Sono in cima: l’elenco ordina per punteggio',
+    conti.bozze_da_decidere && {
+      testo: `${conti.bozze_da_decidere} testi aspettano il tuo sì`,
+      vai: '/bozze',
       ora: true,
     },
-    conti.bozze_da_decidere && {
-      testo: `${conti.bozze_da_decidere} bozze aspettano un sì o un no`,
-      dove: 'Bozze → «Da decidere». È l’unica coda che si ferma se nessuno la guarda',
+    conti.caldi_non_contattati && {
+      testo: `${conti.caldi_non_contattati} lead buoni da chiamare`,
+      vai: '/aziende?stato=prospect',
       ora: true,
     },
     conti.da_analizzare && {
-      testo: `${conti.da_analizzare} aziende non hanno ancora un audit riuscito`,
-      dove: 'Aziende → «Analizza le mancanti». È gratis: passa dalla catena, 25 per giro',
+      testo: `${conti.da_analizzare} aziende senza audit`,
+      vai: '/aziende',
       ora: false,
     },
     conti.clienti_senza_voce && {
-      testo: `${conti.clienti_senza_voce} clienti non hanno una voce`,
-      dove: 'Scheda cliente → «Ricava la voce da quello che c’è». Senza, i post escono da agenzia',
+      testo: `${conti.clienti_senza_voce} clienti senza voce`,
+      vai: '/aziende?stato=cliente',
       ora: false,
     },
     conti.clienti_senza_fatti && {
-      testo: `${conti.clienti_senza_fatti} clienti hanno meno di 4 fatti`,
-      dove: 'Scheda cliente → «Cosa è vero». Sotto i quattro i temi finiscono e il mese si ripete',
+      testo: `${conti.clienti_senza_fatti} clienti con meno di 4 fatti`,
+      vai: '/aziende?stato=cliente',
       ora: false,
     },
     conti.slot_da_scrivere && {
-      testo: `${conti.slot_da_scrivere} slot del piano non hanno ancora un testo`,
-      dove: 'Scheda cliente → «Scrivi i testi mancanti»',
+      testo: `${conti.slot_da_scrivere} post del piano ancora da scrivere`,
+      vai: '/piano',
       ora: false,
     },
-  ].filter(Boolean) as Array<{ testo: string; dove: string; ora: boolean }>;
+  ].filter(Boolean) as Array<{ testo: string; vai: string; ora: boolean }>;
 
   const ordine = ['prospect', 'contattato', 'in_trattativa', 'cliente', 'perso'];
-  const totale = imbuto.reduce((n, r) => n + r.quanti, 0);
+
 
   return (
     <Telaio attiva="/insights">
@@ -146,23 +157,26 @@ export default async function PaginaInsights() {
         height="fill"
         header={
           <LayoutHeader hasDivider>
-            <HStack gap={3} align="center">
-              <Heading level={2}>Insights</Heading>
-              <Text color="secondary">dove si è fermato il lavoro</Text>
-            </HStack>
+            <Heading level={2}>Da fare</Heading>
           </LayoutHeader>
         }
         content={
           <LayoutContent padding={4}>
             <VStack gap={6}>
+              {/*
+                La mappa, non la spiegazione (01/09/2026). Questa pagina e' la
+                porta d'ingresso da quando /entra non manda piu' a /aziende:
+                chi arriva non sa cosa significhi "bozza" o "approvazione".
+                Una riga muta — icona ed etichetta, zero prosa — non e'
+                spiegare "perche' la pagina e' fatta cosi'" (quello resta
+                vietato, vedi sopra): e' dire cos'e' il prodotto, che e' un'
+                altra cosa. Condivisa con il login (`catenaWesion.ts`) perche'
+                e' lo stesso concetto raccontato due volte.
+              */}
+              <CatenaStriscia />
+              <Divider />
+
               <VStack gap={3}>
-                <VStack gap={1}>
-                  <Heading level={3}>Cosa fare adesso</Heading>
-                  <Text type="supporting">
-                    Ogni riga è un lavoro fermo, con scritto dove si sblocca. Se è vuota, non c’è niente in attesa
-                    di una persona.
-                  </Text>
-                </VStack>
                 {daFare.length === 0 ? (
                   <Banner
                     status="success"
@@ -170,13 +184,17 @@ export default async function PaginaInsights() {
                     description="Tutto quello che poteva partire è partito."
                   />
                 ) : (
+                  /* La riga PORTA dove si lavora: prima diceva a parole
+                     «Aziende -> Da contattare», che e' un'istruzione da
+                     eseguire a mano. */
                   <List hasDividers density="balanced">
                     {daFare.map((r, i) => (
                       <ListItem
                         key={i}
                         label={r.testo}
-                        description={r.dove}
+                        href={r.vai}
                         startContent={r.ora ? <Badge variant="warning" label="ora" /> : null}
+                        endContent={<Text type="supporting">apri →</Text>}
                       />
                     ))}
                   </List>
@@ -184,13 +202,7 @@ export default async function PaginaInsights() {
               </VStack>
 
               <VStack gap={3}>
-                <VStack gap={1}>
-                  <Heading level={3}>L’imbuto</Heading>
-                  <Text type="supporting">
-                    {totale} aziende in tutto. «senza sito» è la colonna che conta per chi vende siti: sono i lead
-                    dove il problema è evidente prima ancora di chiamare.
-                  </Text>
-                </VStack>
+                <Heading level={3}>Aziende</Heading>
                 <List hasDividers density="balanced">
                   {ordine.map((st) => {
                     const r = imbuto.find((x) => x.stato === st);
@@ -199,7 +211,8 @@ export default async function PaginaInsights() {
                       <ListItem
                         key={st}
                         label={ETICHETTA[st] ?? st}
-                        description={`${r.con_audit} con audit · ${r.senza_sito} senza sito`}
+                        href={`/aziende?stato=${st}`}
+                        description={r.senza_sito ? `${r.senza_sito} senza sito` : undefined}
                         endContent={<Text hasTabularNumbers>{r.quanti}</Text>}
                       />
                     );
@@ -208,13 +221,7 @@ export default async function PaginaInsights() {
               </VStack>
 
               <VStack gap={3}>
-                <VStack gap={1}>
-                  <Heading level={3}>Dove conviene cercare</Heading>
-                  <Text type="supporting">
-                    Ordinate per punteggio medio dell’audit, non per numero: dieci lead scadenti valgono meno di
-                    tre buoni, e il conteggio da solo farebbe scegliere la campagna sbagliata.
-                  </Text>
-                </VStack>
+                <Heading level={3}>Categorie migliori</Heading>
                 {categorie.length === 0 ? (
                   <EmptyState
                     isCompact
@@ -227,7 +234,8 @@ export default async function PaginaInsights() {
                       <ListItem
                         key={c.categoria}
                         label={c.categoria}
-                        description={`${c.quanti} aziende · ${c.senza_sito} senza sito`}
+                        href={`/aziende?categoria=${encodeURIComponent(c.categoria)}`}
+                        description={`${c.quanti} aziende${c.senza_sito ? ` · ${c.senza_sito} senza sito` : ''}`}
                         endContent={
                           c.media ? (
                             <Badge variant={c.media >= 80 ? 'orange' : 'neutral'} label={`media ${c.media}`} />

@@ -19,7 +19,7 @@
  * scritto: ogni sezione dice cosa manca per passare alla successiva.
  */
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
@@ -34,6 +34,9 @@ import { List, ListItem } from '@astryxdesign/core/List';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
 import { Selector } from '@astryxdesign/core/Selector';
+import { TabList, Tab } from '@astryxdesign/core/TabList';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { DateInput } from '@astryxdesign/core/DateInput';
 import type { Scheda } from '@/lib/scheda';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
@@ -52,6 +55,13 @@ const CHIAVI: Array<{ id: string; nome: string; aiuto: string }> = [
   { id: 'punti_forza', nome: 'Punti di forza', aiuto: 'Cosa lo distingue davvero, senza superlativi.' },
 ];
 
+/**
+ * Il tipo che vuole `DateInput`: una data ISO, controllata dal compilatore
+ * carattere per carattere. Le nostre date girano come `string`, quindi il
+ * confine fra i due mondi sta qui, in un posto solo, invece che sparso.
+ */
+type DataISO = `${number}${number}${number}${number}-${number}${number}-${number}${number}`;
+
 /** L'a capo, come costante: dentro un join scritto a mano si rompe. */
 const SEP = String.fromCharCode(10);
 
@@ -61,8 +71,87 @@ const daRighe = (v: string): string[] => v.split(/\r?\n/).map((r) => r.trim()).f
 
 export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const router = useRouter();
+  const parametri = useSearchParams();
   const [s, setS] = useState<Scheda>(iniziale);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
+  /**
+   * Cinque sezioni in colonna erano due schermate e mezzo di scorrimento, e si
+   * lavora su una per volta: si da' una voce OPPURE si accende un servizio
+   * OPPURE si costruisce il mese. Le linguette non nascondono niente — tolgono
+   * di mezzo quello che adesso non stai facendo.
+   *
+   * ⚠️ `?tab=` decide quella iniziale (01/09/2026): le spie di `/spie` portano
+   * qui con la linguetta giusta gia' aperta — "id Google malformati" arriva su
+   * `servizi`, non su "Chi è" a fartela ricercare. Letto una volta sola al
+   * montaggio: dopo, chi clicca un'altra linguetta a mano decide lui.
+   */
+  const [sezione, setSezione] = useState(parametri.get('tab') || 'chi');
+
+  /**
+   * ⚠️ QUESTA PAGINA SERVE A DUE PERSONE DIVERSE (31/08/2026).
+   *
+   * E' nata come banco di lavoro di un CLIENTE: voce, fatti, servizi, piano del
+   * mese. Ma ci si arriva anche da una riga qualsiasi dell'elenco, cioe' da un
+   * lead che nessuno ha ancora chiamato — e li' dentro non c'e' niente che lo
+   * riguardi. Aprendo un dentista di Abbiategrasso mai contattato usciva un
+   * avviso giallo con cinque cose «mancanti»: nessun settore, nessun fatto,
+   * nessun titolare, nessun servizio. Tutte cose che a un prospect NON devono
+   * esserci. E' come aprire la scheda di un candidato e leggere «manca il
+   * badge, manca la scrivania».
+   *
+   * Quindi: a un lead si mostra quello che serve per TELEFONARGLI (il numero e
+   * il gancio), e il resto resta li' ma non urla. La lavorazione da cliente si
+   * apre quando lo diventa.
+   */
+  const eCliente = s.stato === 'cliente';
+
+  /**
+   * Il modulo per UN pezzo solo: null = chiuso.
+   *
+   * ⚠️ Fino al 31/08/2026 l'unico modo di avere un post era generare il MESE:
+   * diciassette bozze in un colpo. Ma il lavoro capita anche al contrario — il
+   * cliente chiama, domenica fa una serata, e ne serve uno per quel giorno. Chi
+   * doveva farlo generava il mese e buttava sedici bozze, oppure apriva il
+   * database.
+   */
+  const [pezzo, setPezzo] = useState<{ tipo: 'post_gbp' | 'articolo'; fattoId: string; quando: string; angolo: string } | null>(null);
+
+  /** Crea la bozza e la fa scrivere subito: sono due chiamate, un gesto solo. */
+  async function creaPezzo() {
+    if (!pezzo) return;
+    setMessaggio({ tipo: 'info', testo: 'Preparo la bozza…' });
+
+    const creata = await fetch(`/api/aziende/${s.id}/post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo: pezzo.tipo,
+        fattoId: pezzo.fattoId ? Number(pezzo.fattoId) : undefined,
+        quando: pezzo.quando || undefined,
+        angolo: pezzo.angolo || undefined,
+      }),
+    });
+    const esito = await creata.json().catch(() => ({}));
+    if (!creata.ok) {
+      setMessaggio({ tipo: 'error', testo: esito.errore ?? 'Non è andata.' });
+      return;
+    }
+
+    setMessaggio({ tipo: 'info', testo: 'Lo faccio scrivere…' });
+    const scritta = await fetch(`/api/bozze/${esito.bozzaId}/scrivi`, { method: 'POST' });
+    if (!scritta.ok) {
+      setMessaggio({
+        tipo: 'error',
+        testo: 'La bozza è stata creata ma il testo non è uscito: la trovi vuota in Bozze, si riprova da lì.',
+      });
+      setPezzo(null);
+      return;
+    }
+
+    setPezzo(null);
+    // Si va DOVE si decide: il pezzo adesso aspetta un sì, e quello è in Bozze.
+    router.push('/bozze');
+  }
   const [salvato, setSalvato] = useState(true);
   /** Le schede lette da Google, quando qualcuno le chiede. */
   const [schede, setSchede] = useState<Array<{ accountId: string; locationId: string; titolo: string }> | null>(null);
@@ -71,7 +160,8 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   /** Cosa ha capito l'analisi. NON e' ancora salvato: si guarda e si accetta. */
   const [proposta, setProposta] = useState<{
     voce: Record<string, unknown>;
-    fatti: { cosa_fa: string; offerta: string[]; materiali: string[] };
+    fatti: { cosa_fa: string; offerta: string[]; materiali: string[]; punti_forza: string[] };
+    settore: string[];
     fonti: string[];
     avvisi: string[];
   } | null>(null);
@@ -193,10 +283,50 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
       cosa_fa: f.cosa_fa || proposta.fatti.cosa_fa,
       offerta: f.offerta || proposta.fatti.offerta.join(SEP),
       materiali: f.materiali || proposta.fatti.materiali.join(SEP),
+      punti_forza: f.punti_forza || (proposta.fatti.punti_forza ?? []).join(SEP),
     }));
+
+    // Il settore è l'unica cosa qui che non è testo ma una scelta fra cinque:
+    // si applica solo se nessuno l'ha ancora fatta, come tutto il resto.
+    if (!s.settore.length && proposta.settore?.length) {
+      setS((x) => ({ ...x, settore: proposta.settore as typeof x.settore }));
+    }
 
     setProposta(null);
     setMessaggio({ tipo: 'success', testo: 'Portato nei campi. Correggi quello che non torna, poi salva.' });
+  }
+
+  /**
+   * Prova le credenziali WordPress su quello che c'è NEI CAMPI, non su quello
+   * che è salvato: si scopre che la password è sbagliata mentre la si incolla,
+   * non il giorno che un articolo non esce.
+   */
+  async function provaWordPress() {
+    const c = config('blog');
+    setMessaggio(null);
+    const risposta = await fetch(`/api/aziende/${s.id}/prova-wordpress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wp_base: c.wp_base ?? '',
+        wp_utente: c.wp_utente ?? '',
+        wp_password_app: c.wp_password_app ?? '',
+      }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
+
+    if (!esito.ok) {
+      setMessaggio({ tipo: 'error', testo: esito.errore ?? 'WordPress non ha risposto.' });
+      return;
+    }
+    setMessaggio(
+      esito.puoPubblicare
+        ? { tipo: 'success', testo: `Funziona: risulti «${esito.utente}», e può pubblicare articoli.` }
+        : {
+            tipo: 'error',
+            testo: `Le credenziali valgono (sei «${esito.utente}»), ma quell’utente non ha il permesso di pubblicare articoli. Serve almeno il ruolo Autore.`,
+          }
+    );
   }
 
   async function salva() {
@@ -262,12 +392,41 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
       height="fill"
       header={
         <LayoutHeader hasDivider>
-          <HStack gap={3} align="center">
-            <Heading level={2}>{s.nome}</Heading>
-            <StatusDot variant={s.stato === 'cliente' ? 'success' : 'neutral'} label={s.stato} />
-            <Text color="secondary">{s.citta ?? ''}</Text>
-            {!salvato ? <Badge variant="warning" label="non salvata" /> : null}
-          </HStack>
+          <VStack gap={3}>
+            <HStack gap={3} align="center" wrap="wrap">
+              <Heading level={2}>{s.nome}</Heading>
+              <StatusDot variant={s.stato === 'cliente' ? 'success' : 'neutral'} label={s.stato} />
+              <Text color="secondary">{s.citta ?? ''}</Text>
+              {!salvato ? <Badge variant="warning" label="non salvata" /> : null}
+              {/* Il salvataggio sta QUI e non solo in fondo alla pagina: con le
+                  linguette il bottone in coda si vede solo dentro «Il mese», e
+                  chi corregge un fatto e cambia linguetta perderebbe tutto
+                  senza mai incontrarlo. */}
+              {!salvato ? (
+                <Button label="Salva" variant="primary" size="sm" clickAction={salva} />
+              ) : null}
+            </HStack>
+            <TabList value={sezione} onChange={setSezione}>
+              <Tab value="chi" label="Chi è" />
+              <Tab value="voce" label="Come parla" />
+              <Tab
+                value="fatti"
+                label="Cosa è vero"
+                endContent={
+                  s.fatti.length ? (
+                    <Badge variant={s.fatti.length >= 4 ? 'neutral' : 'warning'} label={String(s.fatti.length)} />
+                  ) : (
+                    <Badge variant="warning" label="0" />
+                  )
+                }
+              />
+              {/* Servizi e piano del mese su un lead non contattato sono due
+                  schermate vuote con dentro delle regole che non lo riguardano:
+                  compaiono quando diventa cliente. */}
+              {eCliente ? <Tab value="servizi" label="Servizi" /> : null}
+              {eCliente ? <Tab value="mese" label="Il mese" /> : null}
+            </TabList>
+          </VStack>
         </LayoutHeader>
       }
       content={
@@ -282,11 +441,72 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               />
             ) : null}
 
-            {mancanze.length > 0 ? (
+            {/* ── IL LEAD: quello che serve per chiamarlo ──────────────────
+                Un prospect non ha una voce, dei fatti o un piano: ha un numero
+                e un motivo per chiamarlo. Quelli stanno qui, in cima, e il
+                resto della pagina aspetta che diventi cliente. */}
+            {!eCliente ? (
+              <VStack gap={3}>
+                <HStack gap={2} align="center" wrap="wrap">
+                  <Button
+                    label="Chiama"
+                    variant="primary"
+                    isDisabled={!s.telefono}
+                    tooltip={s.telefono ?? 'Non ha un numero: fallo trovare con «Analizza il sito».'}
+                    onClick={() => {
+                      window.location.href = `tel:${(s.telefono ?? '').replace(/[^\d+]/g, '')}`;
+                    }}
+                  />
+                  <Button
+                    label="WhatsApp"
+                    isDisabled={!s.telefono_normalizzato}
+                    onClick={() => window.open(`https://wa.me/${s.telefono_normalizzato}`, '_blank')}
+                  />
+                  {s.telefono ? <Text color="secondary">{s.telefono}</Text> : null}
+                  {s.score !== null ? (
+                    <Badge
+                      variant={s.score >= 80 ? 'warning' : s.score >= 50 ? 'info' : 'success'}
+                      label={`urgenza ${s.score}/100`}
+                    />
+                  ) : null}
+                </HStack>
+
+                {s.audit_hook ? (
+                  <TextArea
+                    label="Come aprire il discorso"
+                    rows={4}
+                    value={s.audit_hook}
+                    isDisabled
+                    disabledMessage="Si riscrive rianalizzando il sito, dall’elenco."
+                  />
+                ) : (
+                  <Text color="secondary">
+                    Nessun audit ancora: dall’elenco, «Analizza il sito».
+                  </Text>
+                )}
+
+                {/* Il bottone che cambia tutto: da qui in poi la pagina diventa
+                    quella del cliente, con voce, fatti, servizi e piano. */}
+                <HStack gap={2} align="center">
+                  <Button
+                    label="È diventato cliente"
+                    variant="secondary"
+                    clickAction={async () => {
+                      setS((x) => ({ ...x, stato: 'cliente' }));
+                      setSalvato(false);
+                      setSezione('chi');
+                    }}
+                  />
+                  <Text type="supporting">Da lì si apre la lavorazione: voce, fatti, servizi, piano.</Text>
+                </HStack>
+              </VStack>
+            ) : null}
+
+            {eCliente && mancanze.length > 0 ? (
               <Banner
                 status="warning"
                 title="Questo cliente non è ancora pronto"
-                description="Finché manca qualcosa qui sotto, il piano esce povero o non esce."
+                description="Finché manca qualcosa, il piano esce povero."
                 defaultIsExpanded
               >
                 <List hasDividers density="compact">
@@ -299,15 +519,12 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               <Banner status="success" title="Pronto: si può costruire il piano del mese." />
             )}
 
-            {/* ── 1. Chi è ───────────────────────────────────────────────── */}
+            {/* ── 1. Chi è ─────────────────────────────────────────────────
+                Il PERCHE' del settore — sceglie temi e ricorrenze, e dedurlo
+                dalla categoria di Google vuol dire sbagliare tutto il mese —
+                sta qui, non sullo schermo di chi deve solo scegliere un tag. */}
+            {sezione === 'chi' ? (
             <VStack gap={3}>
-              <VStack gap={1}>
-                <Heading level={3}>Chi è</Heading>
-                <Text type="supporting">
-                  Il settore sceglie quali temi e quali ricorrenze hanno senso. Esplicito e non dedotto dalla
-                  categoria di Google: indovinarlo da «Da Andrea» vuol dire sbagliarlo su tutto il mese.
-                </Text>
-              </VStack>
               <HStack gap={2} wrap="wrap">
                 {SETTORI.map((t) => (
                   <Button
@@ -343,16 +560,13 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 ))}
               </HStack>
             </VStack>
+            ) : null}
 
-            {/* ── 2. Come parla ──────────────────────────────────────────── */}
+            {/* ── 2. Come parla ────────────────────────────────────────────
+                Senza voce i testi escono corretti e intercambiabili: il
+                generatore ricade sul registro da agenzia. */}
+            {sezione === 'voce' ? (
             <VStack gap={3}>
-              <VStack gap={1}>
-                <Heading level={3}>Come parla</Heading>
-                <Text type="supporting">
-                  Senza questo i testi escono corretti e intercambiabili: il generatore ricade sul registro da
-                  agenzia, ed è il difetto che si nota anche quando non è un errore.
-                </Text>
-              </VStack>
               {/* ── Ricavare la voce da quello che c'e' gia' ────────────────
                   Le fonti stanno in ordine di quanto ci si puo' fidare: le
                   recensioni per prime, perche' sono l'unica cosa che non ha
@@ -366,7 +580,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 </HStack>
                 <TextArea
                   label="Materiale suo, se ne hai"
-                  description="Didascalie dei social, appunti di una telefonata, un messaggio che ti ha scritto. È la fonte migliore dopo le recensioni, perché sono parole sue."
+                  description="Didascalie, appunti di una telefonata, un suo messaggio."
                   rows={3}
                   value={incollato}
                   onChange={setIncollato}
@@ -400,6 +614,26 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                         {(proposta.voce.apprezzato as string[] | undefined)?.join(' · ') || '—'}
                       </MetadataListItem>
                       <MetadataListItem label="Cosa fa">{proposta.fatti.cosa_fa || '—'}</MetadataListItem>
+                      {/* I tre elenchi che riempiono «Cosa è vero»: si guardano
+                          qui perché sono quelli che finiranno nei post come
+                          roba verificata, e leggerli dopo averli accettati è
+                          l'ordine sbagliato. */}
+                      <MetadataListItem label="Offerta">
+                        {proposta.fatti.offerta?.join(' · ') || '—'}
+                      </MetadataListItem>
+                      <MetadataListItem label="Materiali">
+                        {proposta.fatti.materiali?.join(' · ') || '—'}
+                      </MetadataListItem>
+                      <MetadataListItem label="Punti di forza">
+                        {proposta.fatti.punti_forza?.join(' · ') || '—'}
+                      </MetadataListItem>
+                      <MetadataListItem label="Settore">
+                        {proposta.settore?.length
+                          ? proposta.settore.join(' · ')
+                          : s.settore.length
+                            ? 'lo tengo com’è'
+                            : '—'}
+                      </MetadataListItem>
                     </MetadataList>
                     <HStack gap={2}>
                       <Button label="Porta nei campi" variant="primary" size="sm" onClick={accetta} />
@@ -429,7 +663,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               />
               <TextArea
                 label="Cosa apprezzano i clienti"
-                description="Dalle recensioni: è materiale verificato da terzi, quindi si può usare senza chiedere conferma. Una voce per riga."
+                description="Dalle recensioni. Una per riga."
                 rows={3}
                 value={aRighe(s.voce.apprezzato)}
                 onChange={(v) => {
@@ -439,7 +673,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               />
               <TextArea
                 label="Confini — cosa NON fa"
-                description="«niente surgelati», «niente truciolato». Valgono su Google come sul sito. Una voce per riga."
+                description="«niente surgelati», «niente truciolato». Una per riga."
                 rows={3}
                 value={aRighe(s.voce.non_fa)}
                 onChange={(v) => {
@@ -449,7 +683,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               />
               <TextArea
                 label="Da non dire mai"
-                description="Frasi che il cliente non vuole sentirsi attribuire, finché non le conferma lui. Una per riga."
+                description="Frasi da non usare mai. Una per riga."
                 rows={3}
                 value={aRighe(s.voce.mai_dire)}
                 onChange={(v) => {
@@ -458,17 +692,15 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 }}
               />
             </VStack>
+            ) : null}
 
-            {/* ── 3. Cosa è vero ─────────────────────────────────────────── */}
+            {/* ── 3. Cosa è vero ───────────────────────────────────────────
+                I fatti sono l'unica cosa che un post puo' affermare: e' cio' che
+                rende la revisione «e' vero?» invece di «e' bello?». Togliere una
+                riga la SPEGNE, non la cancella — i post pubblicati sanno ancora
+                su cosa si reggevano. */}
+            {sezione === 'fatti' ? (
             <VStack gap={3}>
-              <VStack gap={1}>
-                <Heading level={3}>Cosa è vero</Heading>
-                <Text type="supporting">
-                  I fatti sono l’unica cosa che un post può affermare, ed è ciò che rende la revisione «è vero?»
-                  invece di «è bello?». Togliere una riga non la cancella: la spegne, così i post già pubblicati
-                  sanno ancora su cosa si reggevano.
-                </Text>
-              </VStack>
               {CHIAVI.map((c) => (
                 <TextArea
                   key={c.id}
@@ -483,15 +715,13 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 />
               ))}
             </VStack>
+            ) : null}
 
-            {/* ── 4. Cosa gli facciamo ───────────────────────────────────── */}
+            {/* ── 4. Servizi ───────────────────────────────────────────────
+                Senza una riga qui il router non pubblica niente, nemmeno se il
+                titolare manda la foto. */}
+            {sezione === 'servizi' ? (
             <VStack gap={3}>
-              <VStack gap={1}>
-                <Heading level={3}>Cosa gli facciamo</Heading>
-                <Text type="supporting">
-                  Senza una riga qui il router non pubblica niente, nemmeno se il titolare manda la foto.
-                </Text>
-              </VStack>
 
               <VStack gap={2}>
                 <HStack gap={2} align="center">
@@ -512,7 +742,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     />
                     <TextInput
                       label="Segreto del sito"
-                      description="È per-cliente: non può stare in un .env comune."
+                      description="Uno per cliente."
                       value={config('menu_del_giorno').site_secret ?? ''}
                       onChange={(v) => cambiaServizio('menu_del_giorno', { site_secret: v })}
                     />
@@ -610,19 +840,71 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 </HStack>
                 {attivo('blog') ? (
                   <VStack gap={2}>
-                    <TextInput
-                      label="URL a cui mandare gli articoli"
-                      description="Un endpoint sul sito del cliente. Il sito scrive sul proprio database: noi non abbiamo le sue credenziali, e non dobbiamo averle."
-                      placeholder="https://ilcliente.it/api/blog"
-                      value={config('blog').site_blog_url ?? ''}
-                      onChange={(v) => cambiaServizio('blog', { site_blog_url: v })}
+                    {/* La scelta viene PRIMA dei campi: cambia quali campi
+                        hanno senso, e mostrarli tutti insieme vorrebbe dire
+                        chiedere un segreto a chi ha un WordPress e non ce
+                        l'ha, o viceversa. */}
+                    <Selector
+                      label="Che sito ha il cliente"
+                      description="Su WordPress non si installa niente: si pubblica dalla sua REST API."
+                      value={config('blog').tipo || 'wesion'}
+                      onChange={(v) => cambiaServizio('blog', { tipo: v ?? 'wesion' })}
+                      options={[
+                        { value: 'wesion', label: 'Sito nostro (Astro, Express, Worker)' },
+                        { value: 'wordpress', label: 'Il WordPress del cliente' },
+                      ]}
                     />
-                    <TextInput
-                      label="Segreto del blog"
-                      description="Diverso da quello del menù, apposta: chi può cambiare venti righe di menù non deve poter pubblicare articoli indicizzabili."
-                      value={config('blog').site_blog_secret ?? ''}
-                      onChange={(v) => cambiaServizio('blog', { site_blog_secret: v })}
-                    />
+
+                    {(config('blog').tipo || 'wesion') === 'wordpress' ? (
+                      <>
+                        <TextInput
+                          label="Indirizzo del sito"
+                          description="Solo https: su http WordPress le password per applicazioni non le rilascia nemmeno."
+                          placeholder="https://ilcliente.it"
+                          value={config('blog').wp_base ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { wp_base: v })}
+                        />
+                        <TextInput
+                          label="Utente WordPress"
+                          description="Deve poter pubblicare articoli: Autore o Amministratore."
+                          placeholder="mario"
+                          value={config('blog').wp_utente ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { wp_utente: v })}
+                        />
+                        <TextInput
+                          label="Password per applicazioni"
+                          description="Se la genera lui: Utenti → Profilo → Password per applicazioni. Non è la sua password."
+                          placeholder="abcd EFGH 1234 wxyz ..."
+                          value={config('blog').wp_password_app ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { wp_password_app: v })}
+                        />
+                        <HStack gap={2} align="center">
+                          <Button label="Prova le credenziali" size="sm" clickAction={provaWordPress} />
+                          <Text type="supporting">
+                            Chiede a WordPress «chi sono io». Verifica in un colpo solo tre cose che si
+                            rompono spesso: la REST API raggiungibile, l’header Authorization che arriva
+                            fino a PHP, e i permessi dell’utente.
+                          </Text>
+                        </HStack>
+                      </>
+                    ) : (
+                      <>
+                        <TextInput
+                          label="URL a cui mandare gli articoli"
+                          description="L’endpoint sul sito del cliente."
+                          placeholder="https://ilcliente.it/api/blog"
+                          value={config('blog').site_blog_url ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { site_blog_url: v })}
+                        />
+                        <TextInput
+                          label="Segreto del blog"
+                          description="Diverso da quello del menù."
+                          value={config('blog').site_blog_secret ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { site_blog_secret: v })}
+                        />
+                      </>
+                    )}
+
                     <TextInput
                       label="Pagina del blog"
                       placeholder="https://ilcliente.it/blog"
@@ -631,7 +913,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     />
                     <TextInput
                       label="Categorie"
-                      description="Separate da virgola. Il generatore sceglie fra queste invece di inventarne una nuova a ogni articolo: un blog con quindici categorie da un pezzo ciascuna non raggruppa niente."
+                      description="Separate da virgola. Il generatore sceglie fra queste."
                       placeholder="Ristorazione, SEO, Prezzi & Budget, Consigli"
                       value={config('blog').categorie ?? ''}
                       onChange={(v) => cambiaServizio('blog', { categorie: v })}
@@ -649,23 +931,27 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     ))}
                   </List>
                 ) : (
+                  /* Dal 31/08/2026 si fa dall'elenco: «Modifica» sulla riga,
+                     un contatto con l'interruttore «titolare» acceso. La riga
+                     di comando resta per il primo giro e per quando la
+                     dashboard non è raggiungibile — le due strade chiamano le
+                     stesse funzioni, apposta. */
                   <Text type="supporting">
-                    Nessuno. Si abilita con <code>npm run cliente -- --azienda {s.slug} --titolare &quot;+39…&quot;</code>
+                    Nessuno: il bot non risponderà a nessun numero. Si abilita da «Aziende» → la riga →
+                    «Modifica» → un contatto con l’interruttore «titolare» acceso. Da riga di comando:{' '}
+                    <code>npm run cliente -- --azienda {s.slug} --titolare &quot;+39…&quot;</code>
                   </Text>
                 )}
               </VStack>
             </VStack>
+            ) : null}
 
-            {/* ── 5. Il mese ─────────────────────────────────────────────── */}
+            {/* ── 5. Il mese ───────────────────────────────────────────────
+                Prima il piano (aritmetica, gratis), poi si guarda, e solo dopo
+                si spendono le generazioni: un piano sbagliato lo vedi in dieci
+                secondi, diciotto testi sbagliati no. */}
+            {sezione === 'mese' ? (
             <VStack gap={3}>
-              <VStack gap={1}>
-                <Heading level={3}>Il mese</Heading>
-                <Text type="supporting">
-                  Prima si costruisce il piano — che è aritmetica su un calendario e non costa niente — poi si
-                  guarda, e solo dopo si spendono le generazioni. Se il piano è sbagliato lo vedi in dieci secondi;
-                  accorgertene leggendo diciotto testi costa molto di più.
-                </Text>
-              </VStack>
               <HStack gap={2} wrap="wrap">
                 {/* ⚠️ PORTA ALL'ANTEPRIMA, non crea niente.
                     Prima questo bottone faceva direttamente il POST, e il piano
@@ -684,12 +970,76 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   label="Scrivi i testi mancanti"
                   clickAction={() => chiama(`/api/aziende/${s.id}/scrivi`, 'Scrivo i testi')}
                 />
+                {/* Un pezzo solo, per quando il mese non c'entra: il cliente
+                    chiama e domenica fa una serata. */}
+                <Button
+                  label="Un post solo"
+                  variant="secondary"
+                  isDisabled={!s.fatti.length}
+                  tooltip={s.fatti.length ? undefined : 'Serve almeno un fatto: un post deve poter dire qualcosa di vero.'}
+                  onClick={() => setPezzo({ tipo: 'post_gbp', fattoId: '', quando: '', angolo: '' })}
+                />
+                <Button
+                  label="Un articolo"
+                  variant="secondary"
+                  isDisabled={!s.fatti.length}
+                  tooltip={s.fatti.length ? undefined : 'Serve almeno un fatto.'}
+                  onClick={() => setPezzo({ tipo: 'articolo', fattoId: '', quando: '', angolo: '' })}
+                />
                 <Button
                   label="Analizza il sito"
                   clickAction={() => chiama(`/api/aziende/${s.id}/audit`, 'Analizzo')}
                 />
               </HStack>
             </VStack>
+            ) : null}
+
+            {/* ── Il modulo di UN pezzo ────────────────────────────────────
+                Tre domande e basta: su cosa parla, che taglio, quando esce.
+                Il resto — il testo — lo scrive il generatore, e la revisione e'
+                dove e' sempre stata: in Bozze. */}
+            {pezzo ? (
+              <Dialog isOpen onOpenChange={(o) => (o ? null : setPezzo(null))} purpose="form" width={560}>
+                <DialogHeader
+                  title={pezzo.tipo === 'post_gbp' ? 'Un post per la scheda Google' : 'Un articolo per il blog'}
+                  subtitle={s.nome}
+                  onOpenChange={(o) => (o ? null : setPezzo(null))}
+                />
+                <VStack gap={4} padding={4}>
+                  <Selector
+                    label="Su cosa parla"
+                    description="Uno dei fatti veri di questo cliente."
+                    value={pezzo.fattoId}
+                    onChange={(v) => setPezzo((x) => (x ? { ...x, fattoId: v ?? '' } : x))}
+                    options={s.fatti.map((f) => ({ value: String(f.id), label: f.valore }))}
+                  />
+                  <TextArea
+                    label="Che taglio dargli"
+                    rows={3}
+                    placeholder="Domenica sera c’è la serata con la musica dal vivo: dillo senza fare il volantino."
+                    value={pezzo.angolo}
+                    onChange={(v) => setPezzo((x) => (x ? { ...x, angolo: v } : x))}
+                  />
+                  <DateInput
+                    label="Quando esce"
+                    description="Vuoto = appena lo approvi. Con una data, il router aspetta quel giorno alle 10."
+                    value={(pezzo.quando || undefined) as DataISO | undefined}
+                    min={new Date().toISOString().slice(0, 10) as DataISO}
+                    onChange={(v) => setPezzo((x) => (x ? { ...x, quando: v ?? '' } : x))}
+                  />
+                  <HStack gap={2} justify="end">
+                    <Button label="Annulla" variant="ghost" onClick={() => setPezzo(null)} />
+                    <Button
+                      label="Scrivilo"
+                      variant="primary"
+                      isDisabled={!pezzo.fattoId}
+                      tooltip={pezzo.fattoId ? undefined : 'Scegli su cosa deve parlare.'}
+                      clickAction={creaPezzo}
+                    />
+                  </HStack>
+                </VStack>
+              </Dialog>
+            ) : null}
 
             <HStack gap={2}>
               <Button label="Salva la scheda" variant="primary" clickAction={salva} isDisabled={salvato} />

@@ -277,6 +277,23 @@ ALTER TABLE wesion.azienda
 ALTER TABLE wesion.voce
   ADD COLUMN IF NOT EXISTS pubblico TEXT;
 
+-- Cosa si e' VISTO davvero sul sito, separato da cosa ne pensa il modello.
+--
+-- ⚠️ IL 31/08/2026 LA DASHBOARD MOSTRAVA LA SECONDA COSA COL NOME DELLA PRIMA.
+-- La scansione (il sito risponde? ha il viewport? ha un form?) veniva calcolata,
+-- data in pasto al modello e poi buttata: in tabella restava solo `note`, cioe'
+-- la prosa del modello, che l'elenco presentava sotto l'etichetta "Cosa si e'
+-- visto". Sul sito della Trattoria La Fenice — fatto da noi, responsive — ne e'
+-- uscito "non ottimizzato per una grafica moderna, poco accattivante su
+-- dispositivi recenti", mentre la scansione un secondo prima aveva registrato
+-- viewport PRESENTE. Un gancio del genere letto al telefono a un ristoratore
+-- che apre il sito dal cellulare mentre parlate fa perdere la chiamata.
+--
+-- I fatti sono deterministici e non costano niente: si conservano, e restano
+-- veri anche quando l'AI e' giu' o dice sciocchezze.
+ALTER TABLE wesion.audit
+  ADD COLUMN IF NOT EXISTS scansione TEXT;
+
 -- Il piano crea bozze VUOTE, e ne crea molte. Senza questo indice la query che
 -- chiede "cosa c'e' da scrivere" scorre tutta la tabella a ogni giro.
 CREATE INDEX IF NOT EXISTS idx_bozza_da_scrivere ON wesion.bozza (azienda_id, creata_at)

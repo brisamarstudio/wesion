@@ -41,5 +41,11 @@ export async function middleware(richiesta: NextRequest) {
 export const config = {
   // Fuori i file statici e le immagini: non c'e' niente da proteggere e
   // farli passare da qui costerebbe una verifica di firma per ogni icona.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  //
+  // ⚠️ `public/` non era escluso (01/09/2026): il logo su /entra veniva
+  // redirect-ato su se stesso per chi, ovviamente, non e' ancora entrato —
+  // cioe' per chiunque guardi quella pagina. Un percorso con un'estensione
+  // (`.png`, `.svg`, `.txt`...) e' sempre un file statico qui: le rotte
+  // dell'app non ne hanno mai una nel path.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 };

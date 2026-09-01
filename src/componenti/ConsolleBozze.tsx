@@ -39,6 +39,8 @@ import { Button } from '@astryxdesign/core/Button';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { FileInput } from '@astryxdesign/core/FileInput';
+import { Thumbnail } from '@astryxdesign/core/Thumbnail';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { Selector } from '@astryxdesign/core/Selector';
 import {
@@ -66,6 +68,38 @@ const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 
 
 const DECIDIBILI = new Set(['vuota', 'generata', 'attesa_approvazione']);
 
+/**
+ * Cosa succede ADESSO a una bozza approvata, in una frase.
+ *
+ * ⚠️ IL 31/08/2026 QUESTA SCHERMATA HA INGANNATO IL SUO PRIMO UTENTE, che
+ * eravamo noi. Diceva «Approvata — il router deve ancora pubblicarla» e, sei
+ * righe più sotto, in un'altra voce, «Esce il 27/09 10:00». Le due frasi sono
+ * vere tutte e due e non si toccano mai: si legge la prima, si aspetta, e non
+ * succede niente per un mese. Chi approva vuole sapere UNA cosa — quando esce —
+ * e deve leggerla dove ha appena premuto il bottone, non ricostruirla
+ * mettendo insieme due voci lontane.
+ *
+ * Le tre risposte possibili sono tre stati diversi del mondo, non sfumature:
+ * il momento è passato (tocca al router, ~30s), il momento deve arrivare
+ * (aspetta, e si dice quanto), oppure non c'è un momento (esce adesso).
+ */
+function cosaSuccedeOra(b: Bozza, adesso: number | null): string {
+  if (!b.pubblica_at) return 'esce al prossimo giro del router, entro mezzo minuto';
+
+  // Prima del montaggio l'ora non si sa (vedi `useAdesso`: saperla sul server
+  // vorrebbe dire scrivere due HTML diversi e litigare in idratazione). Si dice
+  // la data, che è vera sempre, e il «fra quanto» arriva un istante dopo.
+  if (adesso === null) return `programmata per il ${quandoBreve(b.pubblica_at)}`;
+
+  const quando = new Date(b.pubblica_at).getTime();
+  if (quando <= adesso) return 'in coda: esce al prossimo giro del router, entro mezzo minuto';
+
+  const giorni = Math.round((quando - adesso) / 86_400_000);
+  const fra =
+    giorni >= 2 ? `fra ${giorni} giorni` : giorni === 1 ? 'domani' : `fra ${Math.max(1, Math.round((quando - adesso) / 3_600_000))} ore`;
+  return `NON esce ancora: è programmata per il ${quandoBreve(b.pubblica_at)} (${fra})`;
+}
+
 export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const router = useRouter();
   // L'ora arriva dopo il montaggio: prima non si sa, e va bene cosi'.
@@ -77,6 +111,8 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
   const [correzioni, setCorrezioni] = useState<Record<number, string>>({});
   const [errore, setErrore] = useState<string | null>(null);
+  /** Vero mentre la foto sale: il media server ci mette qualche secondo. */
+  const [caricando, setCaricando] = useState(false);
 
   const filtrate = useMemo(() => {
     const q = cerca.trim().toLowerCase();
@@ -113,6 +149,44 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
 
   const voci = selezionata ? vociMenu(selezionata.contenuto) : [];
   const scade = selezionata ? scadenza(selezionata.scade_at, adesso) : null;
+
+  /**
+   * La copertina.
+   *
+   * ⚠️ IL FILE NON PASSA DAL NOSTRO DATABASE e non resta nemmeno qui: sale su
+   * `media.mywebby.it` e di ritorno arriva una URL pubblica. Deve essere
+   * pubblica perche' Google il file non lo riceve — gli passiamo un indirizzo e
+   * se lo scarica da solo (`localPosts` -> `media[].sourceUrl`). Un percorso
+   * locale tipo /uploads/foo.jpg si vedrebbe benissimo nel browser e farebbe
+   * fallire la pubblicazione con un errore che non spiega niente.
+   *
+   * Il tetto di 8 MB e il controllo sul tipo li rifa' anche il server: qui
+   * servono a dirlo subito invece che dopo trenta secondi di attesa.
+   */
+  async function caricaFoto(file: File | File[] | null) {
+    if (!selezionata || !file || Array.isArray(file)) return;
+    setErrore(null);
+    setCaricando(true);
+    try {
+      const modulo = new FormData();
+      modulo.append('file', file);
+      const risposta = await fetch(`/api/bozze/${selezionata.id}/immagine`, { method: 'POST', body: modulo });
+      const esito = await risposta.json().catch(() => ({}));
+      if (!risposta.ok) {
+        setErrore(esito?.errore ?? 'Il caricamento non è riuscito.');
+        return;
+      }
+      router.refresh();
+    } finally {
+      setCaricando(false);
+    }
+  }
+
+  async function togliFoto() {
+    if (!selezionata) return;
+    await fetch(`/api/bozze/${selezionata.id}/immagine`, { method: 'DELETE' });
+    router.refresh();
+  }
 
   async function decidi(azione: 'approva' | 'rifiuta') {
     if (!selezionata) return;
@@ -270,7 +344,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
         </LayoutContent>
       }
       end={
-        <LayoutPanel width={440} hasDivider isScrollable label="Dettaglio bozza" padding={4}>
+        <LayoutPanel width={560} hasDivider isScrollable label="Dettaglio bozza" padding={4}>
           {!selezionata ? (
             <EmptyState
               isCompact
@@ -303,6 +377,48 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
               {attenzioni.map((a, i) => (
                 <Banner key={`a${i}`} status="warning" title="Forse" description={a.messaggio} />
               ))}
+
+              {/* ── I DUE BOTTONI STANNO QUI, IN CIMA ────────────────────────
+                  Fino al 31/08/2026 erano in fondo, sotto il testo, l'elenco
+                  dei piatti e il caricamento della copertina: su un articolo di
+                  seicento parole finivano OLTRE il bordo del pannello, e per
+                  approvare bisognava scorrere fino in fondo — quando li si
+                  trovava. È la stessa scelta già presa nell'elenco aziende: le
+                  azioni sono il motivo per cui si apre una riga, non la
+                  conclusione di una lettura.
+
+                  Sopra restano solo gli avvisi, ed è voluto: se c'è qualcosa da
+                  sapere prima di dire di sì, si legge prima del bottone. */}
+              {DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
+                <HStack gap={2} align="center" wrap="wrap">
+                  <Button
+                    label={gravi.length > 0 ? 'Approva lo stesso' : 'Approva'}
+                    variant="primary"
+                    clickAction={() => decidi('approva')}
+                    tooltip={
+                      gravi.length > 0
+                        ? 'Ci sono avvisi gravi. Puoi approvare comunque: decidi tu.'
+                        : undefined
+                    }
+                  />
+                  <Button label="Rifiuta" variant="secondary" clickAction={() => decidi('rifiuta')} />
+                  {modificato ? <Badge variant="warning" label="testo modificato" /> : null}
+                </HStack>
+              ) : (
+                /* Già decisa: al posto dei bottoni si dice cosa sta succedendo,
+                   perché è la domanda che uno si fa appena approva. */
+                <Banner
+                  status={selezionata.stato === 'pubblicata' ? 'success' : 'info'}
+                  title={ETICHETTA_STATO[selezionata.stato] ?? selezionata.stato}
+                  description={
+                    selezionata.stato === 'approvata'
+                      ? cosaSuccedeOra(selezionata, adesso)
+                      : scade?.scaduta
+                        ? 'Il tempo per dire di sì è passato: va rigenerata.'
+                        : undefined
+                  }
+                />
+              )}
 
               {/* ── La scheda dell'articolo ──────────────────────────────
                   Un articolo non e' un post lungo: titolo, sommario e categoria
@@ -353,7 +469,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
               <TextArea
                 label="Testo"
                 value={testoCorrente}
-                rows={12}
+                rows={18}
                 isDisabled={!DECIDIBILI.has(selezionata.stato)}
                 disabledMessage="Questa bozza è già stata decisa: il testo non si tocca più."
                 description={
@@ -365,6 +481,47 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                   setCorrezioni((c) => ({ ...c, [selezionata.id]: v }))
                 }
               />
+
+              {/* La copertina sta SOTTO il testo e sopra i bottoni: si guarda
+                  dopo aver letto cosa esce, che è l'ordine in cui si decide.
+                  Su un post di Google l'immagine è metà del messaggio.
+
+                  ⚠️ SI PUÒ AGGIUNGERE ANCHE DOPO L'APPROVAZIONE, finché la
+                  bozza non è uscita — e non è una crepa nella regola della
+                  casa. Quello che una persona approva è il TESTO, che infatti
+                  resta bloccato. La copertina è un allegato, e il piano del
+                  mese approva post che escono fra tre settimane: pretendere la
+                  foto nello stesso minuto del sì vorrebbe dire o approvare
+                  tardi, o pubblicare senza immagine — che su Google significa
+                  metà del messaggio in meno. */}
+              {DECIDIBILI.has(selezionata.stato) || selezionata.stato === 'approvata' ? (
+                <VStack gap={2}>
+                  <Text type="supporting">Copertina</Text>
+                  <HStack gap={3} align="center">
+                    {selezionata.contenuto.foto ? (
+                      <Thumbnail
+                        src={String(selezionata.contenuto.foto)}
+                        label="La copertina che esce con questo post"
+                        alt="Copertina della bozza"
+                        isLoading={caricando}
+                        onRemove={togliFoto}
+                        showRemoveOn="always"
+                      />
+                    ) : null}
+                    <FileInput
+                      label={selezionata.contenuto.foto ? 'Cambia la copertina' : 'Aggiungi una copertina'}
+                      mode="dropzone"
+                      accept="image/*"
+                      maxSize={8 * 1024 * 1024}
+                      value={null}
+                      isLoading={caricando}
+                      description="JPG o PNG, fino a 8 MB. Sale su media.mywebby.it: Google se la scarica da lì."
+                      onChange={() => undefined}
+                      changeAction={caricaFoto}
+                    />
+                  </HStack>
+                </VStack>
+              ) : null}
 
               {voci.length > 0 ? (
                 <VStack gap={2}>
@@ -382,27 +539,10 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                 </VStack>
               ) : null}
 
-              {DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
-                <HStack gap={2}>
-                  <Button
-                    label={gravi.length > 0 ? 'Approva lo stesso' : 'Approva'}
-                    variant="primary"
-                    clickAction={() => decidi('approva')}
-                    tooltip={
-                      gravi.length > 0
-                        ? 'Ci sono avvisi gravi. Puoi approvare comunque: decidi tu.'
-                        : undefined
-                    }
-                  />
-                  <Button label="Rifiuta" variant="secondary" clickAction={() => decidi('rifiuta')} />
-                </HStack>
-              ) : null}
-
               <MetadataList>
                 <MetadataListItem label="Stato">
                   {ETICHETTA_STATO[selezionata.stato] ?? selezionata.stato}
-                  {/* Approvata non vuol dire uscita: lo diciamo dove si legge. */}
-                  {selezionata.stato === 'approvata' ? ' — il router deve ancora pubblicarla' : ''}
+                  {selezionata.stato === 'approvata' ? ` — ${cosaSuccedeOra(selezionata, adesso)}` : ''}
                 </MetadataListItem>
                 <MetadataListItem label="Da dove arriva">
                   {ETICHETTA_ORIGINE[selezionata.origine] ?? selezionata.origine}

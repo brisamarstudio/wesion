@@ -1,0 +1,34 @@
+/**
+ * Righe alternate negli elenchi.
+ *
+ * ⚠️ PERCHE' UN FILE CSS, IN UN PROGETTO CHE NON NE HA (31/08/2026).
+ * Lo styling qui passa dalle props dei componenti, apposta. Ma `List` non ha
+ * una prop per le righe alternate e il tema non puo' esprimere un `nth-child`:
+ * le sue chiavi sono oggetti di stile, non selettori. La documentazione di
+ * Astryx prevede esattamente questo caso e indica la superficie da usare — la
+ * classe stabile del componente piu' gli attributi dati (`astryx docs styling`,
+ * «Preferred Selector Surface»). Quindi: una regola sola, su quella classe,
+ * con un token del tema e nessun colore scritto a mano.
+ *
+ * A cosa serve: l'elenco aziende sono venticinque righe fitte tutte dello
+ * stesso grigio. Con i nomi lunghi («DENS | Studio Dentistico Abbiategrasso -
+ * Impianti Dentali Abbiategrasso») l'occhio perde la riga fra il nome e il
+ * telefono, che stanno ai due lati opposti dello schermo. La banda alternata
+ * e' la cosa che tiene insieme i due capi, ed e' il motivo per cui i registri
+ * di carta si stampano cosi' da un secolo.
+ *
+ * Il divisore resta: la banda da sola separa i gruppi meno bene.
+ */
+
+.astryx-list-item:nth-child(even) {
+  /* Il grigio smorzato del tema, non un colore nuovo: cambia il fondo quel
+     tanto che basta a seguire la riga, senza diventare una griglia. */
+  background-color: var(--color-background-muted);
+}
+
+/* La riga selezionata e quella sotto il mouse vincono sempre sulla banda:
+   dicono qualcosa, la banda serve solo a leggere. */
+.astryx-list-item:nth-child(even):hover,
+.astryx-list-item:nth-child(even)[aria-selected='true'] {
+  background-color: var(--color-overlay-pressed);
+}

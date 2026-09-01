@@ -232,7 +232,15 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
    */
   if (bozza.tipo === 'articolo') {
     const config = servizio('blog') as ConfigSito | null;
-    if (config?.site_blog_url) {
+    /**
+     * Due modi di essere configurato, uno per mondo: un sito nostro ha
+     * l'indirizzo dell'endpoint, un WordPress ha la radice del suo sito e le
+     * credenziali. Controllare solo `site_blog_url`, come faceva questa riga
+     * fino al 31/08/2026, avrebbe fatto rifiutare OGNI articolo verso un
+     * WordPress con un messaggio che parlava di un campo che li' non esiste.
+     */
+    const configurato = config?.tipo === 'wordpress' ? Boolean(config.wp_base) : Boolean(config?.site_blog_url);
+    if (config && configurato) {
       try {
         const esito = await pubblicaArticolo(config, {
           titolo: String(bozza.contenuto.titolo ?? '').trim() || 'Senza titolo',
@@ -250,7 +258,12 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
         destinazioni.push({ destinazione: 'blog', esito: 'errore', errore: motivo });
       }
     } else {
-      const motivo = 'il cliente non ha il servizio "blog" configurato con un site_blog_url';
+      // Il motivo dice quale campo manca in QUEL mondo: mandare uno a cercare
+      // un `site_blog_url` su un cliente WordPress e' peggio che tacere.
+      const motivo =
+        config?.tipo === 'wordpress'
+          ? 'il servizio "blog" è impostato su WordPress ma non ha l’indirizzo del sito'
+          : 'il cliente non ha il servizio "blog" configurato con un site_blog_url';
       await segna(bozzaId, 'blog', 'errore', { errore: motivo });
       destinazioni.push({ destinazione: 'blog', esito: 'errore', errore: motivo });
     }

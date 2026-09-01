@@ -40,6 +40,19 @@ export interface Scheda {
   slug: string;
   citta: string | null;
   stato: string;
+  /**
+   * Le tre cose che servono a CHIAMARLO, non a farlo lavorare.
+   *
+   * ⚠️ Aggiunte il 31/08/2026 perche' questa scheda si apre anche su un lead
+   * che non e' mai stato contattato, e li' voce, fatti e piano del mese non
+   * c'entrano niente: serve il numero e cosa dirgli. Prima quei dati stavano
+   * solo nell'elenco, quindi aprendo la scheda di un prospect si perdeva
+   * l'unica roba utile.
+   */
+  telefono: string | null;
+  telefono_normalizzato: string | null;
+  audit_hook: string | null;
+  score: number | null;
   settore: TagAttivita[];
   voce: {
     voce: string;
@@ -79,7 +92,28 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
     citta: string | null;
     stato: string;
     settore: string[];
-  }>(`SELECT id, nome, slug, citta, stato, settore FROM wesion.azienda WHERE id = $1`, [aziendaId]);
+    telefono: string | null;
+    telefono_normalizzato: string | null;
+    audit_hook: string | null;
+    score: number | null;
+  }>(
+    `SELECT a.id, a.nome, a.slug, a.citta, a.stato, a.settore,
+            (SELECT c.valore FROM wesion.contatto c
+              WHERE c.azienda_id = a.id AND c.tipo = 'telefono'
+              ORDER BY c.e_titolare DESC, c.id LIMIT 1)       AS telefono,
+            (SELECT c.normalizzato FROM wesion.contatto c
+              WHERE c.azienda_id = a.id AND c.tipo IN ('telefono','whatsapp')
+              ORDER BY c.e_titolare DESC, c.id LIMIT 1)       AS telefono_normalizzato,
+            u.hook AS audit_hook, u.score
+       FROM wesion.azienda a
+       LEFT JOIN LATERAL (
+         SELECT x.hook, x.score FROM wesion.audit x
+          WHERE x.azienda_id = a.id AND x.esito = 'ok'
+          ORDER BY x.eseguito_at DESC LIMIT 1
+       ) u ON true
+      WHERE a.id = $1`,
+    [aziendaId]
+  );
   if (!azienda) return null;
 
   const [voce] = await query<Scheda['voce']>(
@@ -145,8 +179,21 @@ export async function salvaScheda(aziendaId: number, m: ModificheScheda): Promis
   if (m.voce) {
     const v = m.voce;
     await query(
+      /**
+       * ⚠️ I CAST `::text[]` NON SONO DECORATIVI (31/08/2026).
+       *
+       * Senza, la riga era `COALESCE($4,'{}')` e il tipo del parametro lo
+       * deduceva Postgres: con una lista PIENA gli tornava, con una lista VUOTA
+       * decideva `text` e rifiutava tutto con
+       * «column "apprezzato" is of type text[] but expression is of type text».
+       * Il difetto stava lì da sempre e non si vedeva perche' dalla dashboard
+       * quelle liste arrivavano quasi sempre con qualcosa dentro: e' saltato
+       * fuori salvando un cliente senza recensioni, cioe' senza `apprezzato`.
+       * Dire il tipo invece di farlo indovinare costa otto caratteri.
+       */
       `INSERT INTO wesion.voce (azienda_id, voce, pubblico, apprezzato, non_fa, mai_dire, parole_sue, da_evitare, origine, come_ragiona)
-       VALUES ($1, $2, $3, COALESCE($4,'{}'), COALESCE($5,'{}'), COALESCE($6,'{}'), COALESCE($7,'{}'), COALESCE($8,'{}'), $9, $10)
+       VALUES ($1, $2, $3, COALESCE($4::text[],'{}'), COALESCE($5::text[],'{}'), COALESCE($6::text[],'{}'),
+               COALESCE($7::text[],'{}'), COALESCE($8::text[],'{}'), $9, $10)
        ON CONFLICT (azienda_id) DO UPDATE
          SET voce = COALESCE(EXCLUDED.voce, wesion.voce.voce),
              pubblico = COALESCE(EXCLUDED.pubblico, wesion.voce.pubblico),

@@ -32,6 +32,19 @@ import { query } from './db';
 import { controllaBozza } from './controlloTesto';
 import { testoBozza } from './bozze';
 
+/**
+ * Un esempio di riga toccata da una spia.
+ *
+ * `href` esiste perche' una spia che dice cosa e' rotto e non porta a
+ * sistemarlo si legge e basta — bisogna poi ricordarsi dove andare a mano.
+ * Assente quando non c'e' un posto della dashboard che risolva la cosa (un
+ * mittente senza azienda, l'impianto giu'): meglio nessun link che uno finto.
+ */
+export interface EsempioSpia {
+  etichetta: string;
+  href?: string;
+}
+
 export interface Spia {
   chiave: string;
   famiglia: 'guasto' | 'silenzio' | 'impianto';
@@ -43,8 +56,8 @@ export interface Spia {
   dettaglio: string;
   /** Quante volte. 0 significa che la spia parla dell'impianto, non di righe. */
   quanti: number;
-  /** Qualche nome, per sapere subito chi guardare. Al massimo cinque. */
-  esempi: string[];
+  /** Qualche nome, per sapere subito chi guardare, e dove andare a sistemarlo. Al massimo cinque. */
+  esempi: EsempioSpia[];
   /** Da quando e' accesa. Arriva dalla tabella, non dal controllo. */
   dal: string | null;
 }
@@ -73,8 +86,14 @@ async function esegui(chiave: string, famiglia: Spia['famiglia'], controllo: Con
   }
 }
 
-const nomi = (righe: Array<Record<string, unknown>>, campo = 'azienda'): string[] =>
-  righe.slice(0, 5).map((r) => String(r[campo] ?? '')).filter(Boolean);
+const nomi = (
+  righe: Array<Record<string, unknown>>,
+  opzioni: { campo?: string; href?: (r: Record<string, unknown>) => string } = {}
+): EsempioSpia[] =>
+  righe
+    .slice(0, 5)
+    .map((r) => ({ etichetta: String(r[opzioni.campo ?? 'azienda'] ?? ''), href: opzioni.href?.(r) }))
+    .filter((e) => e.etichetta);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // I GUASTI — qualcosa è andato storto e si vede
@@ -82,8 +101,8 @@ const nomi = (righe: Array<Record<string, unknown>>, campo = 'azienda'): string[
 
 /** Pubblicazioni fallite: la bozza era approvata e alla destinazione non è arrivata. */
 async function pubblicazioniFallite(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string; destinazione: string; errore: string | null }>(
-    `SELECT a.nome AS azienda, p.destinazione, p.errore
+  const righe = await query<{ azienda_id: number; azienda: string; destinazione: string; errore: string | null }>(
+    `SELECT a.id AS azienda_id, a.nome AS azienda, p.destinazione, p.errore
        FROM wesion.pubblicazione p
        JOIN wesion.bozza b   ON b.id = p.bozza_id
        JOIN wesion.azienda a ON a.id = b.azienda_id
@@ -102,7 +121,9 @@ async function pubblicazioniFallite(): Promise<Spia | null> {
       'Il contenuto era approvato e alla destinazione non è mai arrivato: sulla scheda o sul sito ' +
       `del cliente non c'è. Primo errore: ${primo}`,
     quanti: righe.length,
-    esempi: righe.slice(0, 5).map((r) => `${r.azienda} → ${r.destinazione}`),
+    esempi: righe
+      .slice(0, 5)
+      .map((r) => ({ etichetta: `${r.azienda} → ${r.destinazione}`, href: `/aziende/${r.azienda_id}` })),
     dal: null,
   };
 }
@@ -124,8 +145,8 @@ async function pubblicazioniFallite(): Promise<Spia | null> {
  * lento, e' fermo.
  */
 async function bozzeApprovateFerme(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string; tipo: string; minuti: number }>(
-    `SELECT a.nome AS azienda, b.tipo,
+  const righe = await query<{ azienda_id: number; azienda: string; tipo: string; minuti: number }>(
+    `SELECT a.id AS azienda_id, a.nome AS azienda, b.tipo,
             EXTRACT(EPOCH FROM (now() - b.approvata_at))::int / 60 AS minuti
        FROM wesion.bozza b
        JOIN wesion.azienda a ON a.id = b.azienda_id
@@ -146,7 +167,15 @@ async function bozzeApprovateFerme(): Promise<Spia | null> {
       `La più vecchia aspetta da ${piuVecchia} minuti. Di solito vuol dire che il router è fermo ` +
       'o ha perso la sessione di WhatsApp — va guardato lì, non in dashboard.',
     quanti: righe.length,
-    esempi: righe.slice(0, 5).map((r) => `${r.azienda} (${r.tipo}, da ${r.minuti} min)`),
+    // "Servizi": e' li' che si scopre se la causa e' un servizio spento o mal
+    // configurato — l'unica meta' del guasto che si sistema DA QUI, l'altra
+    // (il router fermo) non e' una pagina della dashboard.
+    esempi: righe
+      .slice(0, 5)
+      .map((r) => ({
+        etichetta: `${r.azienda} (${r.tipo}, da ${r.minuti} min)`,
+        href: `/aziende/${r.azienda_id}?tab=servizi`,
+      })),
     dal: null,
   };
 }
@@ -161,8 +190,8 @@ async function bozzeApprovateFerme(): Promise<Spia | null> {
  * cliente a caso. Gli id veri sono numerici: qualunque altra cosa e' un residuo.
  */
 async function idGoogleMalformati(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string; account: string; scheda: string }>(
-    `SELECT a.nome AS azienda,
+  const righe = await query<{ azienda_id: number; azienda: string; account: string; scheda: string }>(
+    `SELECT a.id AS azienda_id, a.nome AS azienda,
             COALESCE(s.config->>'gbp_account_id', '')  AS account,
             COALESCE(s.config->>'gbp_location_id', '') AS scheda
        FROM wesion.servizio s
@@ -182,7 +211,12 @@ async function idGoogleMalformati(): Promise<Spia | null> {
       'fallirà con 404 al primo tentativo. Si correggono solo rileggendoli da Google: non si ' +
       'deducono e non si scrivono a mano.',
     quanti: righe.length,
-    esempi: righe.slice(0, 5).map((r) => `${r.azienda} (account: "${r.account}", scheda: "${r.scheda}")`),
+    // Dritti sul bottone "Leggi le schede da Google" della linguetta Servizi:
+    // e' l'unico modo corretto di sistemarli (mai a mano, regola del 21/07/2026).
+    esempi: righe.slice(0, 5).map((r) => ({
+      etichetta: `${r.azienda} (account: "${r.account}", scheda: "${r.scheda}")`,
+      href: `/aziende/${r.azienda_id}?tab=servizi`,
+    })),
     dal: null,
   };
 }
@@ -209,7 +243,9 @@ async function bozzeScadute(): Promise<Spia | null> {
       'giorno vuol dire che quel giorno sul sito è rimasto quello vecchio. Se càpita spesso, ' +
       'il problema non è la fretta: è che la richiesta non arriva dove la persona la vede.',
     quanti: righe.length,
-    esempi: righe.slice(0, 5).map((r) => `${r.azienda} (${r.tipo})`),
+    // La decisione si prende nella consolle, non qui: la spia porta alla coda,
+    // non alla scheda del cliente (che non ha un bottone "approva questa").
+    esempi: righe.slice(0, 5).map((r) => ({ etichetta: `${r.azienda} (${r.tipo})`, href: '/bozze' })),
     dal: null,
   };
 }
@@ -233,8 +269,8 @@ async function bozzeScadute(): Promise<Spia | null> {
  * Dopo le 11: prima di quell'ora e' presto, la lavagna spesso si scrive tardi.
  */
 async function menuNonArrivato(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string }>(
-    `SELECT a.nome AS azienda
+  const righe = await query<{ id: number; azienda: string }>(
+    `SELECT a.id, a.nome AS azienda
        FROM wesion.servizio s
        JOIN wesion.azienda a ON a.id = s.azienda_id
       WHERE s.tipo = 'menu_del_giorno' AND s.attivo
@@ -257,15 +293,15 @@ async function menuNonArrivato(): Promise<Spia | null> {
       'sito e su Google è rimasto quello di ieri. Può essere una dimenticanza loro o il router ' +
       'che non riceve più: si distingue guardando se è successo a uno solo o a tutti insieme.',
     quanti: righe.length,
-    esempi: nomi(righe),
+    esempi: nomi(righe, { href: (r) => `/aziende/${r.id}` }),
     dal: null,
   };
 }
 
 /** Clienti attivi senza niente in coda: da qui in poi da loro non esce più nulla. */
 async function codaVuota(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string }>(
-    `SELECT a.nome AS azienda
+  const righe = await query<{ id: number; azienda: string }>(
+    `SELECT a.id, a.nome AS azienda
        FROM wesion.azienda a
       WHERE a.stato = 'cliente'
         AND EXISTS (SELECT 1 FROM wesion.servizio s
@@ -288,15 +324,17 @@ async function codaVuota(): Promise<Spia | null> {
       'niente. È il guasto che il cliente scopre da solo, guardando la sua pagina, e nel mese in ' +
       'cui succede il canone non ha comprato niente. Costruisci il piano.',
     quanti: righe.length,
-    esempi: nomi(righe),
+    // "Il mese": e' la linguetta dove sta il bottone "Costruisci il piano del
+    // mese" che il dettaglio qui sopra sta letteralmente consigliando di premere.
+    esempi: nomi(righe, { href: (r) => `/aziende/${r.id}?tab=mese` }),
     dal: null,
   };
 }
 
 /** Clienti senza voce: i loro testi escono corretti e intercambiabili. */
 async function voceMancante(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string }>(
-    `SELECT a.nome AS azienda
+  const righe = await query<{ id: number; azienda: string }>(
+    `SELECT a.id, a.nome AS azienda
        FROM wesion.azienda a
        LEFT JOIN wesion.voce v ON v.azienda_id = a.id
       WHERE a.stato = 'cliente'
@@ -315,15 +353,15 @@ async function voceMancante(): Promise<Spia | null> {
       'parole sue il generatore ricade sul registro da agenzia. È il difetto che si nota anche ' +
       'quando non è un errore.',
     quanti: righe.length,
-    esempi: nomi(righe),
+    esempi: nomi(righe, { href: (r) => `/aziende/${r.id}?tab=voce` }),
     dal: null,
   };
 }
 
 /** Clienti senza nessun fatto attivo: non c'è materia prima da cui partire. */
 async function fattiMancanti(): Promise<Spia | null> {
-  const righe = await query<{ azienda: string }>(
-    `SELECT a.nome AS azienda
+  const righe = await query<{ id: number; azienda: string }>(
+    `SELECT a.id, a.nome AS azienda
        FROM wesion.azienda a
       WHERE a.stato = 'cliente'
         AND NOT EXISTS (SELECT 1 FROM wesion.fatto f WHERE f.azienda_id = a.id AND f.attivo)
@@ -339,7 +377,7 @@ async function fattiMancanti(): Promise<Spia | null> {
       'Senza fatti il piano non ha da cosa nascere: esce corto o non esce. E un testo senza un ' +
       'fatto sotto è un testo che parla senza dire niente.',
     quanti: righe.length,
-    esempi: nomi(righe),
+    esempi: nomi(righe, { href: (r) => `/aziende/${r.id}?tab=fatti` }),
     dal: null,
   };
 }
@@ -376,7 +414,9 @@ async function testiARischio(): Promise<Spia | null> {
       'Contengono roba che a Google non piace o che nessuno ha verificato — contatti, numeri ' +
       'inventati, orari. Aprili prima di approvarli: nella consolle trovi scritto cosa.',
     quanti: sospetti.length,
-    esempi: sospetti.slice(0, 5).map((r) => `${r.azienda}: ${r.gravi[0].messaggio}`),
+    esempi: sospetti
+      .slice(0, 5)
+      .map((r) => ({ etichetta: `${r.azienda}: ${r.gravi[0].messaggio}`, href: '/bozze' })),
     dal: null,
   };
 }
@@ -415,7 +455,9 @@ async function pubblicatiDaRivedere(): Promise<Spia | null> {
       'Non è un rischio teorico: il 20/07/2026 una scheda è stata sospesa per questo. Conviene ' +
       'riscriverli o rimuoverli.',
     quanti: sospetti.length,
-    esempi: sospetti.slice(0, 5).map((r) => `${r.azienda}: ${r.gravi[0].messaggio}`),
+    esempi: sospetti
+      .slice(0, 5)
+      .map((r) => ({ etichetta: `${r.azienda}: ${r.gravi[0].messaggio}`, href: '/bozze' })),
     dal: null,
   };
 }
@@ -450,7 +492,7 @@ async function messaggiOrfani(): Promise<Spia | null> {
       'e lui pensa che il servizio non funzioni. Quasi sempre è un titolare che scrive da un ' +
       'secondo numero o dal LID: basta aggiungere quel contatto alla sua azienda.',
     quanti: totale,
-    esempi: righe.slice(0, 5).map((r) => `${r.mittente} (${r.quanti})`),
+    esempi: righe.slice(0, 5).map((r) => ({ etichetta: `${r.mittente} (${r.quanti})` })),
     dal: null,
   };
 }

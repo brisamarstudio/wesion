@@ -24,10 +24,20 @@
 
 import { query } from './db';
 import { generaJson } from './generatore';
+import { estraiRecapiti, paginaContatti } from './leggiSito';
+import { normalizzaTelefono } from './normalizza';
 
 export interface EsitoAudit {
   score: number | null;
+  /** Cosa ne PENSA il modello. È un'opinione, e va mostrata come tale. */
   note: string;
+  /**
+   * Cosa si è VISTO: risponde? ha il viewport? ha un form?
+   *
+   * Separato da `note` apposta — vedi la migrazione in fondo a `db/schema.sql`.
+   * Questo è vero anche quando l'AI è giù, e non cambia se cambia il modello.
+   */
+  scansione: string;
   hook: string | null;
   esito: 'ok' | 'errore';
   errore: string | null;
@@ -42,8 +52,8 @@ export interface EsitoAudit {
  * alla domanda che conta davvero per una chiamata a freddo: il sito c'e'?
  * risponde? si vede da telefono?
  */
-async function scansione(sito: string | null): Promise<string> {
-  if (!sito || !sito.trim()) return 'Attività priva di un sito web ufficiale.';
+async function scansione(sito: string | null): Promise<{ nota: string; html: string; url: string | null }> {
+  if (!sito || !sito.trim()) return { nota: 'Attività priva di un sito web ufficiale.', html: '', url: null };
 
   const url = sito.startsWith('http') ? sito : `https://${sito}`;
   try {
@@ -51,20 +61,140 @@ async function scansione(sito: string | null): Promise<string> {
       signal: AbortSignal.timeout(6000),
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
     });
-    if (!risposta.ok) return `Sito risponde con errore HTTP ${risposta.status}.`;
+    if (!risposta.ok) return { nota: `Sito risponde con errore HTTP ${risposta.status}.`, html: '', url };
 
-    const html = (await risposta.text()).toLowerCase();
-    const viewport = html.includes('name="viewport"');
-    const prenotazioni = html.includes('prenot') || html.includes('book');
-    return (
-      `Sito esistente (HTTP ${risposta.status}). ` +
-      `Viewport mobile: ${viewport ? 'PRESENTE' : 'MANCANTE'}. ` +
-      `Form prenotazioni: ${prenotazioni ? 'PRESENTE' : 'MANCANTE'}.`
-    );
+    /**
+     * L'HTML torna indietro INTERO, e prima non era così: veniva ridotto a
+     * minuscolo per due `includes` e poi buttato. Ma è la stessa pagina dove il
+     * cliente ha scritto il proprio numero — vedi `estraiRecapiti`. Il
+     * minuscolo serve solo ai due controlli qui sotto.
+     */
+    const html = await risposta.text();
+    const minuscolo = html.toLowerCase();
+    const viewport = minuscolo.includes('name="viewport"');
+    const prenotazioni = minuscolo.includes('prenot') || minuscolo.includes('book');
+    return {
+      nota:
+        `Sito esistente (HTTP ${risposta.status}). ` +
+        `Viewport mobile: ${viewport ? 'PRESENTE' : 'MANCANTE'}. ` +
+        `Form prenotazioni: ${prenotazioni ? 'PRESENTE' : 'MANCANTE'}.`,
+      html,
+      url,
+    };
   } catch (errore: unknown) {
-    const motivo = errore instanceof Error ? errore.message : String(errore);
-    return `Sito non raggiungibile o offline (${motivo}).`;
+    return { nota: perche(errore, url), html: '', url };
   }
+}
+
+/**
+ * Perche' non l'abbiamo letto — detto come un fatto su DI NOI, non su di loro.
+ *
+ * ⚠️ IL CASO CHE HA INSEGNATO LA REGOLA (31/08/2026). Bludental e' un network
+ * con 81 centri e un sito bellissimo. Il nostro `fetch` falliva in 60
+ * millisecondi e la nota diceva «Sito non raggiungibile o offline»; il modello
+ * ne ha ricavato «ho notato che il vostro sito non e' attivo» e una proposta
+ * per rifarglielo. Se quel messaggio parte, la chiamata e' finita prima di
+ * cominciare.
+ *
+ * La causa vera era UNABLE_TO_VERIFY_LEAF_SIGNATURE: il loro server manda una
+ * catena di certificati incompleta. Browser e curl la riparano da soli
+ * scaricando l'intermedio (AIA fetching), Node no. Il sito e' perfetto: cieco
+ * era il nostro lettore.
+ *
+ * Quindi ogni fallimento dice cosa e' successo A NOI, e per il certificato dice
+ * pure che il sito con ogni probabilita' funziona. Chi legge il gancio deve
+ * sapere cosa puo' affermare al telefono.
+ */
+function perche(errore: unknown, url: string): string {
+  const codice = String(
+    (errore as { cause?: { code?: string } })?.cause?.code ??
+      (errore as { code?: string })?.code ??
+      ''
+  );
+  const messaggio = errore instanceof Error ? errore.message : String(errore);
+
+  if (/CERT|SIGNATURE|SELF_SIGNED/i.test(codice)) {
+    return (
+      `Il sito risponde ma NOI non l'abbiamo letto: catena di certificati incompleta (${codice}). ` +
+      'I browser la riparano da soli, quindi per i visitatori funziona. Non è un sito assente.'
+    );
+  }
+  if (/ENOTFOUND|EAI_AGAIN/i.test(codice)) {
+    return `Il dominio ${new URL(url).hostname} non esiste nei DNS: il sito non c'è davvero.`;
+  }
+  if (/TimeoutError|ABORT/i.test(codice) || /timeout/i.test(messaggio)) {
+    return 'Il sito non ha risposto entro sei secondi: o è molto lento, o era giù in quel momento.';
+  }
+  if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH/i.test(codice)) {
+    return `Il server ha rifiutato la connessione (${codice}): il sito risulta spento adesso.`;
+  }
+  return `Non siamo riusciti a leggere il sito (${codice || messaggio}). Non vuol dire che non esista.`;
+}
+
+/**
+ * I recapiti trovati sul sito finiscono in tabella.
+ *
+ * ⚠️ MAI `e_titolare`. Un numero letto da una pagina web dice «questa attività
+ * si fa chiamare qui», non «questa persona può pubblicare sul sito e sulla
+ * scheda Google di qualcuno». Quel permesso lo dà una persona, dalla scheda, e
+ * resta l'unica cosa che si fa a mano — perché è l'unica che dà dei poteri.
+ *
+ * `ON CONFLICT DO NOTHING` come fa lo scraper: se il numero c'è già, quello
+ * scritto da un umano vince e non viene ritoccato.
+ */
+async function raccogliRecapiti(aziendaId: number, html: string, url: string | null): Promise<number> {
+  if (!html || !url) return 0;
+
+  const recapiti = estraiRecapiti(html);
+
+  /**
+   * Se ne manca UNO DEI DUE si guarda anche la pagina «Contatti».
+   *
+   * ⚠️ Prima la condizione era «solo se non ho trovato niente», e sbagliava un
+   * caso frequentissimo, visto sulla Fenice il 31/08/2026: in home c'è il
+   * numero di telefono (nel piede, come su mezzo web), l'email no. Trovato il
+   * telefono, non si cercava oltre e l'email restava sul sito. Costava una
+   * richiesta risparmiata e un indirizzo perso.
+   */
+  if (!recapiti.telefoni.length || !recapiti.email.length) {
+    const contatti = paginaContatti(html, url);
+    if (contatti) {
+      try {
+        const risposta = await fetch(contatti, {
+          signal: AbortSignal.timeout(6000),
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        });
+        if (risposta.ok) {
+          // Si UNISCE, non si sostituisce: quello che c'era in home vale
+          // quanto quello che c'è qui, e uno dei due potrebbe mancare di là.
+          const altri = estraiRecapiti(await risposta.text());
+          recapiti.telefoni = [...new Set([...recapiti.telefoni, ...altri.telefoni])].slice(0, 5);
+          recapiti.email = [...new Set([...recapiti.email, ...altri.email])].slice(0, 5);
+        }
+      } catch {
+        /* Il sito c'è ma la pagina contatti no: si va avanti con quello che si ha. */
+      }
+    }
+  }
+
+  const righe: Array<{ tipo: string; valore: string; normalizzato: string | null }> = [
+    ...recapiti.telefoni.map((t) => ({ tipo: 'telefono', valore: t, normalizzato: normalizzaTelefono(t) })),
+    ...recapiti.email.map((e) => ({ tipo: 'email', valore: e, normalizzato: e.toLowerCase() })),
+  ];
+
+  let scritti = 0;
+  for (const r of righe) {
+    if (!r.normalizzato) continue;
+    const esito = await query<{ id: number }>(
+      `INSERT INTO wesion.contatto (azienda_id, tipo, valore, normalizzato, note, verificato_at)
+       VALUES ($1, $2, $3, $4, 'trovato sul sito', now())
+       ON CONFLICT (azienda_id, tipo, normalizzato) DO NOTHING
+       RETURNING id`,
+      [aziendaId, r.tipo, r.valore, r.normalizzato]
+    );
+    scritti += esito.length;
+  }
+  return scritti;
 }
 
 export interface DatiAzienda {
@@ -92,7 +222,32 @@ function eGiudizio(x: unknown): x is { score?: unknown; note?: unknown; hook?: u
   return Boolean(x) && typeof x === 'object';
 }
 
-async function chiediGiudizio(dati: DatiAzienda, note: string): Promise<EsitoAudit> {
+async function chiediGiudizio(dati: DatiAzienda, note: string, letto: boolean): Promise<EsitoAudit> {
+  /**
+   * ⚠️ SE NON L'ABBIAMO VISTO, NON SE NE PARLA. E' il secondo giro della stessa
+   * lezione, il 31/08/2026: reso onesto il messaggio d'errore, il modello ha
+   * smesso di dire «il sito non e' attivo» e ha cominciato a dire «il
+   * certificato genera un avviso di sicurezza nei browser» — mentre la
+   * scansione diceva l'opposto, cioe' che i browser lo riparano da soli.
+   *
+   * Chiedergli di essere prudente non basta: finche' il compito e' «scrivi un
+   * gancio sui punti deboli del sito», un modello un punto debole lo trova
+   * comunque. Quindi quando il sito non e' stato letto GLI SI CAMBIA IL
+   * COMPITO: niente diagnosi, si chiede il permesso di guardare.
+   */
+  const alBuio = letto
+    ? ''
+    : `
+⚠️ IL SITO NON L'ABBIAMO VISTO. Non hai NESSUNA informazione su com'è fatto: non sai se è
+lento, se è vecchio, se si vede da telefono, e non sai se i visitatori hanno problemi.
+Quindi:
+- "note": riporta solo cosa è successo a noi, senza dedurne conseguenze per i loro clienti.
+- "score": basso (40 o meno). Un sito che non abbiamo letto non è un bisogno dimostrato.
+- "hook": NON deve affermare niente sul loro sito, nemmeno sul certificato. Si presenta,
+  dice che stavamo dando un'occhiata ai siti della zona e che il loro non siamo riusciti a
+  caricarlo, e CHIEDE se va tutto bene. Una domanda, non una diagnosi.
+`;
+
   const sistema =
     "Sei l'esperto di consulenza web di MyWebby (www.mywebby.it). Valuti quanto urgentemente " +
     "un'attività ha bisogno di un sito nuovo, e scrivi il messaggio con cui aprire il discorso. " +
@@ -109,7 +264,27 @@ Dati dell'azienda:
 Compiti:
 1. "score" da 1 a 100: quanto urge un sito nuovo. 95 per chi non ce l'ha o ha errori,
    80 per chi ha un sito datato o non leggibile da telefono, 40 per chi sta già bene.
-2. "note": due righe sui punti deboli rilevati, concrete, senza gergo.
+2. "note": due righe sui punti deboli, concrete, senza gergo.
+
+   ⚠️ SE LA SCANSIONE DICE CHE NON SIAMO RIUSCITI A LEGGERE IL SITO, NON
+   CONCLUDERE CHE IL SITO NON ESISTE O NON FUNZIONA. Sono due cose diverse: un
+   certificato che il nostro lettore non verifica, o un server lento, non sono
+   un'attività senza presenza online. In quel caso lo "score" resta basso e il
+   "hook" NON deve proporre di rifare un sito che nessuno ha visto: al massimo
+   chiede conferma. Il 31/08/2026 e' andata cosi' con un network di 81 centri
+   odontoiatrici dal sito impeccabile.
+
+   ⚠️ NON CONTRADDIRE LA SCANSIONE, E NON AGGIUNGERCI NIENTE. Quella riga è
+   l'unica cosa che qualcuno ha davvero guardato. Del sito NON hai visto la
+   grafica, non hai misurato la velocità, non sai se è "datato" o "poco
+   accattivante": se lo scrivi te lo stai inventando, e questo testo finisce
+   letto al telefono a chi quel sito ce l'ha davanti. Il 31/08/2026 è successo
+   con un sito responsive, di cui la scansione diceva "viewport PRESENTE": ne è
+   uscito "non ottimizzato per i dispositivi recenti".
+   Se la scansione non rileva problemi, la risposta giusta è dirlo — e allora
+   anche lo "score" deve essere basso, perché un'attività che sta bene non ha
+   bisogno di niente con urgenza. Un punteggio alto con una scansione pulita è
+   una contraddizione, non una vendita.
 3. "hook": massimo 3 righe per aprire una conversazione su WhatsApp o via email. Tono
    professionale, cordiale, mai da marketer aggressivo. Personalizzato, con una soluzione
    concreta (sito leggibile da telefono, menù o prenotazioni online, velocità).
@@ -122,6 +297,7 @@ Compiti:
 
 Rispondi SOLO con:
 {"score": 90, "note": "…", "hook": "…"}
+${alBuio}
 `.trim();
 
   try {
@@ -132,6 +308,7 @@ Rispondi SOLO con:
       // basso: si scarta invece di salvarlo storto.
       score: Number.isFinite(score) && score >= 0 && score <= 100 ? Math.round(score) : null,
       note: String(esito.dato.note ?? note).trim() || note,
+      scansione: note,
       hook: String(esito.dato.hook ?? '').trim() || null,
       esito: 'ok',
       errore: null,
@@ -139,7 +316,8 @@ Rispondi SOLO con:
     };
   } catch (errore: unknown) {
     const motivo = errore instanceof Error ? errore.message : String(errore);
-    return { score: null, note, hook: null, esito: 'errore', errore: motivo, modello: 'nessuno' };
+    // Anche col modello giu' la scansione resta: e' quella che vale.
+    return { score: null, note, scansione: note, hook: null, esito: 'errore', errore: motivo, modello: 'nessuno' };
   }
 }
 
@@ -161,13 +339,24 @@ export async function analizzaAzienda(aziendaId: number): Promise<EsitoAudit> {
   );
   if (!azienda) throw new Error(`azienda ${aziendaId} inesistente`);
 
-  const note = await scansione(azienda.sito);
-  const esito = await chiediGiudizio(azienda, note);
+  const scansionato = await scansione(azienda.sito);
+
+  /**
+   * I recapiti PRIMA del giudizio, e non è indifferente: se il modello è giù o
+   * la catena è satura, l'audit fallisce ma il telefono resta preso. È la parte
+   * che non ha bisogno di nessuna AI, e non deve dipenderne.
+   */
+  const recapiti = await raccogliRecapiti(aziendaId, scansionato.html, scansionato.url);
+  if (recapiti) console.log(`[audit] azienda ${aziendaId}: ${recapiti} recapiti presi dal sito`);
+
+  // `html` vuoto = non l'abbiamo letto, per qualunque ragione.
+  const esito = await chiediGiudizio(azienda, scansionato.nota, Boolean(scansionato.html));
 
   await query(
-    `INSERT INTO wesion.audit (azienda_id, modello, sito_letto, score, note, hook, esito, errore)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [aziendaId, esito.modello, azienda.sito, esito.score, esito.note, esito.hook, esito.esito, esito.errore]
+    `INSERT INTO wesion.audit (azienda_id, modello, sito_letto, score, note, scansione, hook, esito, errore)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [aziendaId, esito.modello, azienda.sito, esito.score, esito.note, esito.scansione,
+     esito.hook, esito.esito, esito.errore]
   );
 
   return esito;

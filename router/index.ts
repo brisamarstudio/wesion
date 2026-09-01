@@ -218,7 +218,11 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
     try {
       const { dati, mime } = await scaricaMedia(url);
       immagineDataUrl = `data:${mime};base64,${dati.toString('base64')}`;
-      foto = await caricaPubblico(dati, mime);
+      // Una query in piu' per sapere in che cartella va la foto. Costa niente
+      // (succede una volta per lavagna fotografata) e tiene le immagini di un
+      // cliente separate da quelle di tutti gli altri.
+      const [az] = await query<{ slug: string }>(`SELECT slug FROM wesion.azienda WHERE id = $1`, [a.aziendaId]);
+      foto = await caricaPubblico(dati, mime, { cliente: az?.slug, tipo: 'menu' });
     } catch (errore: unknown) {
       console.error('[router] media non scaricato:', errore instanceof Error ? errore.message : errore);
     }
