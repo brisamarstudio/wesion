@@ -165,6 +165,7 @@ export function ElencoAziende({
   aziende,
   conteggi,
   quante,
+  daAnalizzare,
   pagina,
   perPagina,
   gruppo,
@@ -174,6 +175,8 @@ export function ElencoAziende({
   aziende: Azienda[];
   conteggi: Record<string, number>;
   quante: number;
+  /** Quante aziende non hanno ancora un audit riuscito, su TUTTE non solo questa pagina. */
+  daAnalizzare: number;
   pagina: number;
   perPagina: number;
   gruppo: string;
@@ -186,6 +189,8 @@ export function ElencoAziende({
   const [selezionataId, setSelezionataId] = useState<number | null>(null);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
   const [copiato, setCopiato] = useState(false);
+  /** Il giro dell'audit dura minuti: il bottone deve dire che sta lavorando. */
+  const [analisiInCorso, setAnalisiInCorso] = useState(false);
   /**
    * `null` = chiuso. Un oggetto = aperto su quei dati; senza `id` dentro, e'
    * una creazione. Tenerlo in uno stato solo evita il caso impossibile
@@ -406,9 +411,23 @@ export function ElencoAziende({
   }
 
   async function analizzaMancanti() {
-    setMessaggio({ tipo: 'info', testo: 'Analizzo quelle senza un audit riuscito…' });
+    /**
+     * ⚠️ SI DICE QUANTE E QUANTO, non "sto lavorando".
+     *
+     * Ogni azienda vuole scaricare il suo sito e farlo leggere a un'AI: sono
+     * secondi, e su venticinque diventano minuti. Un bottone che gira senza
+     * dire niente fa pensare che si sia piantato, e chi guarda ricarica la
+     * pagina — cioe' interrompe proprio la cosa che stava aspettando.
+     */
+    const quante = Math.min(daAnalizzare, 25);
+    setAnalisiInCorso(true);
+    setMessaggio({
+      tipo: 'info',
+      testo: `Sto guardando ${quante} siti, uno per uno. Ci vogliono un paio di minuti: puoi continuare a lavorare, ma non ricaricare la pagina.`,
+    });
     const r = await fetch('/api/aziende/audit-batch', { method: 'POST' });
     const e = await r.json().catch(() => ({}));
+    setAnalisiInCorso(false);
     if (!r.ok) {
       setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
       return;
@@ -522,7 +541,8 @@ export function ElencoAziende({
                   <MetadataListItem label="95 (giallo)">
                     Il voto dell’audit: quanto è messo male il sito che ha adesso. Più è alto,
                     più ha bisogno di noi. «—» vuol dire che non l’abbiamo ancora guardato:
-                    lo fai con «Analizza le mancanti».
+                    lo fai con «Controlla i siti mai visti», il bottone qui sopra: ci mette un paio di
+                    minuti perché guarda un sito per volta.
                   </MetadataListItem>
                   <MetadataListItem label="★ 4.9 · 10">
                     Le recensioni su Google: prima il voto, poi quante ne ha. Dieci recensioni
@@ -661,7 +681,22 @@ export function ElencoAziende({
                     }
                   />
                 ) : null}
-                <Button label="Analizza le mancanti" size="sm" variant="ghost" clickAction={analizzaMancanti} />
+                {/* ⚠️ "Analizza le mancanti" NON SI CAPIVA (01/09/2026):
+                    mancanti cosa? E si cliccava alla cieca, aspettando minuti
+                    senza sapere se stesse lavorando su tre aziende o trenta.
+                    Adesso dice il mestiere e il numero — e sparisce quando non
+                    c'e' niente da analizzare, invece di restare li' a far
+                    premere un bottone che non fa niente. */}
+                {daAnalizzare > 0 ? (
+                  <Button
+                    label={`Controlla i siti mai visti (${daAnalizzare})`}
+                    size="sm"
+                    variant="ghost"
+                    isLoading={analisiInCorso}
+                    tooltip="Scarica il sito di ogni azienda senza punteggio e lo fa leggere all’AI. Ci vuole qualche secondo per azienda, 25 per volta."
+                    clickAction={analizzaMancanti}
+                  />
+                ) : null}
                 <Button
                   label="Esporta CSV"
                   size="sm"

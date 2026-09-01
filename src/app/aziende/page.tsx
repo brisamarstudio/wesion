@@ -91,7 +91,7 @@ export default async function PaginaAziende({
    *
    * `Promise.all` le manda insieme: il costo diventa quello della più lenta.
    */
-  const [aziende, conteggioTotale, conteggi, categorie, citte, campagne] = await Promise.all([
+  const [aziende, conteggioTotale, senzaAudit, conteggi, categorie, citte, campagne] = await Promise.all([
     query<Azienda>(
     `SELECT
        a.id, a.slug, a.nome, a.categoria, a.citta, a.provincia, a.stato, a.maps_url,
@@ -174,6 +174,21 @@ export default async function PaginaAziende({
 
     query<{ quante: number }>(`SELECT count(*)::int AS quante FROM wesion.azienda a WHERE ${DOVE}`, filtri),
 
+    /**
+     * Quante non sono mai state analizzate.
+     *
+     * Serve a scrivere il numero SUL BOTTONE: "Analizza le mancanti" non
+     * diceva mancanti di cosa, ne' quante — si cliccava alla cieca e si
+     * aspettava minuti senza sapere se stesse lavorando su tre aziende o su
+     * trenta. Il conteggio guarda TUTTE le aziende e non solo la pagina: il
+     * giro dell'audit fa lo stesso.
+     */
+    query<{ quante: number }>(
+      `SELECT count(*)::int AS quante FROM wesion.azienda a
+        WHERE NOT EXISTS (SELECT 1 FROM wesion.audit x
+                           WHERE x.azienda_id = a.id AND x.esito = 'ok')`
+    ),
+
     // I conteggi per stato guardano SEMPRE tutte le aziende: dicono quanto c'è
     // di là, non quanto se ne vede di qua.
     query<{ stato: string; quanti: number }>(
@@ -196,6 +211,7 @@ export default async function PaginaAziende({
   ]);
 
   const quante = conteggioTotale[0].quante;
+  const daAnalizzare = senzaAudit[0].quante;
 
   return (
     <Telaio attiva="/aziende">
@@ -203,6 +219,7 @@ export default async function PaginaAziende({
         aziende={aziende}
         conteggi={Object.fromEntries(conteggi.map((c) => [c.stato, c.quanti]))}
         quante={quante}
+        daAnalizzare={daAnalizzare}
         pagina={pagina}
         perPagina={PER_PAGINA}
         gruppo={gruppo}
