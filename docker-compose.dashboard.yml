@@ -44,6 +44,20 @@ services:
       APIFY_ACTOR_ID: ${APIFY_ACTOR_ID:-compass~crawler-google-places}
       SESSION_SECRET: ${SESSION_SECRET:?serve SESSION_SECRET}
 
+      # ⚠️ CARICARE UNA FOTO NON E' PUBBLICARE (01/09/2026). Queste due mancavano
+      # perche' avevo diviso le variabili con la regola "la dashboard non
+      # pubblica, quindi niente credenziali di pubblicazione" — giusta per
+      # Google e per WhatsApp, sbagliata qui: la copertina di un post si carica
+      # DALLA CONSOLLE, prima che il post esista da qualche parte. Senza,
+      # l'operatore sceglie il file e si vede rispondere "il media server non ha
+      # accettato il file", che e' vero e non aiuta.
+      #
+      # `upload.php` e' condiviso da tutti i siti MyWebby e sa solo archiviare:
+      # non pubblica niente su nessuna scheda e su nessun sito di cliente.
+      MEDIA_UPLOAD_URL: ${MEDIA_UPLOAD_URL:-https://media.mywebby.it/upload.php}
+      MEDIA_UPLOAD_TOKEN: ${MEDIA_UPLOAD_TOKEN}
+      MEDIA_CLIENT: ${MEDIA_CLIENT:-wesion}
+
     # ⚠️ /entra e non /aziende: da quando c'e' l'autenticazione, /aziende
     # risponde con un redirect al login. Un healthcheck che passa da un
     # redirect dice "sano" anche quando l'unica cosa che funziona e' la porta
