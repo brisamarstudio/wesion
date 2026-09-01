@@ -12,8 +12,12 @@ Se apri questo progetto adesso, **leggi solo questo file**.
 
 Wesion sostituisce `leadgen-italia`, `mywebby-automations` e `gbp-autoposter` con un
 programma solo. **Il software e' completo**: campagna -> lead -> audit -> cliente -> voce ->
-piano -> testi -> approvazione -> pubblicazione. **Niente e' deployato e niente e' mai
-uscito davvero** (`pubblicazioni: 0`). I tre vecchi girano ancora, intatti.
+piano -> testi -> approvazione -> pubblicazione.
+
+Dal 01/09/2026 **la dashboard e' online**: <https://wesion.mywebby.it> (Contabo, dietro
+nginx, certificato Let's Encrypt). Il **router e' costruito su Oracle ma non avviato**, e
+**niente e' ancora mai uscito davvero** (`pubblicazioni: 0`) — vedi §14.1.
+I tre vecchi girano ancora, intatti.
 
 ```
 npm run dev      ->  http://localhost:3015   (NON 3000: quella e' di gbp-autoposter)
@@ -531,6 +535,50 @@ Router, in più: `WAHA_BASE`, `WAHA_API_KEY`, `WAHA_SESSION`, `ROUTER_SECRET`,
 d'agenzia** e copre tutte le schede: sta solo qui), `NUMERI_AMMINISTRATORI` per gli
 avvisi di lead caldo. Facoltative: `ROUTER_HOST`, `ROUTER_PORT`, `DRAFT_TTL_MINUTES`
 (15), `MAX_ITEMS` (12), `SECONDI_GIRO` (30).
+
+## 14.1 Cosa è deployato davvero (01/09/2026)
+
+**Dashboard su Contabo — online e funzionante.**
+
+```
+https://wesion.mywebby.it      → nginx (vhost `wesion`) → 127.0.0.1:3020 → container wesion-dashboard
+```
+
+Repo su GitHub (`brisamarstudio/wesion`), tre deploy key: una per macchina, e solo
+quella del PC di sviluppo scrive. Il codice arriva sui server con `git pull`, l'immagine
+si costruisce lì. `/opt/wesion` su Contabo, `~/wesion-app/wesion` su Oracle.
+
+Il `.env` di ciascun server contiene **solo quello che quel server deve poter fare**: su
+Contabo non ci sono né `GBP_*` né `WAHA_*`, perché la dashboard non pubblica. Le chiavi di
+Oracle sono **copiate** dal `.env` di `mywebby-automations`, che è sulla stessa macchina —
+mai rigenerate, o il router vecchio si romperebbe mentre serve sei numeri veri.
+
+**Due cose scoperte deployando, che il build non poteva vedere:**
+
+1. **`public/` non finisce nell'immagine.** L'output `standalone` di Next porta il server e
+   i moduli, non i file statici: il logo rispondeva 404 con l'healthcheck verde. Corretto
+   nel `Dockerfile` con una `COPY` esplicita.
+2. **Il `docker-compose.yml` unico non permetteva quello che dichiarava.** Compose interpola
+   tutto il file prima di guardare quale servizio gli hai chiesto, quindi su Contabo
+   pretendeva `ROUTER_SECRET`. Ora sono due file, uno per server.
+
+**Router su Oracle — immagine costruita, container NON avviato.**
+
+⚠️ **Non è una dimenticanza.** Appena parte, entro 30 secondi fa il primo giro e pubblica
+la bozza approvata che sta in coda (MyWebby #75) sulla **scheda Google vera**. Quello è un
+bottone che preme una persona, non un deploy.
+
+```bash
+# su Oracle, quando si decide di farlo:
+cd ~/wesion-app/wesion && docker compose -f docker-compose.router.yml up -d
+docker logs -f wesion-router      # "[router] bozza 75: pubblicata" oppure "NON pubblicata"
+```
+
+⚠️ **Gira sulla 3011, non sulla 3010.** Sulla 3010 c'è ancora il router vecchio, con sei
+container WAHA attaccati. I due convivono: leggono database diversi (Neon europeo contro
+quello vecchio), quindi non pubblicano mai la stessa cosa. **I webhook di WAHA puntano
+ancora al vecchio**: spostarli è un'operazione a sé, tenant per tenant, e finché non si fa
+il router nuovo riceve zero messaggi WhatsApp — fa solo il giro delle pubblicazioni.
 
 ## 15. Il tono, se devi scrivere codice qui
 
