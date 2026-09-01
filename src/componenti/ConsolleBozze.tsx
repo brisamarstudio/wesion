@@ -47,6 +47,7 @@ import {
   ETICHETTA_ORIGINE,
   ETICHETTA_STATO,
   ETICHETTA_TIPO,
+  destinazioneBozza,
   testoBozza,
   titoloBozza,
   vociMenu,
@@ -154,6 +155,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
 
   const voci = selezionata ? vociMenu(selezionata.contenuto) : [];
   const scade = selezionata ? scadenza(selezionata.scade_at, adesso) : null;
+  const destinazione = selezionata ? destinazioneBozza(selezionata) : null;
 
   /**
    * La copertina.
@@ -414,11 +416,40 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
 
                   Sopra restano solo gli avvisi, ed è voluto: se c'è qualcosa da
                   sapere prima di dire di sì, si legge prima del bottone. */}
+              {/* ── DOVE VA A FINIRE ─────────────────────────────────────────
+                  Chiesto da chi la usa, davanti alla schermata: «ma per
+                  pubblicare su Google sono nel posto giusto?». Non c'era
+                  scritto da nessuna parte. Chi sta per far uscire una cosa nel
+                  mondo ha diritto di sapere dove va, prima di premere — e se
+                  quel posto non esiste, ha diritto di saperlo adesso e non da
+                  un errore rosso mezz'ora dopo. */}
+              {destinazione && DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
+                destinazione.pronta ? (
+                  <Banner
+                    status="info"
+                    title={`Approvando, questo esce su: ${destinazione.dove}`}
+                    description={cosaSuccedeOra(selezionata, adesso)}
+                  />
+                ) : (
+                  <Banner
+                    status="warning"
+                    title={`Non può uscire: ${destinazione.perche}`}
+                    description={`Dovrebbe andare su ${destinazione.dove}. Si sistema qui: ${destinazione.rimedio}`}
+                  />
+                )
+              ) : null}
+
               {DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
                 <HStack gap={2} align="center" wrap="wrap">
+                  {/* Spento quando la destinazione non c'e': approvare
+                      scriverebbe "approvata" e basta, e mezz'ora dopo il router
+                      registrerebbe un errore. Il perche' non sta in un tooltip
+                      — un bottone disabilitato non riceve nemmeno il passaggio
+                      del mouse — ma nel banner qui sopra, che si legge sempre. */}
                   <Button
                     label={gravi.length > 0 ? 'Approva lo stesso' : 'Approva'}
                     variant="primary"
+                    isDisabled={destinazione ? !destinazione.pronta : false}
                     clickAction={() => decidi('approva')}
                     tooltip={
                       gravi.length > 0

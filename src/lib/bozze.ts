@@ -45,6 +45,90 @@ export interface Bozza {
   fatti_veri: string[];
   /** Esiti di pubblicazione gia' registrati, per non riproporre un lavoro fatto. */
   pubblicazioni: Array<{ destinazione: string; esito: string; errore: string | null }>;
+  /** I servizi dell'azienda configurati abbastanza da funzionare davvero. */
+  servizi_pronti: string[];
+}
+
+/** Dove finisce una bozza quando qualcuno preme «Approva». */
+export interface Destinazione {
+  /** Detto a chi approva, non a chi ha scritto il codice. */
+  dove: string;
+  /** Falso se premere «Approva» non puo' portare da nessuna parte. */
+  pronta: boolean;
+  /** Cosa manca, quando manca. */
+  perche?: string;
+  /** Dove si va a sistemarlo. */
+  rimedio?: string;
+}
+
+/** Il servizio che serve perche' un tipo di bozza possa uscire. */
+const SERVIZIO_PER_TIPO: Record<string, string> = {
+  post_gbp: 'post_gbp',
+  articolo: 'blog',
+  menu: 'menu_del_giorno',
+};
+
+/**
+ * Dove va a finire questa bozza, e se ci puo' andare davvero.
+ *
+ * ⚠️ NASCE DA UNA DOMANDA DI CHI LA USA (01/09/2026): «ma per pubblicare su
+ * Google sono nel posto giusto? e se volessi pubblicare sul mio blog?». La
+ * consolle non lo diceva da nessuna parte: c'era scritto "Post Google" in
+ * piccolo accanto al nome, e nient'altro. Chi approva sta per far uscire una
+ * cosa nel mondo e ha il diritto di sapere DOVE, con la stessa chiarezza con
+ * cui vede il testo.
+ *
+ * E soprattutto: se quella destinazione non e' configurata, va detto PRIMA.
+ * Lasciar premere «Approva» per poi rispondere con un errore rosso mezz'ora
+ * dopo, quando ci passa il router, e' il guasto muto che questo progetto esiste
+ * per non avere.
+ */
+export function destinazioneBozza(b: Bozza): Destinazione {
+  if (b.tipo === 'messaggio_lead') {
+    return {
+      dove: 'un messaggio WhatsApp al lead',
+      pronta: true,
+    };
+  }
+
+  const richiesto = SERVIZIO_PER_TIPO[b.tipo];
+  const pronta = richiesto ? b.servizi_pronti.includes(richiesto) : true;
+
+  if (b.tipo === 'post_gbp') {
+    return pronta
+      ? { dove: `la scheda Google di ${b.azienda}`, pronta: true }
+      : {
+          dove: `la scheda Google di ${b.azienda}`,
+          pronta: false,
+          perche: 'la scheda Google non è collegata, o è spenta.',
+          rimedio: 'Aziende → questo cliente → Servizi → «Leggi le schede da Google».',
+        };
+  }
+
+  if (b.tipo === 'articolo') {
+    return pronta
+      ? { dove: `il blog di ${b.azienda}`, pronta: true }
+      : {
+          dove: `il blog di ${b.azienda}`,
+          pronta: false,
+          perche:
+            'il blog non è configurato: manca l’indirizzo a cui mandare gli articoli, o è ancora quello delle prove in locale.',
+          rimedio: 'Aziende → questo cliente → Servizi → Blog.',
+        };
+  }
+
+  if (b.tipo === 'menu') {
+    return pronta
+      ? { dove: `il sito di ${b.azienda}, e la sua scheda Google se collegata`, pronta: true }
+      : {
+          dove: `il sito di ${b.azienda}`,
+          pronta: false,
+          perche: 'il menù del giorno non è configurato: manca l’indirizzo del sito.',
+          rimedio: 'Aziende → questo cliente → Servizi → Menù del giorno.',
+        };
+  }
+
+  return { dove: 'la destinazione prevista per questo tipo', pronta: true };
 }
 
 export const ETICHETTA_TIPO: Record<string, string> = {
@@ -200,7 +284,38 @@ export const SQL_BOZZE = `
                'errore',       p.errore
              ) ORDER BY p.eseguita_at DESC)
       FROM wesion.pubblicazione p WHERE p.bozza_id = b.id
-    ), '[]'::json) AS pubblicazioni
+    ), '[]'::json) AS pubblicazioni,
+    -- Quali destinazioni sono DAVVERO utilizzabili per questa azienda.
+    --
+    -- ⚠️ SOLO I NOMI, MAI LA CONFIG. Questa riga finisce in un componente
+    -- client, cioe' nell'HTML: mandare s.config vorrebbe dire spedire al
+    -- browser il segreto del blog e le chiavi di Google.
+    --
+    -- "Attivo" non basta: un servizio acceso con l'indirizzo vuoto non
+    -- pubblica niente, e localhost e' peggio ancora — da un server non porta
+    -- da nessuna parte, ma sembra configurato. E' il caso vero trovato il
+    -- 01/09/2026 su MyWebby: site_blog_url era rimasto a localhost:3001 dopo
+    -- le prove, e la consolle lasciava approvare un articolo che non poteva
+    -- uscire, dicendolo solo dopo come errore rosso.
+    COALESCE((
+      SELECT array_agg(s.tipo)
+        FROM wesion.servizio s
+       WHERE s.azienda_id = a.id AND s.attivo
+         AND CASE s.tipo
+               WHEN 'post_gbp' THEN COALESCE(s.config->>'gbp_account_id', '') <> ''
+                                AND COALESCE(s.config->>'gbp_location_id', '') <> ''
+               WHEN 'blog' THEN
+                 CASE WHEN s.config->>'tipo' = 'wordpress'
+                      THEN COALESCE(s.config->>'wp_base', '') <> ''
+                      ELSE COALESCE(s.config->>'site_blog_url', '') <> ''
+                           AND s.config->>'site_blog_url' NOT LIKE '%localhost%'
+                           AND s.config->>'site_blog_url' NOT LIKE '%127.0.0.1%'
+                 END
+               WHEN 'menu_del_giorno' THEN COALESCE(s.config->>'site_menu_url', '') <> ''
+                                       AND s.config->>'site_menu_url' NOT LIKE '%localhost%'
+               ELSE true
+             END
+    ), '{}') AS servizi_pronti
   FROM wesion.bozza b
   JOIN wesion.azienda a ON a.id = b.azienda_id
   LEFT JOIN wesion.fatto f ON f.id = b.fatto_id
