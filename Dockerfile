@@ -39,6 +39,14 @@ ENV PORT=3000
 COPY --from=costruzione /app/.next/standalone ./
 COPY --from=costruzione /app/.next/static ./.next/static
 
+# ⚠️ `public/` VA COPIATA A MANO, e non è un dettaglio (01/09/2026). L'output
+# `standalone` di Next NON la porta con sé: si porta il server e i moduli, non
+# i file statici serviti così come sono. Questo Dockerfile è di fine agosto,
+# quando `public/` non esisteva ancora — è nata col logo vero sul login. Il
+# build passa lo stesso, l'immagine parte lo stesso, e in produzione il logo
+# risponde 404: il guasto compare solo a chi guarda la pagina.
+COPY --from=costruzione /app/public ./public
+
 USER node
 
 EXPOSE 3000
