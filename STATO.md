@@ -134,8 +134,36 @@ di aggiungerne una a mano. Da lì:
 
 ### Poi — deploy
 
-4. Router su **Oracle** (ARM: l'immagine si costruisce LI'), dashboard su **Contabo**.
-   Dettagli e trappole in §14.
+4. ~~Router su Oracle, dashboard su Contabo~~ — **fatto il 01/09/2026**, vedi §14.1.
+
+5. **Il blog di mywebby.it: rilascio del SITO, non di Wesion.** ⚠️ Da fare con calma,
+   guardandolo — non in coda a un'altra cosa.
+
+   L'endpoint `POST /api/blog` **esiste già** in `SITI/SitoMyWebby/server/routes/blog.js`,
+   scritto col contratto giusto (header `x-blog-secret`, e senza segreto è *spento, non
+   aperto*). Online però non c'è: `https://mywebby.it/api/blog` risponde **404**, perché il
+   container `mywebby-backend:20260718` è fermo al 18 luglio.
+
+   **Perché non l'abbiamo fatto al volo il 01/09:**
+
+   - il lavoro sul blog è **non committato**: `server/routes/blog.js`, `server/paginaBlog.js`,
+     `src/pages/blog/ArticoloDinamico.jsx` sono nuovi, e `server/database.js`,
+     `server/index.js`, `src/App.jsx`, `src/pages/Blog.jsx` sono modificati;
+   - sopra ci sono **12 commit mai deployati** dal 18/07 — prerendering SEO, modifiche a
+     **nginx**, portfolio, `llms.txt`, notifiche WhatsApp sui lead;
+   - `deploy.sh` di quel progetto avverte in testa che una sua versione precedente
+     «avrebbe RIPORTATO INDIETRO IL SITO DI DUE MESI», che il repo è privato e il server
+     non ha credenziali git, e che il container fu creato a mano da un'immagine buildata
+     altrove.
+
+   Quindi l'ordine è: guardare cosa fanno quei 12 commit → capire se `database.js` vuole
+   una migrazione sul DB di produzione → rilasciare → **solo allora** mettere `BLOG_SECRET`
+   nel container `mywebby-backend` e incollarlo nella scheda di MyWebby in Wesion.
+
+   > Nota: **Trattoria La Fenice è già collegata e verificata** (01/09/2026). Il suo
+   > endpoint è online e il segreto in Wesion è quello vero: `POST` con segreto giusto
+   > risponde 400 sul corpo vuoto, con segreto sbagliato 401. Se serve provare la catena
+   > del blog prima di sistemare mywebby.it, si prova lì senza rischiare niente.
 
 ### Quando serve — non blocca
 
