@@ -153,6 +153,21 @@ async function bozzeApprovateFerme(): Promise<Spia | null> {
       WHERE b.stato = 'approvata'
         AND b.approvata_at < now() - INTERVAL '10 minutes'
         AND NOT EXISTS (SELECT 1 FROM wesion.pubblicazione p WHERE p.bozza_id = b.id)
+        /**
+         * ⚠️ ANCHE `pubblica_at`, COME FA IL ROUTER (01/09/2026).
+         *
+         * Senza questa riga la spia si accendeva rossa su un post del piano
+         * approvato in anticipo e programmato fra tre settimane, dicendo "il
+         * router e' fermo o ha perso la sessione di WhatsApp". Il router non
+         * era fermo: stava facendo la cosa giusta, cioe' aspettare il giorno
+         * suo (`giroPubblicazioni` ha lo stesso vincolo). Successo davvero, il
+         * primo giorno online, e ci ha fatti cercare un guasto che non c'era.
+         *
+         * Una spia deve avere ESATTAMENTE le condizioni di chi lavora: se le
+         * due query divergono, la spia non sorveglia il router — sorveglia
+         * un'idea del router che nessuno aggiorna.
+         */
+        AND (b.pubblica_at IS NULL OR b.pubblica_at <= now())
       ORDER BY b.approvata_at ASC`
   );
   if (!righe.length) return null;
