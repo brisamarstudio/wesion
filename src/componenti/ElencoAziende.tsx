@@ -546,6 +546,22 @@ export function ElencoAziende({
                 </MetadataList>
               </Banner>
 
+              {/* ── I FILTRI, TUTTI IN UNA RIGA ──────────────────────────────
+                  ⚠️ ETICHETTE NASCOSTE (01/09/2026). Ogni filtro aveva la sua
+                  scritta sopra — «Categoria», «Città», «Campagna», «Sito» — e
+                  quelle scritte alzavano ogni controllo di una riga: i primi
+                  quattro entravano, il quinto («Sito») finiva a capo da solo e
+                  sembrava un pezzo staccato di un'altra cosa.
+
+                  Si possono togliere perché il placeholder dice già la stessa
+                  parola: «Tutte le categorie», «Tutte le città». Restano per chi
+                  legge con lo screen reader, che l'etichetta ce l'ha comunque.
+
+                  Il prezzo, detto: quando un filtro è scelto, il suo valore
+                  sostituisce il placeholder e si perde la parola che diceva di
+                  che filtro si tratta. Lo si accetta perché i valori qui sono
+                  espliciti da soli («dentisti · abbiategrasso»), e perché
+                  «Togli i filtri (N)» dice comunque che qualcosa è acceso. */}
               <HStack gap={2} align="end" wrap="wrap">
                 <TextInput
                   label="Cerca"
@@ -564,6 +580,7 @@ export function ElencoAziende({
                     c'è dietro, invece di aprire e trovare tre righe. */}
                 <Selector
                   label="Categoria"
+                  isLabelHidden
                   size="sm"
                   hasClear
                   hasSearch={opzioni.categorie.length > 8}
@@ -574,6 +591,7 @@ export function ElencoAziende({
                 />
                 <Selector
                   label="Città"
+                  isLabelHidden
                   size="sm"
                   hasClear
                   hasSearch={opzioni.citte.length > 8}
@@ -584,6 +602,7 @@ export function ElencoAziende({
                 />
                 <Selector
                   label="Campagna"
+                  isLabelHidden
                   size="sm"
                   hasClear
                   placeholder="Tutte le campagne"
@@ -593,6 +612,7 @@ export function ElencoAziende({
                 />
                 <Selector
                   label="Sito"
+                  isLabelHidden
                   size="sm"
                   hasClear
                   placeholder="Con e senza sito"
@@ -614,14 +634,20 @@ export function ElencoAziende({
                   <SegmentedControlItem value="nessuno" label="Niente" />
                 </SegmentedControl>
 
-                <Button label="Cerca" size="sm" isLoading={inCorso} onClick={() => vaiA({ q: cerca, pagina: 1 })} />
+                <Button
+                  label="Cerca"
+                  size="sm"
+                  variant="primary"
+                  isLoading={inCorso}
+                  onClick={() => vaiA({ q: cerca, pagina: 1 })}
+                />
                 {/* Sta fra i comandi e non in fondo alla lista: chi aggiunge
                     un'azienda a mano di solito ha appena riagganciato il
                     telefono, e non deve cercare il bottone. */}
                 <Button
                   label="Nuova azienda"
                   size="sm"
-                  variant="primary"
+                  variant="secondary"
                   icon={<Plus size={16} />}
                   onClick={() => setModulo({ ...AZIENDA_VUOTA })}
                 />
@@ -686,7 +712,7 @@ export function ElencoAziende({
                     <Button
                       label="Elimina il gruppo"
                       size="sm"
-                      variant="ghost"
+                      variant="destructive"
                       icon={<Trash2 size={16} />}
                       onClick={() => {
                         const scelto = opzioniGruppo.find((o) => o.valore === gruppoScelto);
