@@ -14,10 +14,9 @@ Wesion sostituisce `leadgen-italia`, `mywebby-automations` e `gbp-autoposter` co
 programma solo. **Il software e' completo**: campagna -> lead -> audit -> cliente -> voce ->
 piano -> testi -> approvazione -> pubblicazione.
 
-Dal 01/09/2026 **la dashboard e' online**: <https://wesion.mywebby.it> (Contabo, dietro
-nginx, certificato Let's Encrypt). Il **router e' costruito su Oracle ma non avviato**, e
-**niente e' ancora mai uscito davvero** (`pubblicazioni: 0`) — vedi §14.1.
-I tre vecchi girano ancora, intatti.
+Dal 01/09/2026 **la dashboard e' online** (<https://wesion.mywebby.it>, Contabo dietro
+nginx), **il router gira su Oracle**, e — sempre il 01/09 — **il primo post e' uscito
+davvero**: vedi §0.2. I tre vecchi girano ancora, intatti.
 
 ```
 npm run dev      ->  http://localhost:3015   (NON 3000: quella e' di gbp-autoposter)
@@ -25,6 +24,41 @@ npm run router   ->  il router WhatsApp, su 172.17.0.1:3010
 npm run cliente  ->  prepara un cliente da riga di comando
 npm run utente   ->  crea un accesso alla dashboard
 ```
+
+## 0.2 La prima pubblicazione vera (01/09/2026, 15:07)
+
+**`pubblicazioni: 0` non è più vero.** MyWebby, post «Un problema tipico», uscito sulla
+scheda Google reale con la sua copertina:
+
+```
+approvata in dashboard   15:07:43
+uscita su Google         15:07:48      (cinque secondi, un tentativo, esito ok)
+localPosts/843509859251901975 · state: PROCESSING · media: PHOTO
+```
+
+La catena intera, per la prima volta dall'inizio alla fine: piano del mese → testo
+generato da `groq/openai/gpt-oss-120b` → copertina caricata a mano dalla consolle →
+**una persona ha detto sì** → router su Oracle → scheda Google.
+
+**Cosa ha rotto questa giornata, in ordine di scoperta.** Sono tutti guasti che il build
+non poteva vedere, e che si sono visti solo usando la cosa per davvero:
+
+| Cosa | Perché |
+|---|---|
+| Il logo dava 404 online | `standalone` di Next non porta `public/` con sé |
+| Il compose non si divideva | Compose interpola tutto il file: su Contabo chiedeva `ROUTER_SECRET` |
+| Il router partiva senza segreto | La guardia era solo nel compose, non nel programma |
+| La spia diceva «il router è fermo» | Le mancava il vincolo su `pubblica_at` che il router invece ha |
+| La consolle: 17 righe identiche | Mostrava cliente + tipo + data di *creazione*, uguali per tutto un piano |
+| «Choose file» in italiano | Astryx spedisce solo `en`/`fr`: ora c'è `src/tema/it.json` |
+| La copertina non si caricava | Alla dashboard mancava `MEDIA_UPLOAD_TOKEN`: caricare non è pubblicare |
+| Si poteva approvare l'impossibile | Un articolo verso un blog inesistente: ora il bottone è spento e dice perché |
+| Non c'era uno storico | «Cosa abbiamo fatto per questo cliente?» non aveva risposta: ora è una linguetta |
+
+**Cosa resta aperto, e conta:** `state: PROCESSING` vuol dire che Google l'ha accettato ma
+lo sta ancora revisionando. **Wesion non ricontrolla mai**: se Google lo respingesse dopo,
+resteremmo convinti che sia andata bene. `gbp-autoposter` questa lezione l'ha già pagata —
+vedi §14.1.
 
 ## 0.1 Cosa è cambiato dal 27/08 (non ancora committato)
 

@@ -35,6 +35,11 @@ import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
 import { Selector } from '@astryxdesign/core/Selector';
 import { TabList, Tab } from '@astryxdesign/core/TabList';
+import { Card } from '@astryxdesign/core/Card';
+import { Grid } from '@astryxdesign/core/Grid';
+import { Link } from '@astryxdesign/core/Link';
+import { ETICHETTA_DESTINAZIONE } from '@/lib/bozze';
+import { quandoBreve } from '@/lib/quando';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { DateInput } from '@astryxdesign/core/DateInput';
 import type { Scheda } from '@/lib/scheda';
@@ -425,6 +430,15 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   compaiono quando diventa cliente. */}
               {eCliente ? <Tab value="servizi" label="Servizi" /> : null}
               {eCliente ? <Tab value="mese" label="Il mese" /> : null}
+              {/* Lo storico compare solo quando c'e' qualcosa dentro: una
+                  linguetta che si apre sempre vuota insegna a non cliccarla. */}
+              {s.storico.length > 0 ? (
+                <Tab
+                  value="storico"
+                  label="Cosa è uscito"
+                  endContent={<Badge variant="neutral" label={String(s.storico.length)} />}
+                />
+              ) : null}
             </TabList>
           </VStack>
         </LayoutHeader>
@@ -1039,6 +1053,103 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   </HStack>
                 </VStack>
               </Dialog>
+            ) : null}
+
+            {/* ── COSA È USCITO ────────────────────────────────────────────
+                Chiesto il giorno della prima pubblicazione vera: «non esiste
+                uno storico? per capire cosa abbiamo fatto?». No, non esisteva.
+
+                ⚠️ CARD E NON RIGHE, in deroga alla regola di casa (dati fitti =
+                righe a filo). Qui ogni voce è un oggetto visivo con una
+                copertina, e si guarda come si guarda una galleria: «cosa gli
+                abbiamo pubblicato?» si risponde con l'occhio, non leggendo una
+                colonna. È l'eccezione che AGENTS.md prevede per le gallerie.
+
+                Ci sono anche i FALLITI, col loro errore: "abbiamo provato e non
+                è andata" fa parte della storia di un cliente quanto un
+                successo, e toglierlo farebbe sembrare che quel giorno non
+                avessimo fatto niente. */}
+            {sezione === 'storico' ? (
+              <VStack gap={4}>
+                <Text type="supporting">
+                  Quello che è uscito davvero, dal più recente. Non è la coda di quello che deve
+                  ancora uscire: quella sta in Bozze.
+                </Text>
+
+                <Grid columns={{ minWidth: 280, repeat: 'fit' }} gap={4}>
+                  {s.storico.map((v) => {
+                    const riuscita = v.destinazioni.some((d) => d.esito === 'ok');
+                    const link = v.destinazioni.find((d) => d.url)?.url ?? null;
+                    return (
+                      <Card key={v.id} padding={0}>
+                        <VStack gap={0}>
+                          {v.foto ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={v.foto}
+                              alt=""
+                              style={{
+                                width: '100%',
+                                aspectRatio: '1 / 1',
+                                objectFit: 'cover',
+                                display: 'block',
+                              }}
+                            />
+                          ) : null}
+                          <VStack gap={2} padding={4}>
+                            <HStack gap={2} vAlign="center" wrap="wrap">
+                              <Badge
+                                variant={riuscita ? 'success' : 'error'}
+                                label={riuscita ? 'uscito' : 'non uscito'}
+                              />
+                              {v.destinazioni.map((d, i) => (
+                                <Badge
+                                  key={i}
+                                  variant="neutral"
+                                  label={ETICHETTA_DESTINAZIONE[d.destinazione] ?? d.destinazione}
+                                />
+                              ))}
+                            </HStack>
+
+                            {v.titolo ? (
+                              <Text type="body" weight="semibold">
+                                {v.titolo}
+                              </Text>
+                            ) : null}
+                            {v.testo ? (
+                              <Text type="supporting" maxLines={4}>
+                                {v.testo}
+                              </Text>
+                            ) : null}
+
+                            <Text type="supporting" size="xsm">
+                              {v.uscito_at ? quandoBreve(v.uscito_at) : '—'}
+                            </Text>
+
+                            {v.destinazioni
+                              .filter((d) => d.esito === 'errore' && d.errore)
+                              .map((d, i) => (
+                                <Text key={i} type="supporting" size="xsm" color="disabled">
+                                  {d.errore}
+                                </Text>
+                              ))}
+
+                            {link ? (
+                              <Link
+                                href={link}
+                                isExternalLink
+                                newTabLabel="(si apre in una scheda nuova)"
+                              >
+                                Vai a vederlo
+                              </Link>
+                            ) : null}
+                          </VStack>
+                        </VStack>
+                      </Card>
+                    );
+                  })}
+                </Grid>
+              </VStack>
             ) : null}
 
             <HStack gap={2}>

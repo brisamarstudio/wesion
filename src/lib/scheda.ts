@@ -70,6 +70,30 @@ export interface Scheda {
   servizi: ServizioScheda[];
   /** Chi può dare comandi al router. */
   titolari: Array<{ id: number; tipo: string; valore: string }>;
+  /**
+   * Cosa è uscito davvero, per questo cliente.
+   *
+   * ⚠️ CHIESTO DA CHI LO USA IL GIORNO DELLA PRIMA PUBBLICAZIONE VERA
+   * (01/09/2026): «ma non esiste uno storico? per capire cosa abbiamo fatto?».
+   * Non esisteva: c'era la coda di quello che deve ancora uscire (`/bozze`) e
+   * il registro di tutto l'impianto (`/spie`), ma la domanda "cosa abbiamo
+   * fatto per QUESTO cliente" non aveva una risposta da nessuna parte. Ed è la
+   * domanda che si fa prima di una telefonata, o quando il cliente chiede.
+   */
+  storico: VoceStorico[];
+}
+
+/** Una cosa uscita: il post com'è, e dove è finito. */
+export interface VoceStorico {
+  id: number;
+  tipo: string;
+  titolo: string | null;
+  testo: string | null;
+  foto: string | null;
+  /** Quando è uscito davvero, non quando era programmato. */
+  uscito_at: string | null;
+  /** Le destinazioni toccate, con l'esito di ciascuna. */
+  destinazioni: Array<{ destinazione: string; esito: string; url: string | null; errore: string | null }>;
 }
 
 export const VOCE_VUOTA: Scheda['voce'] = {
@@ -142,6 +166,41 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
     [aziendaId]
   );
 
+  /**
+   * Lo storico: quello che e' USCITO, non quello che e' stato approvato.
+   *
+   * Il criterio e' `pubblicazione`, non `bozza.stato`: una bozza puo' essere
+   * approvata da giorni e non essere mai uscita — e' il caso che ci ha fatto
+   * inseguire un guasto inesistente stamattina. Qui deve comparire solo quello
+   * che ha davvero toccato Google, il sito o WhatsApp, con l'esito di ognuno.
+   *
+   * Anche i FALLITI restano in elenco: "abbiamo provato e non e' andata" e'
+   * parte della storia di un cliente quanto un successo, e nasconderlo
+   * significherebbe far sembrare che quel giorno non abbiamo fatto niente.
+   */
+  const storico = await query<VoceStorico>(
+    `SELECT b.id, b.tipo,
+            b.contenuto->>'titolo' AS titolo,
+            b.contenuto->>'testo'  AS testo,
+            b.contenuto->>'foto'   AS foto,
+            (SELECT max(p.eseguita_at) FROM wesion.pubblicazione p WHERE p.bozza_id = b.id) AS uscito_at,
+            COALESCE((
+              SELECT json_agg(json_build_object(
+                       'destinazione', p.destinazione,
+                       'esito',        p.esito,
+                       'url',          p.url_risultato,
+                       'errore',       p.errore
+                     ) ORDER BY p.eseguita_at DESC)
+                FROM wesion.pubblicazione p WHERE p.bozza_id = b.id
+            ), '[]'::json) AS destinazioni
+       FROM wesion.bozza b
+      WHERE b.azienda_id = $1
+        AND EXISTS (SELECT 1 FROM wesion.pubblicazione p WHERE p.bozza_id = b.id)
+      ORDER BY (SELECT max(p.eseguita_at) FROM wesion.pubblicazione p WHERE p.bozza_id = b.id) DESC
+      LIMIT 60`,
+    [aziendaId]
+  );
+
   return {
     ...azienda,
     settore: (azienda.settore ?? []) as TagAttivita[],
@@ -149,6 +208,7 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
     fatti,
     servizi,
     titolari,
+    storico,
   };
 }
 
