@@ -21,7 +21,7 @@ import { AppShell } from '@astryxdesign/core/AppShell';
 import { SideNav, SideNavHeading, SideNavItem } from '@astryxdesign/core/SideNav';
 import { Button } from '@astryxdesign/core/Button';
 import { Icon } from '@astryxdesign/core/Icon';
-import { Megaphone, Building2, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut } from 'lucide-react';
+import { Megaphone, Building2, Users, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /**
@@ -37,6 +37,10 @@ import type { ReactNode } from 'react';
 const VOCI = [
   { href: '/campagne', label: 'Campagne', icona: Megaphone },
   { href: '/aziende', label: 'Aziende', icona: Building2 },
+  // Non lo stesso posto di "Aziende": lì il pannello parla a chi deve ancora
+  // chiamare (gancio, urgenza). Qui c'è chi è già dentro — vedi la nota in
+  // cima a app/clienti/page.tsx.
+  { href: '/clienti', label: 'Clienti', icona: Users },
   { href: '/calendario', label: 'Calendario', icona: CalendarDays },
   { href: '/piano', label: 'Piano', icona: LayoutGrid },
   { href: '/bozze', label: 'Bozze', icona: PenLine },

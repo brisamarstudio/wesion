@@ -21,7 +21,10 @@ export default async function PaginaCliente({ params }: { params: Promise<{ id: 
   if (!scheda) notFound();
 
   return (
-    <Telaio attiva="/aziende">
+    // Chi è già cliente arriva quasi sempre da /clienti, non da /aziende: la
+    // voce accesa nella barra laterale segue lui, non l'URL — vedi la nota in
+    // cima a app/clienti/page.tsx sul perché le due liste sono separate.
+    <Telaio attiva={scheda.stato === 'cliente' ? '/clienti' : '/aziende'}>
       {/* useSearchParams (per ?tab=, vedi SchedaCliente) vuole un confine di
           Suspense, o il build si ferma — stessa regola di piano/page.tsx. */}
       <Suspense>
