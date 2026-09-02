@@ -23,7 +23,7 @@
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { leggiMateriale, applicaModifiche } from '../src/lib/seo-git.ts';
+import { leggiMateriale, applicaModifiche, pezziPR } from '../src/lib/seo-git.ts';
 import type { ModificaProposta } from '../src/lib/seo-proposta.ts';
 
 let falliti = 0;
@@ -172,6 +172,26 @@ console.log('\nQuello che difendevamo già');
   const { applicate, scartati } = await applicaModifiche(dir, [fuori]);
   verifica('fuori dal repo non si scrive', applicate.length === 0 && scartati[0].includes('fuori dal repo'));
 }
+
+// ── 4. Su quale repo stiamo per agire ───────────────────────────────────────
+// `pezziPR` decide owner/repo/numero di ogni chiamata a GitHub, `chiudiPR`
+// compresa — che chiude una PR e cancella un ramo. Una svista qui non dà
+// errore: agisce sul repo sbagliato di un cliente sbagliato.
+console.log('\nDa un indirizzo di PR ai pezzi giusti');
+{
+  const p = pezziPR('https://github.com/brisamarstudio/trattorialafenice/pull/3');
+  verifica(
+    'owner, repo e numero',
+    p?.owner === 'brisamarstudio' && p?.repo === 'trattorialafenice' && p?.numero === 3,
+    JSON.stringify(p)
+  );
+}
+{
+  const p = pezziPR('https://github.com/brisamarstudio/trattorialafenice/pull/12/files#diff-abc');
+  verifica('regge la coda che il browser aggiunge', p?.numero === 12, JSON.stringify(p));
+}
+verifica('un indirizzo che non è una PR non passa', pezziPR('https://github.com/tizio/repo') === null);
+verifica('e nemmeno una stringa a caso', pezziPR('boh') === null);
 
 for (const dir of daButtare) await rm(dir, { recursive: true, force: true });
 

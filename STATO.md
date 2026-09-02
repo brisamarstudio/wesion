@@ -728,11 +728,22 @@ bozza GBP. Vedi la nota in cima a `src/lib/seo-git.ts`.
 - `POST /api/aziende/[id]/seo-audit` — il giro intero. **Manuale per ora**, non un cron: il
   primo lotto di PR va guardato uno per uno prima di lasciarlo andare da solo ogni mese —
   e la tabella qui sotto dice perché non è prudenza per modo di dire.
-- `POST /api/aziende/[id]/seo-pr` — legge la PR aperta e la applica al sito.
+- `/api/aziende/[id]/seo-pr` — `GET` legge la PR aperta, `POST` la applica, **`DELETE` la
+  scarta**: commento col motivo, PR chiusa, ramo `wesion-seo-*` cancellato (solo i nostri:
+  sul repo di un cliente non si cancella un ramo che non abbiamo creato noi).
 - Il tutto sta nella **scheda cliente**, linguetta «Chi è», blocco «Audit SEO/GEO/AEO»
   (`SchedaCliente.tsx`): "Analizza SEO" → "Guarda la proposta" (diff file per file, con gli
-  scarti) → "Applica al sito". Il giro si chiude dove è cominciato, senza passare da GitHub
-  — che resta lì per chi vuole leggere la PR per intero.
+  scarti) → **"Applica al sito" oppure "Scarta la proposta"**. Il giro si chiude dove è
+  cominciato, senza passare da GitHub — che resta lì per chi vuole leggere la PR per
+  intero.
+
+  ⚠️ **Il «no» è arrivato dopo il «sì», ed era il buco più grosso** (02/09/2026, sera).
+  Fino a quella sera la scheda sapeva dire solo «applica»: per rifiutare bisognava uscire
+  da Wesion e chiudere la PR su GitHub. Un bottone che ha solo il sì non è una decisione,
+  è un modulo di consenso — e le prime tre proposte su La Fenice andavano buttate tutte e
+  tre. Se il no costa un giro fuori dal programma, prima o poi qualcuno applica per
+  stanchezza. Il motivo dello scarto è facoltativo ma finisce come commento sulla PR:
+  «closed» da solo, fra sei mesi, non dice se era sbagliata o solo arrivata male.
 
 **Le due credenziali ci sono** (procurate il 02/09). Non si generano da sole — servono un
 consenso OAuth nel browser e una scelta di scope su GitHub — quindi il procedimento resta

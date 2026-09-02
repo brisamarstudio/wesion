@@ -9,10 +9,14 @@
  *
  * L'ultimo bottone resta dell'operatore: il POST lo chiama una persona che ha
  * appena guardato il diff, mai un giro automatico.
+ *
+ * Il DELETE è il no, ed è arrivato dopo (02/09/2026, sera). Fino a quel giorno
+ * da qui si poteva solo applicare: per rifiutare bisognava andare su GitHub.
+ * Un bottone che ha solo il sì non è una decisione — vedi `chiudiPR`.
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { leggiPR, applicaPR } from '@/lib/seo-git';
+import { leggiPR, applicaPR, chiudiPR } from '@/lib/seo-git';
 
 async function urlDellaPR(aziendaId: number): Promise<string | null> {
   const [sito] = await query<{ ultima_pr_url: string | null }>(
@@ -77,4 +81,53 @@ export async function POST(_r: Request, contesto: { params: Promise<{ id: string
   await query(`UPDATE wesion.sito SET ultimo_errore = NULL WHERE azienda_id = $1`, [aziendaId]);
 
   return NextResponse.json({ applicata: true, pr_url: url });
+}
+
+/**
+ * Il no: la proposta si scarta senza uscire da Wesion.
+ *
+ * Il motivo è facoltativo e arriva dal corpo. Se c'è, finisce come commento
+ * sulla PR prima della chiusura: chi riapre quel repo fra sei mesi deve poter
+ * leggere PERCHÉ, non solo che è stata chiusa.
+ */
+export async function DELETE(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
+  const { id } = await contesto.params;
+  const aziendaId = Number(id);
+  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+
+  const { GITHUB_TOKEN } = process.env;
+  if (!GITHUB_TOKEN) return NextResponse.json({ errore: 'GITHUB_TOKEN non configurato.' }, { status: 500 });
+
+  const url = await urlDellaPR(aziendaId);
+  if (!url) return NextResponse.json({ errore: 'Non c’è nessuna proposta da scartare.' }, { status: 400 });
+
+  const corpo = (await richiesta.json().catch(() => ({}))) as { motivo?: string };
+
+  try {
+    await chiudiPR(url, GITHUB_TOKEN, corpo.motivo);
+  } catch (errore: unknown) {
+    const messaggio = errore instanceof Error ? errore.message : String(errore);
+    await query(`UPDATE wesion.sito SET ultimo_errore = $2 WHERE azienda_id = $1`, [
+      aziendaId,
+      messaggio.slice(0, 500),
+    ]);
+    return NextResponse.json({ errore: messaggio }, { status: 502 });
+  }
+
+  // ⚠️ L'evento PRIMA di cancellare `ultima_pr_url`, o l'indirizzo della PR
+  // scartata non resta scritto da nessuna parte: la colonna è l'unico posto
+  // dove ce l'abbiamo.
+  await query(
+    `INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio)
+     VALUES ($1, 'seo_scartato', 'dashboard', $2)`,
+    [aziendaId, JSON.stringify({ pr: url, motivo: corpo.motivo ?? null })]
+  );
+
+  // La scheda torna pulita: una proposta scartata non deve restare lì a
+  // chiedere una decisione già presa. Lo storico è nell'evento qui sopra.
+  await query(`UPDATE wesion.sito SET ultima_pr_url = NULL, ultimo_errore = NULL WHERE azienda_id = $1`, [
+    aziendaId,
+  ]);
+
+  return NextResponse.json({ scartata: true, pr_url: url });
 }

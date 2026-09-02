@@ -120,6 +120,20 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const [confermaApplica, setConfermaApplica] = useState(false);
 
   /**
+   * Il no, accanto al sì.
+   *
+   * ⚠️ Fino al 02/09/2026 sera questa scheda sapeva dire solo «applica»: per
+   * rifiutare bisognava aprire GitHub. Le prime tre proposte su La Fenice
+   * andavano buttate tutte e tre, e ogni no costava un giro fuori dal
+   * programma — la strada più corta per applicare qualcosa per stanchezza.
+   *
+   * Il motivo si scrive qui e non in un modale, perché si scrive mentre si
+   * guarda il diff, non dopo averlo perso di vista.
+   */
+  const [motivoScarto, setMotivoScarto] = useState('');
+  const [confermaScarta, setConfermaScarta] = useState(false);
+
+  /**
    * L'ultimo click sulle bozze, dentro la scheda.
    *
    * ⚠️ APPROVATA NON VUOL DIRE PUBBLICATA, e va detto dove si preme. Questa
@@ -190,6 +204,36 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         testo: 'Applicata al sito. Cloudflare ricostruisce da solo: fra qualche minuto è online.',
       });
       setPr((v) => (v ? { ...v, stato: 'applicata' } : v));
+    } finally {
+      setPrInCorso(false);
+    }
+  }
+
+  async function scartaProposta() {
+    setConfermaScarta(false);
+    setMessaggio(null);
+    setPrInCorso(true);
+    try {
+      const r = await fetch(`/api/aziende/${s.id}/seo-pr`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: motivoScarto.trim() || undefined }),
+      });
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+        return;
+      }
+      setMessaggio({
+        tipo: 'success',
+        testo: 'Scartata: la PR è chiusa e il ramo cancellato. Il sito non è stato toccato.',
+      });
+      // Via dalla pagina: una proposta scartata non deve restare lì a chiedere
+      // una decisione già presa. Resta scritta nello storico, non qui.
+      setPr(null);
+      setMotivoScarto('');
+      setS((v) => ({ ...v, sito_ultima_pr_url: null }));
+      router.refresh();
     } finally {
       setPrInCorso(false);
     }
@@ -897,18 +941,38 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                             merge. Per questo chiede conferma e per questo non
                             lo preme nessun giro automatico. */}
                         {pr.stato === 'aperta' ? (
-                          <HStack gap={2} align="center" wrap="wrap">
-                            <Button
-                              label="Applica al sito"
-                              variant="primary"
-                              size="sm"
-                              isLoading={prInCorso}
-                              onClick={() => setConfermaApplica(true)}
+                          <VStack gap={2}>
+                            <HStack gap={2} align="center" wrap="wrap">
+                              <Button
+                                label="Applica al sito"
+                                variant="primary"
+                                size="sm"
+                                isLoading={prInCorso}
+                                onClick={() => setConfermaApplica(true)}
+                              />
+                              {/* Il no sta accanto al sì, non altrove e non
+                                  nascosto: sono due esiti della stessa
+                                  decisione, e finché il no era su GitHub la
+                                  decisione era truccata. */}
+                              <Button
+                                label="Scarta la proposta"
+                                variant="secondary"
+                                size="sm"
+                                isLoading={prInCorso}
+                                onClick={() => setConfermaScarta(true)}
+                              />
+                              <Text type="supporting" color="secondary">
+                                Il sito si ricostruisce da solo: online fra qualche minuto.
+                              </Text>
+                            </HStack>
+                            <TextArea
+                              label="Perché la scarti"
+                              description="Facoltativo, ma finisce come commento sulla PR: fra sei mesi «chiusa» da sola non dice niente."
+                              rows={2}
+                              value={motivoScarto}
+                              onChange={setMotivoScarto}
                             />
-                            <Text type="supporting" color="secondary">
-                              Il sito si ricostruisce da solo: online fra qualche minuto.
-                            </Text>
-                          </HStack>
+                          </VStack>
                         ) : null}
                       </VStack>
                     ) : null}
@@ -1687,6 +1751,21 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         actionLabel="Applica"
         cancelLabel="Lascia stare"
         onAction={applicaProposta}
+      />
+    ) : null}
+
+    {/* Anche qui la domanda dice cosa succede dopo, e soprattutto cosa NON
+        succede: il sito resta com'è. Scartare non è pericoloso — pericoloso
+        era non poterlo fare da qui. */}
+    {confermaScarta ? (
+      <AlertDialog
+        isOpen
+        onOpenChange={(aperto) => (aperto ? null : setConfermaScarta(false))}
+        title="Scartare questa proposta?"
+        description={`La PR si chiude e il ramo viene cancellato. Il sito di ${s.nome} non cambia. Il prossimo "Analizza SEO" ne propone una nuova.`}
+        actionLabel="Scarta"
+        cancelLabel="Lascia stare"
+        onAction={scartaProposta}
       />
     ) : null}
 

@@ -456,3 +456,74 @@ export async function applicaPR(urlPR: string, token: string, titolo: string): P
     );
   }
 }
+
+/**
+ * Scarta la proposta: commento col motivo, PR chiusa, ramo cancellato.
+ *
+ * ⚠️ ESISTE PERCHÉ IL «NO» NON C'ERA (02/09/2026). La scheda sapeva dire solo
+ * sì: per rifiutare una proposta bisognava uscire da Wesion, aprire GitHub e
+ * chiuderla lì. Ma la regola che tiene su tutto questo programma è che
+ * l'ultimo bottone è dell'operatore — e un bottone che ha solo il sì non è una
+ * decisione, è un modulo di consenso. Le prime tre PR su `trattorialafenice`
+ * andavano buttate tutte e tre: se il no costa un giro fuori dal programma,
+ * prima o poi qualcuno applica per stanchezza.
+ *
+ * Il motivo finisce in un commento PRIMA della chiusura, e non è cortesia:
+ * fra sei mesi «closed» da solo non dice se la proposta era sbagliata o solo
+ * arrivata in un brutto momento, e quella differenza serve a chi legge lo
+ * storico per capire se l'audit sta migliorando.
+ */
+export async function chiudiPR(urlPR: string, token: string, motivo?: string): Promise<void> {
+  const p = pezziPR(urlPR);
+  if (!p) throw new Error(`Non riconosco questo indirizzo di PR: ${urlPR}`);
+
+  const intestazioni = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  };
+  const base = `https://api.github.com/repos/${p.owner}/${p.repo}`;
+
+  const rPR = await fetch(`${base}/pulls/${p.numero}`, { headers: intestazioni });
+  if (!rPR.ok) throw new Error(`GitHub (lettura PR): ${(await rPR.text()).slice(0, 300)}`);
+  const { head, state, merged } = (await rPR.json()) as {
+    head: { ref: string };
+    state: string;
+    merged: boolean;
+  };
+
+  // Una già applicata non si "scarta": chiuderla non toglierebbe niente dal
+  // sito, e lasciarlo credere sarebbe peggio che dire di no.
+  if (merged) throw new Error(`La proposta #${p.numero} è già stata applicata al sito: non si può scartare.`);
+  if (state !== 'open') throw new Error(`La proposta #${p.numero} non è più aperta: non c'è niente da scartare.`);
+
+  if (motivo?.trim()) {
+    // Se il commento non parte, la PR si chiude lo stesso: il motivo è
+    // importante, ma non quanto il fatto che la proposta smetta di stare lì
+    // aperta a chiedere una decisione già presa.
+    await fetch(`${base}/issues/${p.numero}/comments`, {
+      method: 'POST',
+      headers: intestazioni,
+      body: JSON.stringify({ body: `Scartata da Wesion.\n\n${motivo.trim()}` }),
+    }).catch(() => {});
+  }
+
+  const rChiudi = await fetch(`${base}/pulls/${p.numero}`, {
+    method: 'PATCH',
+    headers: intestazioni,
+    body: JSON.stringify({ state: 'closed' }),
+  });
+  if (!rChiudi.ok) throw new Error(`GitHub (chiusura PR): ${(await rChiudi.text()).slice(0, 300)}`);
+
+  // ⚠️ Il ramo si cancella SOLO se l'abbiamo fatto noi. `wesion-seo-*` è roba
+  // nostra e non la guarda nessun altro; qualunque altro nome è lavoro del
+  // cliente, e sul repo di un cliente non si cancella niente che non abbiamo
+  // creato — nemmeno se la PR passa da qui.
+  //
+  // E se la cancellazione fallisce non è un errore da mostrare: la PR è
+  // chiusa, che è la cosa per cui è stato premuto il bottone. Un ramo di
+  // troppo è sporcizia, non un danno.
+  if (head.ref.startsWith('wesion-seo-')) {
+    await fetch(`${base}/git/refs/heads/${head.ref}`, { method: 'DELETE', headers: intestazioni }).catch(() => {});
+  }
+}
