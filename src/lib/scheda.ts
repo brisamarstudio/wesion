@@ -54,6 +54,12 @@ export interface Scheda {
   audit_hook: string | null;
   score: number | null;
   settore: TagAttivita[];
+  /** Per l'audit SEO/GEO automatico — vedi wesion.sito. */
+  sito_repo_url: string | null;
+  sito_gsc_proprieta: string | null;
+  sito_ultima_pr_url: string | null;
+  sito_ultimo_audit_at: string | null;
+  sito_ultimo_errore: string | null;
   voce: {
     voce: string;
     pubblico: string;
@@ -129,6 +135,11 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
     telefono_normalizzato: string | null;
     audit_hook: string | null;
     score: number | null;
+    sito_repo_url: string | null;
+    sito_gsc_proprieta: string | null;
+    sito_ultima_pr_url: string | null;
+    sito_ultimo_audit_at: string | null;
+    sito_ultimo_errore: string | null;
   }>(
     `SELECT a.id, a.nome, a.slug, a.citta, a.stato, a.settore,
             (SELECT c.valore FROM wesion.contatto c
@@ -137,13 +148,17 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
             (SELECT c.normalizzato FROM wesion.contatto c
               WHERE c.azienda_id = a.id AND c.tipo IN ('telefono','whatsapp')
               ORDER BY c.e_titolare DESC, c.id LIMIT 1)       AS telefono_normalizzato,
-            u.hook AS audit_hook, u.score
+            u.hook AS audit_hook, u.score,
+            sito.repo_url AS sito_repo_url, sito.gsc_proprieta AS sito_gsc_proprieta,
+            sito.ultima_pr_url AS sito_ultima_pr_url, sito.ultimo_audit_at AS sito_ultimo_audit_at,
+            sito.ultimo_errore AS sito_ultimo_errore
        FROM wesion.azienda a
        LEFT JOIN LATERAL (
          SELECT x.hook, x.score FROM wesion.audit x
           WHERE x.azienda_id = a.id AND x.esito = 'ok'
           ORDER BY x.eseguito_at DESC LIMIT 1
        ) u ON true
+       LEFT JOIN wesion.sito sito ON sito.azienda_id = a.id
       WHERE a.id = $1`,
     [aziendaId]
   );

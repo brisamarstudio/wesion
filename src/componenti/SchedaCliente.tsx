@@ -37,6 +37,7 @@ import { Selector } from '@astryxdesign/core/Selector';
 import { TabList, Tab } from '@astryxdesign/core/TabList';
 import { Card } from '@astryxdesign/core/Card';
 import { Grid } from '@astryxdesign/core/Grid';
+import { Divider } from '@astryxdesign/core/Divider';
 import { Link } from '@astryxdesign/core/Link';
 import { ETICHETTA_DESTINAZIONE } from '@/lib/bozze';
 import { quandoBreve } from '@/lib/quando';
@@ -89,6 +90,30 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
    * si riusa lo stesso `ModuloAzienda` di quella lista, stesse API.
    */
   const [moduloAnagrafica, setModuloAnagrafica] = useState<AziendaModulo | null>(null);
+
+  // L'audit SEO/GEO — vedi /api/aziende/[id]/seo-audit. Stato locale a parte
+  // da `messaggio`: dura di più (clona un repo), e il risultato (link alla
+  // PR) resta in vista invece di sparire come un banner di conferma.
+  const [seoInCorso, setSeoInCorso] = useState(false);
+  const [esitoSeo, setEsitoSeo] = useState<{ pr_url: string | null; riepilogo: string } | null>(null);
+
+  async function analizzaSeo() {
+    setMessaggio(null);
+    setSeoInCorso(true);
+    setEsitoSeo(null);
+    try {
+      const r = await fetch(`/api/aziende/${s.id}/seo-audit`, { method: 'POST' });
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+        return;
+      }
+      setEsitoSeo({ pr_url: e.pr_url ?? null, riepilogo: e.riepilogo ?? '' });
+      router.refresh();
+    } finally {
+      setSeoInCorso(false);
+    }
+  }
 
   async function apriAnagrafica() {
     const r = await fetch(`/api/aziende/${s.id}`);
@@ -620,6 +645,60 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   />
                 ))}
               </HStack>
+
+              <Divider />
+
+              {/* L'audit SEO/GEO/AEO automatico: clona il repo, legge Search
+                  Console, apre una PR — vedi /api/aziende/[id]/seo-audit. Sta
+                  in "Chi è" e non in una linguetta propria: non è ancora un
+                  mestiere abbastanza carico da meritarne una tutta sua. */}
+              <VStack gap={2}>
+                <Text type="supporting">Audit SEO/GEO/AEO</Text>
+                {s.sito_repo_url ? (
+                  <VStack gap={2}>
+                    <MetadataList>
+                      <MetadataListItem label="Repository">{s.sito_repo_url}</MetadataListItem>
+                      {s.sito_gsc_proprieta ? (
+                        <MetadataListItem label="Search Console">{s.sito_gsc_proprieta}</MetadataListItem>
+                      ) : null}
+                      {s.sito_ultimo_audit_at ? (
+                        <MetadataListItem label="Ultimo giro">{quandoBreve(s.sito_ultimo_audit_at)}</MetadataListItem>
+                      ) : null}
+                      {s.sito_ultima_pr_url ? (
+                        <MetadataListItem label="Ultima PR aperta">
+                          <Link href={s.sito_ultima_pr_url} isExternalLink isStandalone>
+                            {s.sito_ultima_pr_url}
+                          </Link>
+                        </MetadataListItem>
+                      ) : null}
+                    </MetadataList>
+
+                    {s.sito_ultimo_errore ? (
+                      <Banner status="error" title="L’ultimo giro non è riuscito" description={s.sito_ultimo_errore} />
+                    ) : null}
+
+                    <Button label="Analizza SEO" size="sm" isLoading={seoInCorso} clickAction={analizzaSeo} />
+
+                    {esitoSeo ? (
+                      <Banner
+                        status={esitoSeo.pr_url ? 'success' : 'info'}
+                        title={esitoSeo.pr_url ? 'PR aperta' : 'Nessuna modifica da proporre'}
+                        description={esitoSeo.riepilogo}
+                      >
+                        {esitoSeo.pr_url ? (
+                          <Link href={esitoSeo.pr_url} isExternalLink isStandalone>
+                            {esitoSeo.pr_url}
+                          </Link>
+                        ) : null}
+                      </Banner>
+                    ) : null}
+                  </VStack>
+                ) : (
+                  <Text type="supporting" color="secondary">
+                    Manca il repository del sito — aggiungilo da «Modifica anagrafica» per abilitare l’audit.
+                  </Text>
+                )}
+              </VStack>
             </VStack>
             ) : null}
 
