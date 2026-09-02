@@ -43,6 +43,8 @@ import { quandoBreve } from '@/lib/quando';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { DateInput } from '@astryxdesign/core/DateInput';
+import { Pencil } from 'lucide-react';
+import { ModuloAzienda, type AziendaModulo } from './ModuloAzienda';
 import type { Scheda } from '@/lib/scheda';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
@@ -80,6 +82,42 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const parametri = useSearchParams();
   const [s, setS] = useState<Scheda>(iniziale);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
+  /**
+   * L'anagrafica (indirizzo, contatti, repo del sito, Search Console) non
+   * aveva NESSUN modo di arrivarci da qui — solo tornando all'elenco Aziende
+   * e passando dal "Modifica" lì. Per chi è già cliente è un giro assurdo:
+   * si riusa lo stesso `ModuloAzienda` di quella lista, stesse API.
+   */
+  const [moduloAnagrafica, setModuloAnagrafica] = useState<AziendaModulo | null>(null);
+
+  async function apriAnagrafica() {
+    const r = await fetch(`/api/aziende/${s.id}`);
+    if (!r.ok) {
+      setMessaggio({ tipo: 'error', testo: 'Non sono riuscito a leggere l’anagrafica.' });
+      return;
+    }
+    const a = await r.json();
+    setModuloAnagrafica({
+      id: a.id,
+      nome: a.nome ?? '',
+      categoria: a.categoria ?? '',
+      citta: a.citta ?? '',
+      provincia: a.provincia ?? '',
+      indirizzo: a.indirizzo ?? '',
+      cap: a.cap ?? '',
+      maps_url: a.maps_url ?? '',
+      place_id: a.place_id ?? '',
+      stato: a.stato ?? 'prospect',
+      note: a.note ?? '',
+      contatti: (a.contatti ?? []).map((c: { tipo: string; valore: string; e_titolare: boolean }) => ({
+        tipo: c.tipo,
+        valore: c.valore,
+        e_titolare: c.e_titolare,
+      })),
+      sito_repo_url: a.sito_repo_url ?? '',
+      sito_gsc_proprieta: a.sito_gsc_proprieta ?? '',
+    });
+  }
   /**
    * Cinque sezioni in colonna erano due schermate e mezzo di scorrimento, e si
    * lavora su una per volta: si da' una voce OPPURE si accende un servizio
@@ -394,6 +432,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   ].filter(Boolean) as string[];
 
   return (
+    <>
     <Layout
       height="fill"
       header={
@@ -403,6 +442,13 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               <Heading level={2}>{s.nome}</Heading>
               <StatusDot variant={s.stato === 'cliente' ? 'success' : 'neutral'} label={s.stato} />
               <Text color="secondary">{s.citta ?? ''}</Text>
+              <Button
+                label="Modifica anagrafica"
+                icon={<Pencil size={16} />}
+                variant="ghost"
+                size="sm"
+                clickAction={apriAnagrafica}
+              />
               {!salvato ? <Badge variant="warning" label="non salvata" /> : null}
               {/* Il salvataggio sta QUI e non solo in fondo alla pagina: con le
                   linguette il bottone in coda si vede solo dentro «Il mese», e
@@ -1226,11 +1272,28 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
 
             <HStack gap={2}>
               <Button label="Salva la scheda" variant="primary" clickAction={salva} isDisabled={salvato} />
-              <Button label="Torna all’elenco" variant="ghost" onClick={() => router.push('/aziende')} />
+              <Button
+                label="Torna all’elenco"
+                variant="ghost"
+                onClick={() => router.push(s.stato === 'cliente' ? '/clienti' : '/aziende')}
+              />
             </HStack>
           </VStack>
         </LayoutContent>
       }
     />
+
+    {moduloAnagrafica ? (
+      <ModuloAzienda
+        aperto
+        azienda={moduloAnagrafica}
+        onChiudi={() => setModuloAnagrafica(null)}
+        onSalvata={() => {
+          setModuloAnagrafica(null);
+          router.refresh();
+        }}
+      />
+    ) : null}
+    </>
   );
 }
