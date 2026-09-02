@@ -35,6 +35,22 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
+# ⚠️ SENZA QUESTA RIGA IL CONTAINER RISULTA "unhealthy" PER SEMPRE, pur
+# funzionando (visto il 02/09/2026, container su da 5 ore e sano: la dashboard
+# rispondeva 200 dall'esterno mentre docker diceva malata).
+#
+# Il `server.js` standalone di Next si lega a `process.env.HOSTNAME`, e Docker
+# quella variabile la imposta da solo all'ID del container. Quindi il processo
+# ascoltava su 172.22.0.2:3000 e basta: dall'host, via port mapping, tutto
+# bene; da DENTRO il container `127.0.0.1:3000` rifiutava la connessione — e il
+# healthcheck chiama proprio quello.
+#
+# Perché conta, visto che il sito andava lo stesso: un healthcheck rotto non
+# dice "sano" per sbaglio, dice "malato" sempre. Che è lo stesso danno della
+# documentazione che dà per spento un servizio acceso: il giorno in cui la
+# dashboard muore davvero, lo stato non cambia e non se ne accorge nessuno.
+ENV HOSTNAME=0.0.0.0
+
 # L'audit SEO clona il repo di un sito cliente per leggerlo e proporre le
 # correzioni (vedi lib/seo-git.ts): senza `git` nell'immagine, quella chiamata
 # fallisce con "spawn git ENOENT" — un errore che non dice cosa manca davvero.
