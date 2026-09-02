@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Il modulo di un'azienda: lo stesso per crearla e per correggerla.
@@ -20,19 +20,20 @@
  * inserendo a mano prima che lo scraper lo trovi — e in quel caso e' quello che
  * evita il doppione, visto che il Place ID e' l'identita'.
  */
-import { useState } from 'react';
-import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
-import { HStack } from '@astryxdesign/core/HStack';
-import { VStack } from '@astryxdesign/core/VStack';
-import { Text } from '@astryxdesign/core/Text';
-import { TextInput } from '@astryxdesign/core/TextInput';
-import { TextArea } from '@astryxdesign/core/TextArea';
-import { Selector } from '@astryxdesign/core/Selector';
-import { Switch } from '@astryxdesign/core/Switch';
-import { Button } from '@astryxdesign/core/Button';
-import { Banner } from '@astryxdesign/core/Banner';
-import { Divider } from '@astryxdesign/core/Divider';
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from "react";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Switch } from "@astryxdesign/core/Switch";
+import { Button } from "@astryxdesign/core/Button";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Plus, Trash2 } from "lucide-react";
 
 export interface ContattoModulo {
   tipo: string;
@@ -56,36 +57,36 @@ export interface AziendaModulo {
 }
 
 export const AZIENDA_VUOTA: AziendaModulo = {
-  nome: '',
-  categoria: '',
-  citta: '',
-  provincia: '',
-  indirizzo: '',
-  cap: '',
-  maps_url: '',
-  place_id: '',
-  stato: 'prospect',
-  note: '',
+  nome: "",
+  categoria: "",
+  citta: "",
+  provincia: "",
+  indirizzo: "",
+  cap: "",
+  maps_url: "",
+  place_id: "",
+  stato: "prospect",
+  note: "",
   contatti: [],
 };
 
 const STATI = [
-  { value: 'prospect', label: 'Da contattare' },
-  { value: 'contattato', label: 'Contattata' },
-  { value: 'in_trattativa', label: 'In trattativa' },
-  { value: 'cliente', label: 'Cliente' },
-  { value: 'perso', label: 'Persa' },
-  { value: 'archiviato', label: 'Archiviata' },
+  { value: "prospect", label: "Da contattare" },
+  { value: "contattato", label: "Contattata" },
+  { value: "in_trattativa", label: "In trattativa" },
+  { value: "cliente", label: "Cliente" },
+  { value: "perso", label: "Persa" },
+  { value: "archiviato", label: "Archiviata" },
 ];
 
 const TIPI = [
-  { value: 'telefono', label: 'Telefono' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'email', label: 'Email' },
-  { value: 'sito', label: 'Sito' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'lid', label: 'LID (WhatsApp GOWS)' },
+  { value: "telefono", label: "Telefono" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "email", label: "Email" },
+  { value: "sito", label: "Sito" },
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "lid", label: "LID (WhatsApp GOWS)" },
 ];
 
 export function ModuloAzienda({
@@ -112,7 +113,9 @@ export function ModuloAzienda({
   function cambiaContatto(indice: number, modifica: Partial<ContattoModulo>) {
     setDati((d) => ({
       ...d,
-      contatti: d.contatti.map((c, i) => (i === indice ? { ...c, ...modifica } : c)),
+      contatti: d.contatti.map((c, i) =>
+        i === indice ? { ...c, ...modifica } : c,
+      ),
     }));
   }
 
@@ -120,7 +123,9 @@ export function ModuloAzienda({
     setErrore(null);
 
     if (!dati.nome.trim()) {
-      setErrore('Il nome è l’unica cosa obbligatoria: senza, la riga non è ritrovabile da nessuna parte.');
+      setErrore(
+        "Il nome è l’unica cosa obbligatoria: senza, la riga non è ritrovabile da nessuna parte.",
+      );
       return;
     }
 
@@ -129,15 +134,21 @@ export function ModuloAzienda({
       contatti: dati.contatti.filter((c) => c.valore.trim()),
     };
 
-    const risposta = await fetch(nuova ? '/api/aziende' : `/api/aziende/${azienda!.id}`, {
-      method: nuova ? 'POST' : 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo),
-    });
+    const risposta = await fetch(
+      nuova ? "/api/aziende" : `/api/aziende/${azienda!.id}`,
+      {
+        method: nuova ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpo),
+      },
+    );
 
     const esito = await risposta.json().catch(() => ({}));
     if (!risposta.ok) {
-      setErrore(esito.errore ?? `Il salvataggio non è riuscito (HTTP ${risposta.status}).`);
+      setErrore(
+        esito.errore ??
+          `Il salvataggio non è riuscito (HTTP ${risposta.status}).`,
+      );
       return;
     }
 
@@ -146,111 +157,197 @@ export function ModuloAzienda({
   }
 
   return (
-    <Dialog isOpen={aperto} onOpenChange={(o) => (o ? null : onChiudi())} purpose="form" width={640}>
-      <DialogHeader
-        title={nuova ? 'Nuova azienda' : `Modifica ${azienda?.nome}`}
-        subtitle={
-          nuova
-            ? 'Per chi non arriva da una campagna: il passaparola, la telefonata, noi stessi.'
-            : 'Chi è e dove sta. Come parla e cosa gli facciamo stanno nella scheda.'
+    <Dialog
+      isOpen={aperto}
+      onOpenChange={(o) => (o ? null : onChiudi())}
+      purpose="form"
+      width={640}
+      maxHeight="85vh"
+    >
+      <Layout
+        header={
+          <DialogHeader
+            title={nuova ? "Nuova azienda" : `Modifica ${azienda?.nome}`}
+            subtitle={
+              nuova
+                ? "Per chi non arriva da una campagna: il passaparola, la telefonata, noi stessi."
+                : "Chi è e dove sta. Come parla e cosa gli facciamo stanno nella scheda."
+            }
+            onOpenChange={(o) => (o ? null : onChiudi())}
+          />
         }
-        onOpenChange={(o) => (o ? null : onChiudi())}
-      />
+        content={
+          <LayoutContent>
+            <VStack gap={4}>
+              {errore ? (
+                <Banner
+                  status="error"
+                  title="Non salvato"
+                  description={errore}
+                />
+              ) : null}
 
-      <VStack gap={4} padding={4}>
-        {errore ? <Banner status="error" title="Non salvato" description={errore} /> : null}
-
-        <TextInput label="Nome" isRequired value={dati.nome} onChange={(v) => cambia('nome', v)} />
-
-        <HStack gap={3}>
-          <TextInput label="Categoria" placeholder="Ristorante, Estetista…" value={dati.categoria} onChange={(v) => cambia('categoria', v)} />
-          <Selector label="Stato" value={dati.stato} onChange={(v) => cambia('stato', v ?? 'prospect')} options={STATI} />
-        </HStack>
-
-        <TextInput label="Indirizzo" value={dati.indirizzo} onChange={(v) => cambia('indirizzo', v)} />
-
-        <HStack gap={3}>
-          <TextInput label="Città" value={dati.citta} onChange={(v) => cambia('citta', v)} />
-          <TextInput label="Provincia" placeholder="PV" value={dati.provincia} onChange={(v) => cambia('provincia', v)} />
-          <TextInput label="CAP" placeholder="si ricava dall’indirizzo" value={dati.cap} onChange={(v) => cambia('cap', v)} />
-        </HStack>
-
-        <Divider />
-
-        <VStack gap={2}>
-          <HStack gap={2} align="center" justify="between">
-            <Text type="supporting">Contatti</Text>
-            <Button
-              label="Aggiungi"
-              size="sm"
-              variant="ghost"
-              icon={<Plus size={16} />}
-              onClick={() =>
-                setDati((d) => ({ ...d, contatti: [...d.contatti, { tipo: 'telefono', valore: '', e_titolare: false }] }))
-              }
-            />
-          </HStack>
-
-          {dati.contatti.length === 0 ? (
-            <Text type="supporting" color="secondary">
-              Senza un contatto con «titolare» acceso, il router non accetta comandi da nessuno per questa azienda.
-            </Text>
-          ) : null}
-
-          {dati.contatti.map((c, i) => (
-            <HStack key={i} gap={2} align="end">
-              <Selector
-                label="Tipo"
-                isLabelHidden
-                size="sm"
-                value={c.tipo}
-                onChange={(v) => cambiaContatto(i, { tipo: v ?? 'telefono' })}
-                options={TIPI}
-              />
               <TextInput
-                label="Valore"
-                isLabelHidden
-                size="sm"
-                placeholder={c.tipo === 'telefono' || c.tipo === 'whatsapp' ? '+39 333 1234567' : ''}
-                value={c.valore}
-                onChange={(v) => cambiaContatto(i, { valore: v })}
+                label="Nome"
+                isRequired
+                value={dati.nome}
+                onChange={(v) => cambia("nome", v)}
               />
-              <Switch
-                label="Titolare"
-                value={c.e_titolare}
-                onChange={(v) => cambiaContatto(i, { e_titolare: v })}
+
+              <HStack gap={3}>
+                <TextInput
+                  label="Categoria"
+                  placeholder="Ristorante, Estetista…"
+                  value={dati.categoria}
+                  onChange={(v) => cambia("categoria", v)}
+                />
+                <Selector
+                  label="Stato"
+                  value={dati.stato}
+                  onChange={(v) => cambia("stato", v ?? "prospect")}
+                  options={STATI}
+                />
+              </HStack>
+
+              <TextInput
+                label="Indirizzo"
+                value={dati.indirizzo}
+                onChange={(v) => cambia("indirizzo", v)}
               />
+
+              <HStack gap={3}>
+                <TextInput
+                  label="Città"
+                  value={dati.citta}
+                  onChange={(v) => cambia("citta", v)}
+                />
+                <TextInput
+                  label="Provincia"
+                  placeholder="PV"
+                  value={dati.provincia}
+                  onChange={(v) => cambia("provincia", v)}
+                />
+                <TextInput
+                  label="CAP"
+                  placeholder="si ricava dall’indirizzo"
+                  value={dati.cap}
+                  onChange={(v) => cambia("cap", v)}
+                />
+              </HStack>
+
+              <Divider />
+
+              <VStack gap={2}>
+                <HStack gap={2} align="center" justify="between">
+                  <Text type="supporting">Contatti</Text>
+                  <Button
+                    label="Aggiungi"
+                    size="sm"
+                    variant="ghost"
+                    icon={<Plus size={16} />}
+                    onClick={() =>
+                      setDati((d) => ({
+                        ...d,
+                        contatti: [
+                          ...d.contatti,
+                          { tipo: "telefono", valore: "", e_titolare: false },
+                        ],
+                      }))
+                    }
+                  />
+                </HStack>
+
+                {dati.contatti.length === 0 ? (
+                  <Text type="supporting" color="secondary">
+                    Senza un contatto con «titolare» acceso, il router non
+                    accetta comandi da nessuno per questa azienda.
+                  </Text>
+                ) : null}
+
+                {dati.contatti.map((c, i) => (
+                  <HStack key={i} gap={2} align="end">
+                    <Selector
+                      label="Tipo"
+                      isLabelHidden
+                      size="sm"
+                      value={c.tipo}
+                      onChange={(v) =>
+                        cambiaContatto(i, { tipo: v ?? "telefono" })
+                      }
+                      options={TIPI}
+                    />
+                    <TextInput
+                      label="Valore"
+                      isLabelHidden
+                      size="sm"
+                      placeholder={
+                        c.tipo === "telefono" || c.tipo === "whatsapp"
+                          ? "+39 333 1234567"
+                          : ""
+                      }
+                      value={c.valore}
+                      onChange={(v) => cambiaContatto(i, { valore: v })}
+                    />
+                    <Switch
+                      label="Titolare"
+                      value={c.e_titolare}
+                      onChange={(v) => cambiaContatto(i, { e_titolare: v })}
+                    />
+                    <Button
+                      label="Togli il contatto"
+                      isIconOnly
+                      size="sm"
+                      variant="ghost"
+                      icon={<Trash2 size={16} />}
+                      onClick={() =>
+                        setDati((d) => ({
+                          ...d,
+                          contatti: d.contatti.filter((_, j) => j !== i),
+                        }))
+                      }
+                    />
+                  </HStack>
+                ))}
+              </VStack>
+
+              <Divider />
+
+              <HStack gap={3}>
+                <TextInput
+                  label="URL di Maps"
+                  value={dati.maps_url}
+                  onChange={(v) => cambia("maps_url", v)}
+                />
+                <TextInput
+                  label="Place ID"
+                  labelTooltip="L’identità del posto. Se c’è già in tabella, invece di creare un doppione ritroviamo quella."
+                  value={dati.place_id}
+                  onChange={(v) => cambia("place_id", v)}
+                />
+              </HStack>
+
+              <TextArea
+                label="Note"
+                rows={3}
+                value={dati.note}
+                onChange={(v) => cambia("note", v)}
+              />
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter>
+            <HStack gap={2} justify="end">
+              <Button label="Annulla" variant="ghost" onClick={onChiudi} />
               <Button
-                label="Togli il contatto"
-                isIconOnly
-                size="sm"
-                variant="ghost"
-                icon={<Trash2 size={16} />}
-                onClick={() => setDati((d) => ({ ...d, contatti: d.contatti.filter((_, j) => j !== i) }))}
+                label={nuova ? "Crea" : "Salva"}
+                variant="primary"
+                clickAction={salva}
               />
             </HStack>
-          ))}
-        </VStack>
-
-        <Divider />
-
-        <HStack gap={3}>
-          <TextInput label="URL di Maps" value={dati.maps_url} onChange={(v) => cambia('maps_url', v)} />
-          <TextInput
-            label="Place ID"
-            labelTooltip="L’identità del posto. Se c’è già in tabella, invece di creare un doppione ritroviamo quella."
-            value={dati.place_id}
-            onChange={(v) => cambia('place_id', v)}
-          />
-        </HStack>
-
-        <TextArea label="Note" rows={3} value={dati.note} onChange={(v) => cambia('note', v)} />
-
-        <HStack gap={2} justify="end">
-          <Button label="Annulla" variant="ghost" onClick={onChiudi} />
-          <Button label={nuova ? 'Crea' : 'Salva'} variant="primary" clickAction={salva} />
-        </HStack>
-      </VStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }
