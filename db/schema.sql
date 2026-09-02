@@ -381,3 +381,12 @@ CREATE TABLE IF NOT EXISTS wesion.sito (
   creato_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   aggiornato_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============ AGGIUNTA DEL 02/09/2026 — l'esito dell'ultimo giro ============
+-- L'ultima PR aperta e quando: non uno storico (quello lo tiene GitHub da
+-- solo, nella lista PR del repo), solo il puntatore piu' fresco per non dover
+-- andare a cercarlo mentre si e' al telefono col cliente.
+ALTER TABLE wesion.sito
+  ADD COLUMN IF NOT EXISTS ultimo_audit_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS ultima_pr_url   TEXT,
+  ADD COLUMN IF NOT EXISTS ultimo_errore   TEXT;

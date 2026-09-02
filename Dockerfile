@@ -35,6 +35,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
+# L'audit SEO clona il repo di un sito cliente per leggerlo e proporre le
+# correzioni (vedi lib/seo-git.ts): senza `git` nell'immagine, quella chiamata
+# fallisce con "spawn git ENOENT" — un errore che non dice cosa manca davvero.
+RUN apk add --no-cache git
+
 # `standalone` è un server già assemblato con dentro solo i moduli che usa.
 COPY --from=costruzione /app/.next/standalone ./
 COPY --from=costruzione /app/.next/static ./.next/static

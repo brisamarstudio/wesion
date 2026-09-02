@@ -38,6 +38,7 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { Button } from '@astryxdesign/core/Button';
 import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
+import { Link } from '@astryxdesign/core/Link';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -64,6 +65,12 @@ export interface Azienda {
    *  non uno storico: vedi la nota nello schema del 02/09/2026. */
   ultimo_contatto_canale: string | null;
   ultimo_contatto_at: string | null;
+  /** Per l'audit SEO/GEO automatico — vedi wesion.sito. */
+  sito_repo_url: string | null;
+  sito_gsc_proprieta: string | null;
+  sito_ultima_pr_url: string | null;
+  sito_ultimo_audit_at: string | null;
+  sito_ultimo_errore: string | null;
   campagna: string | null;
   score: number | null;
   telefono: string | null;
@@ -214,6 +221,8 @@ export function ElencoAziende({
   const [copiato, setCopiato] = useState(false);
   /** Il giro dell'audit dura minuti: il bottone deve dire che sta lavorando. */
   const [analisiInCorso, setAnalisiInCorso] = useState(false);
+  const [seoInCorso, setSeoInCorso] = useState(false);
+  const [esitoSeo, setEsitoSeo] = useState<{ pr_url: string | null; riepilogo: string } | null>(null);
   /**
    * `null` = chiuso. Un oggetto = aperto su quei dati; senza `id` dentro, e'
    * una creazione. Tenerlo in uno stato solo evita il caso impossibile
@@ -433,6 +442,30 @@ export function ElencoAziende({
     const e = await r.json().catch(() => ({}));
     if (!r.ok || e?.esito === 'errore') setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
     router.refresh();
+  }
+
+  /**
+   * L'audit SEO/GEO: clona il repo, legge Search Console, apre la PR — vedi
+   * `/api/aziende/[id]/seo-audit`. Dura di più di `analizza` (clona un repo,
+   * non solo legge una pagina), quindi ha un suo stato di caricamento: non è
+   * `analisiInCorso`, quello è del giro sull'hook.
+   */
+  async function analizzaSeo(id: number) {
+    setMessaggio(null);
+    setSeoInCorso(true);
+    setEsitoSeo(null);
+    try {
+      const r = await fetch(`/api/aziende/${id}/seo-audit`, { method: 'POST' });
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+        return;
+      }
+      setEsitoSeo({ pr_url: e.pr_url ?? null, riepilogo: e.riepilogo ?? '' });
+      router.refresh();
+    } finally {
+      setSeoInCorso(false);
+    }
   }
 
   async function analizzaMancanti() {
@@ -856,7 +889,10 @@ export function ElencoAziende({
                           label={a.nome}
                           description={descrizione(a)}
                           isSelected={a.id === selezionataId}
-                          onClick={() => setSelezionataId(a.id)}
+                          onClick={() => {
+                            setSelezionataId(a.id);
+                            setEsitoSeo(null);
+                          }}
                           startContent={
                             <HStack gap={2} align="center">
                               {/* ⚠️ `stopPropagation`: la riga apre il dettaglio,
@@ -1150,6 +1186,7 @@ export function ElencoAziende({
               ) : null}
 
               {dettaglio === 'dati' ? (
+              <VStack gap={3}>
               <MetadataList>
                 <MetadataListItem label="Telefono">{selezionata.telefono ?? '—'}</MetadataListItem>
                 <MetadataListItem label="Email">{selezionata.email ?? '—'}</MetadataListItem>
@@ -1161,6 +1198,72 @@ export function ElencoAziende({
                   <MetadataListItem label="Ultimo audit">{soloData(selezionata.audit_quando)}</MetadataListItem>
                 ) : null}
               </MetadataList>
+
+              <Divider />
+
+              {/* L'audit SEO/GEO/AEO automatico: clona il repo, legge Search
+                  Console, apre una PR. Compare solo se c'è un repo da
+                  clonare — senza, il bottone cliccato darebbe solo un errore
+                  che dice "vai su Modifica prima". */}
+              <VStack gap={2}>
+                <Text type="supporting">Audit SEO/GEO/AEO</Text>
+                {selezionata.sito_repo_url ? (
+                  <VStack gap={2}>
+                    <MetadataList>
+                      <MetadataListItem label="Repository">{selezionata.sito_repo_url}</MetadataListItem>
+                      {selezionata.sito_gsc_proprieta ? (
+                        <MetadataListItem label="Search Console">{selezionata.sito_gsc_proprieta}</MetadataListItem>
+                      ) : null}
+                      {selezionata.sito_ultimo_audit_at ? (
+                        <MetadataListItem label="Ultimo giro">
+                          {soloData(selezionata.sito_ultimo_audit_at)}
+                        </MetadataListItem>
+                      ) : null}
+                      {selezionata.sito_ultima_pr_url ? (
+                        <MetadataListItem label="Ultima PR aperta">
+                          <Link href={selezionata.sito_ultima_pr_url} isExternalLink isStandalone>
+                            {selezionata.sito_ultima_pr_url}
+                          </Link>
+                        </MetadataListItem>
+                      ) : null}
+                    </MetadataList>
+
+                    {selezionata.sito_ultimo_errore ? (
+                      <Banner
+                        status="error"
+                        title="L’ultimo giro non è riuscito"
+                        description={selezionata.sito_ultimo_errore}
+                      />
+                    ) : null}
+
+                    <Button
+                      label="Analizza SEO"
+                      size="sm"
+                      isLoading={seoInCorso}
+                      clickAction={() => analizzaSeo(selezionata.id)}
+                    />
+
+                    {esitoSeo ? (
+                      <Banner
+                        status={esitoSeo.pr_url ? 'success' : 'info'}
+                        title={esitoSeo.pr_url ? 'PR aperta' : 'Nessuna modifica da proporre'}
+                        description={esitoSeo.riepilogo}
+                      >
+                        {esitoSeo.pr_url ? (
+                          <Link href={esitoSeo.pr_url} isExternalLink isStandalone>
+                            {esitoSeo.pr_url}
+                          </Link>
+                        ) : null}
+                      </Banner>
+                    ) : null}
+                  </VStack>
+                ) : (
+                  <Text type="supporting" color="secondary">
+                    Manca il repository del sito — aggiungilo da «Modifica» per abilitare l’audit automatico.
+                  </Text>
+                )}
+              </VStack>
+              </VStack>
               ) : null}
 
               <Button

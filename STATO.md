@@ -699,6 +699,64 @@ quello vecchio), quindi non pubblicano mai la stessa cosa. **I webhook di WAHA p
 ancora al vecchio**: spostarli è un'operazione a sé, tenant per tenant, e finché non si fa
 il router nuovo riceve zero messaggi WhatsApp — fa solo il giro delle pubblicazioni.
 
+## 14.2 L'audit SEO/GEO/AEO automatico (02/09/2026) — costruito, non ancora acceso
+
+L'idea: Wesion legge Search Console + il repo del sito di un cliente, propone da sola le
+correzioni SEO/GEO/AEO (grafo JSON-LD, `llms.txt`, `robots.txt` — regole in
+`src/lib/regole-seo.ts`, copiate a mano dal playbook perché quello non arriva sul server),
+e apre una Pull Request. **Non pubblica mai da sola**: si ferma alla PR, il merge lo decide
+un umano — stessa regola del bottone dell'operatore, applicata al codice invece che a una
+bozza GBP. Vedi la nota in cima a `src/lib/seo-git.ts`.
+
+**Cosa c'è:**
+- `wesion.sito` (repo_url, gsc_proprieta, ultima_pr_url, ultimo_audit_at, ultimo_errore) —
+  compilata da "Modifica" sulla scheda azienda, campi «Repository del sito» e «Property
+  Search Console».
+- `src/lib/search-console.ts` — legge Search Console con un token OAuth SEPARATO da quello
+  di GBP (stesso client id/secret, scope diverso).
+- `src/lib/seo-git.ts` — clona il repo (via HTTPS+token, MAI l'alias SSH incollato nel
+  campo: si estrae sempre `owner/repo` con una regex), scrive le modifiche, apre la PR via
+  API GitHub.
+- `POST /api/aziende/[id]/seo-audit` — il giro intero. Bottone "Analizza SEO" nella scheda,
+  tab «Dati». **Manuale per ora**, non un cron: il primo lotto di PR va guardato uno per
+  uno prima di lasciarlo andare da solo ogni mese.
+
+**⚠️ Due credenziali mancano, e non sono cose che si possano generare da sole — servono un
+consenso OAuth nel browser e una scelta di scope su GitHub, quindi le procura chi ha le
+chiavi dell'agenzia, non un giro di codice:**
+
+1. **`GSC_REFRESH_TOKEN`** — un token Search Console, di sola lettura, SEPARATO da
+   `GBP_REFRESH_TOKEN` (quello ha solo lo scope `business.manage`, non basta).
+   Si ottiene con **Google OAuth Playground** (developers.google.com/oauthplayground):
+   1. Icona ingranaggio (in alto a destra) → spunta "Use your own OAuth credentials" →
+      incolla `GBP_CLIENT_ID` e `GBP_CLIENT_SECRET` (sono già in `.env`).
+   2. Nel campo scope personalizzato in basso a sinistra scrivi
+      `https://www.googleapis.com/auth/webmasters.readonly`, poi "Authorize APIs".
+   3. Accedi con **l'account Google che vede Search Console dei clienti** (quello
+      dell'agenzia).
+   4. Step 2 della pagina: "Exchange authorization code for tokens".
+   5. Copia il valore di "Refresh token" → va in `GSC_REFRESH_TOKEN` nel `.env` di
+      Contabo (non quello di Oracle: questa parte gira solo sulla dashboard).
+
+2. **`GITHUB_TOKEN`** — un Personal Access Token *fine-grained* che possa leggere i repo
+   dei clienti e aprire Pull Request (MAI push su un branch protetto: il codice non lo fa,
+   ma il token va comunque dato con lo scope minimo).
+   Da github.com/settings/tokens?type=beta:
+   - Resource owner: l'account/org che possiede i repo dei clienti.
+   - Repository access: quelli da abilitare (almeno quello del cliente su cui si testa).
+   - Permissions: **Contents: Read and write**, **Pull requests: Read and write**.
+   - Il token generato → `GITHUB_TOKEN` nel `.env` di Contabo.
+
+Senza queste due, il bottone "Analizza SEO" risponde con un errore che dice esattamente
+cosa manca (non un fallimento muto) — vedi i controlli in cima alla rotta.
+
+**Il primo test vero: Trattoria La Fenice.** Prima di premere il bottone: aprire "Modifica"
+sulla sua scheda e compilare «Repository del sito» (il link Git) e «Property Search
+Console» (il valore in alto a sinistra su search.google.com/search-console per il suo
+dominio). Poi rebuild della dashboard (serve anche perché il `Dockerfile` ora installa
+`git`, mancava) e le due variabili sopra nel `.env` di Contabo prima di ripartire il
+container.
+
 ## 15. Il tono, se devi scrivere codice qui
 
 Come in `gbp-autoposter`: i commenti non dicono *cosa* fa il codice — quello si legge —

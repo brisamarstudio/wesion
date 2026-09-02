@@ -96,6 +96,9 @@ export default async function PaginaAziende({
     `SELECT
        a.id, a.slug, a.nome, a.categoria, a.citta, a.provincia, a.stato, a.maps_url,
        a.ultimo_contatto_canale, a.ultimo_contatto_at,
+       sito.repo_url AS sito_repo_url, sito.gsc_proprieta AS sito_gsc_proprieta,
+       sito.ultima_pr_url AS sito_ultima_pr_url, sito.ultimo_audit_at AS sito_ultimo_audit_at,
+       sito.ultimo_errore AS sito_ultimo_errore,
        camp.nome AS campagna,
        ultimo.score, ultimo.note AS audit_note, ultimo.hook AS audit_hook,
        ultimo.scansione AS audit_scansione, ultimo.modello AS audit_modello,
@@ -130,6 +133,7 @@ export default async function PaginaAziende({
        (a.raw_json->>'reviewsCount')::int     AS recensioni
      FROM wesion.azienda a
      LEFT JOIN wesion.campagna camp ON camp.id = a.campagna_id
+     LEFT JOIN wesion.sito sito ON sito.azienda_id = a.id
      -- LATERAL e non tre sottoquery uguali: punteggio, note e gancio devono
      -- venire tutti DALLO STESSO audit, o un giorno il punteggio è di un giro
      -- e il gancio di un altro e nessuno se ne accorge.

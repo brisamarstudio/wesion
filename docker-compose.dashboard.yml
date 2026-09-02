@@ -58,6 +58,21 @@ services:
       MEDIA_UPLOAD_TOKEN: ${MEDIA_UPLOAD_TOKEN}
       MEDIA_CLIENT: ${MEDIA_CLIENT:-wesion}
 
+      # ⚠️ ALTRA ECCEZIONE ALLA REGOLA "NIENTE CREDENZIALI DI PUBBLICAZIONE QUI"
+      # (02/09/2026), e stavolta va spiegata bene. L'audit SEO NON pubblica sul
+      # sito del cliente: apre una Pull Request, che resta ferma finché un
+      # umano non la mergia — vedi lib/seo-git.ts. Quindi:
+      #   - GBP_CLIENT_ID/SECRET identificano l'app OAuth, non bastano da soli
+      #     a pubblicare: senza GBP_REFRESH_TOKEN (che resta SOLO sul router)
+      #     la dashboard non può toccare nessuna scheda Google.
+      #   - GSC_REFRESH_TOKEN è un token SEPARATO, di sola lettura
+      #     (webmasters.readonly): legge Search Console, non scrive niente.
+      #   - GITHUB_TOKEN apre PR, non fa mai push su un branch protetto.
+      GBP_CLIENT_ID: ${GBP_CLIENT_ID}
+      GBP_CLIENT_SECRET: ${GBP_CLIENT_SECRET}
+      GSC_REFRESH_TOKEN: ${GSC_REFRESH_TOKEN}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+
     # ⚠️ /entra e non /aziende: da quando c'e' l'autenticazione, /aziende
     # risponde con un redirect al login. Un healthcheck che passa da un
     # redirect dice "sano" anche quando l'unica cosa che funziona e' la porta
