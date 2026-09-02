@@ -1,5 +1,9 @@
 > ## Prima di tutto: leggi `STATO.md`
 >
+> (E se cerchi come si USA Wesion invece di come e' fatto, quello sta in
+> `MANUALE.md`: pagina per pagina, a cosa serve e dove sono le trappole. Va
+> tenuto aggiornato quando si aggiunge una feature che l'operatore vede.)
+>
 > Dice cos'e' Wesion, com'e' fatta la catena fatto -> voce -> bozza -> approvazione ->
 > pubblicazione, e le cinque cose non ovvie che altrimenti ti costano un'ora ciascuna
 > (fra cui: perche' non c'e' Tailwind, perche' l'elenco usa `List` e non `Table`, e

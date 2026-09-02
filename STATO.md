@@ -7,6 +7,11 @@ ricostruita e `healthy` alle 16:58; tutto committato e pushato (`main` = `master
 
 Se apri questo progetto adesso, **leggi solo questo file**.
 
+> Questo file dice **com'e' fatto** Wesion. Come si **usa** — pagina per pagina,
+> cosa serve a cosa, dove sono le trappole — sta in **`MANUALE.md`**, ed e'
+> scritto per chi lo apre in dashboard, non per chi ci mette le mani dentro.
+> Quando aggiungi qualcosa che l'operatore vede, aggiorna anche quello.
+
 ---
 
 ## 0. In due righe
