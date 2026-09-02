@@ -84,6 +84,57 @@ export function riscrivibileIntero(percorso: string): boolean {
   return RISCRIVIBILI_INTERI.includes(nome);
 }
 
+/**
+ * I dati che dicono COS'È il cliente, non come è indicizzato.
+ *
+ * ⚠️ NASCE DALLA PR #2 SU `trattorialafenice` (02/09/2026). Quella proposta era
+ * buona — `containedInPlace` e `knowsAbout`, roba da playbook — e in mezzo,
+ * dentro lo stesso blocco, aveva cambiato `"priceRange": "$$"` in `"$"`. Cioè
+ * aveva riclassificato la fascia di prezzo di un ristorante vero, che finisce
+ * nei risultati di Google, senza avere il minimo modo di saperla.
+ *
+ * Il prompt dice già di non toccare i contenuti; questo lo rende impossibile
+ * invece che sconsigliato. Una sostituzione che cambia uno di questi valori
+ * viene scartata INTERA, anche se il resto era buono: perdere una proposta
+ * giusta costa un giro, cambiare un fatto sul cliente in silenzio costa la
+ * fiducia di chi legge la PR — e a quel punto le legge una per una.
+ */
+const CHIAVI_DI_FATTO = [
+  'priceRange',
+  'telephone',
+  'email',
+  'streetAddress',
+  'postalCode',
+  'addressLocality',
+  'addressRegion',
+  'latitude',
+  'longitude',
+  'openingHours',
+  'openingHoursSpecification',
+  'servesCuisine',
+  'starRating',
+  'ratingValue',
+  'reviewCount',
+  'foundingDate',
+];
+
+/** Le chiavi di fatto il cui VALORE cambia fra il testo cercato e quello nuovo. */
+export function fattiAlterati(cerca: string, con: string): string[] {
+  const alterate: string[] = [];
+
+  for (const chiave of CHIAVI_DI_FATTO) {
+    // Il valore fino alla fine della riga: basta a confrontare, e non prova a
+    // capire il JSON (che qui dentro è un pezzo di file, non un documento).
+    const dove = new RegExp(`["']${chiave}["']\\s*:\\s*([^\\n]*)`, 'g');
+    const prima = [...cerca.matchAll(dove)].map((m) => m[1].trim());
+    if (!prima.length) continue; // non c'era: non è una modifica di un fatto
+    const dopo = [...con.matchAll(dove)].map((m) => m[1].trim());
+    if (prima.join('\n') !== dopo.join('\n')) alterate.push(chiave);
+  }
+
+  return alterate;
+}
+
 export function leggiProposta(risposta: string): Proposta {
   const testo = String(risposta ?? '').replace(/\r\n/g, '\n');
 

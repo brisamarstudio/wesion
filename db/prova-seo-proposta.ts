@@ -14,7 +14,7 @@
  * Import con estensione .ts: lo esegue Node con --experimental-strip-types,
  * non Next (stessa regola di `router/`).
  */
-import { leggiProposta, MARCA, riscrivibileIntero } from '../src/lib/seo-proposta.ts';
+import { leggiProposta, MARCA, riscrivibileIntero, fattiAlterati } from '../src/lib/seo-proposta.ts';
 
 let falliti = 0;
 
@@ -124,6 +124,31 @@ verifica('llms.txt sì', riscrivibileIntero('public/llms.txt'));
 verifica('robots.txt sì', riscrivibileIntero('robots.txt'));
 verifica('Layout.astro NO — è il caso della PR #1', !riscrivibileIntero('src/layouts/Layout.astro'));
 verifica('index.html NO', !riscrivibileIntero('src/pages/index.html'));
+
+// ── 7. I fatti sul cliente, cambiati dentro una modifica per il resto buona ──
+//    È il caso vero della PR #2: containedInPlace e knowsAbout (giusti) e in
+//    mezzo priceRange da "$$" a "$", cioè la fascia di prezzo di un ristorante
+//    riclassificata da un modello che non c'è mai stato a mangiare.
+console.log('\nFatti sul cliente');
+const prezzoPrima = '  "priceRange": "$$",\n  "servesCuisine": "Italiana, Pavese",';
+const prezzoDopo = '  "priceRange": "$",\n  "servesCuisine": "Italiana, Pavese",';
+verifica('priceRange cambiato viene visto', fattiAlterati(prezzoPrima, prezzoDopo).includes('priceRange'));
+
+const soloAggiunte = `${prezzoPrima}\n  "knowsAbout": ["Cucina pavese"],`;
+verifica(
+  'aggiungere roba attorno, senza toccarli, va bene',
+  fattiAlterati(prezzoPrima, soloAggiunte).length === 0,
+  fattiAlterati(prezzoPrima, soloAggiunte).join(', ')
+);
+
+verifica(
+  'un telefono cambiato viene visto',
+  fattiAlterati('"telephone": "+3903821938038"', '"telephone": "+390000000"').includes('telephone')
+);
+verifica(
+  'una chiave che prima non c’era non è una modifica di un fatto',
+  fattiAlterati('"url": "https://x.it"', '"url": "https://x.it",\n"priceRange": "$$"').length === 0
+);
 
 console.log(falliti === 0 ? '\nTutto a posto.' : `\n${falliti} verifiche fallite.`);
 process.exit(falliti === 0 ? 0 : 1);

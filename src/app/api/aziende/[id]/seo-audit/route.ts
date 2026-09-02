@@ -108,6 +108,11 @@ Regole del formato:
 - Non scrivere MAI le righe ${MARCA.scrivi}, ${MARCA.cerca}, ${MARCA.con} o ${MARCA.fine} dentro il contenuto.
 - Meglio tre sostituzioni piccole e sicure che una grande: ogni blocco è indipendente.
 - Non toccare contenuti editoriali (testi, prezzi, descrizioni del menù): solo struttura SEO/GEO/AEO.
+- NON CAMBIARE MAI valori che sono FATTI sul cliente e che qualcuno ha scritto apposta:
+  priceRange, telephone, email, indirizzo, coordinate, orari, servesCuisine, voti e recensioni.
+  Non li puoi sapere. Un blocco che ne cambia anche uno solo viene buttato via TUTTO, anche
+  se il resto era giusto: se ti serve modificare quella zona del file, lascia quei valori
+  identici a come sono.
 - Se non c'è niente di sensato da proporre, scrivi solo la riga ${MARCA.riepilogo} e nessun blocco.`;
 
     const utente = `Cliente: ${azienda.nome} (${azienda.categoria ?? 'categoria sconosciuta'}, ${azienda.citta ?? 'città sconosciuta'}).

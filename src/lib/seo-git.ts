@@ -21,7 +21,7 @@ import { promisify } from 'node:util';
 import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { riscrivibileIntero, type ModificaProposta } from './seo-proposta';
+import { riscrivibileIntero, fattiAlterati, type ModificaProposta } from './seo-proposta';
 
 const exec = promisify(execFile);
 
@@ -190,6 +190,18 @@ export async function applicaModifiche(
       continue;
     }
     const cerca = m.cerca ?? '';
+
+    // Un fatto sul cliente cambiato di nascosto dentro una modifica per il
+    // resto legittima — vedi `fattiAlterati`, e la PR #2 che l'ha insegnato.
+    const alterati = fattiAlterati(cerca, m.con ?? '');
+    if (alterati.length) {
+      scartati.push(
+        `${m.percorso}: cambierebbe dati sul cliente che nessuno ha verificato (${alterati.join(', ')}) — ` +
+          'quelli si correggono a mano, non li decide un modello'
+      );
+      continue;
+    }
+
     const quante = attuale.split(cerca).length - 1;
     if (quante === 0) {
       scartati.push(`${m.percorso}: il testo da sostituire non si trova nel file`);
