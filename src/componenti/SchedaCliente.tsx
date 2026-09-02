@@ -38,6 +38,7 @@ import { TabList, Tab } from '@astryxdesign/core/TabList';
 import { Card } from '@astryxdesign/core/Card';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Divider } from '@astryxdesign/core/Divider';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { Link } from '@astryxdesign/core/Link';
 import { ETICHETTA_DESTINAZIONE } from '@/lib/bozze';
 import { quandoBreve } from '@/lib/quando';
@@ -101,6 +102,60 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     scartati: string[];
   } | null>(null);
 
+  /**
+   * La proposta letta da GitHub, per mostrarla QUI.
+   *
+   * ⚠️ Senza questo la feature era a metà: l'audit apriva una PR e in pagina
+   * compariva un link, cioè il lavoro di capire il diff scaricato addosso a
+   * chi sta in dashboard. Le bozze dei post si approvano guardandole qui, non
+   * su Google: per il codice di un sito vale la stessa regola.
+   */
+  const [pr, setPr] = useState<{
+    numero: number;
+    url: string;
+    stato: 'aperta' | 'applicata' | 'chiusa';
+    file: Array<{ percorso: string; aggiunte: number; tolte: number; patch: string | null }>;
+  } | null>(null);
+  const [prInCorso, setPrInCorso] = useState(false);
+  const [confermaApplica, setConfermaApplica] = useState(false);
+
+  async function guardaProposta() {
+    setMessaggio(null);
+    setPrInCorso(true);
+    try {
+      const r = await fetch(`/api/aziende/${s.id}/seo-pr`);
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non sono riuscito a leggere la proposta.' });
+        return;
+      }
+      setPr(e.pr ?? null);
+    } finally {
+      setPrInCorso(false);
+    }
+  }
+
+  async function applicaProposta() {
+    setConfermaApplica(false);
+    setMessaggio(null);
+    setPrInCorso(true);
+    try {
+      const r = await fetch(`/api/aziende/${s.id}/seo-pr`, { method: 'POST' });
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+        return;
+      }
+      setMessaggio({
+        tipo: 'success',
+        testo: 'Applicata al sito. Cloudflare ricostruisce da solo: fra qualche minuto è online.',
+      });
+      setPr((v) => (v ? { ...v, stato: 'applicata' } : v));
+    } finally {
+      setPrInCorso(false);
+    }
+  }
+
   async function analizzaSeo() {
     setMessaggio(null);
     setSeoInCorso(true);
@@ -116,6 +171,10 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         return;
       }
       setEsitoSeo({ pr_url: e.pr_url ?? null, riepilogo: e.riepilogo ?? '', scartati: e.scartati ?? [] });
+      // Appena c'è una proposta la si mostra: chiederlo con un secondo click
+      // vorrebbe dire far uscire di nuovo l'operatore dal lavoro che stava
+      // facendo.
+      if (e.pr_url) void guardaProposta();
       /**
        * ⚠️ `router.refresh()` da solo NON basta, e si vede (02/09/2026): dopo
        * un giro riuscito restava in pagina il banner rosso del giro fallito
@@ -697,7 +756,113 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                       <Banner status="error" title="L’ultimo giro non è riuscito" description={s.sito_ultimo_errore} />
                     ) : null}
 
-                    <Button label="Analizza SEO" size="sm" isLoading={seoInCorso} clickAction={analizzaSeo} />
+                    <HStack gap={2} align="center" wrap="wrap">
+                      <Button label="Analizza SEO" size="sm" isLoading={seoInCorso} clickAction={analizzaSeo} />
+                      {s.sito_ultima_pr_url ? (
+                        <Button
+                          label="Guarda la proposta"
+                          size="sm"
+                          variant="secondary"
+                          isLoading={prInCorso}
+                          clickAction={guardaProposta}
+                        />
+                      ) : null}
+                    </HStack>
+
+                    {/* ── La proposta, leggibile qui ────────────────────────
+                        Il diff sta in pagina e non dietro un link: chi decide
+                        deve poter vedere cosa cambia senza aprire GitHub,
+                        capire un unified diff e tornare indietro. */}
+                    {pr ? (
+                      <VStack gap={2}>
+                        <HStack gap={2} align="center" wrap="wrap">
+                          <Text type="supporting">
+                            Proposta #{pr.numero} · {pr.file.length} file
+                          </Text>
+                          <Badge
+                            variant={pr.stato === 'applicata' ? 'success' : pr.stato === 'aperta' ? 'info' : 'neutral'}
+                            label={
+                              pr.stato === 'applicata'
+                                ? 'applicata al sito'
+                                : pr.stato === 'aperta'
+                                  ? 'da decidere'
+                                  : 'chiusa senza applicare'
+                            }
+                          />
+                          <Link href={pr.url} isExternalLink>
+                            vedila su GitHub
+                          </Link>
+                        </HStack>
+
+                        {pr.file.map((f) => (
+                          <VStack key={f.percorso} gap={1}>
+                            <HStack gap={2} align="center" wrap="wrap">
+                              <Text type="supporting">{f.percorso}</Text>
+                              <Text type="supporting" style={{ color: 'var(--color-success)' }}>
+                                +{f.aggiunte}
+                              </Text>
+                              <Text type="supporting" style={{ color: 'var(--color-error)' }}>
+                                −{f.tolte}
+                              </Text>
+                            </HStack>
+                            {f.patch ? (
+                              // Il diff è testo a colonne: va letto in monospazio
+                              // e può essere largo, quindi scorre per conto suo
+                              // invece di allargare la pagina.
+                              <VStack
+                                gap={0}
+                                padding={2}
+                                style={{
+                                  backgroundColor: 'var(--color-background-surface)',
+                                  borderRadius: 'var(--radius-md)',
+                                  overflowX: 'auto',
+                                  maxHeight: '320px',
+                                  overflowY: 'auto',
+                                }}
+                              >
+                                {f.patch.split('\n').map((riga, i) => (
+                                  <Text
+                                    key={i}
+                                    type="supporting"
+                                    size="xsm"
+                                    style={{
+                                      fontFamily: 'var(--font-family-mono, monospace)',
+                                      whiteSpace: 'pre',
+                                      color: riga.startsWith('+')
+                                        ? 'var(--color-success)'
+                                        : riga.startsWith('-')
+                                          ? 'var(--color-error)'
+                                          : undefined,
+                                    }}
+                                  >
+                                    {riga || ' '}
+                                  </Text>
+                                ))}
+                              </VStack>
+                            ) : null}
+                          </VStack>
+                        ))}
+
+                        {/* ⚠️ L'ULTIMO BOTTONE. Da qui il sito del cliente
+                            cambia davvero: Cloudflare ricostruisce da solo al
+                            merge. Per questo chiede conferma e per questo non
+                            lo preme nessun giro automatico. */}
+                        {pr.stato === 'aperta' ? (
+                          <HStack gap={2} align="center" wrap="wrap">
+                            <Button
+                              label="Applica al sito"
+                              variant="primary"
+                              size="sm"
+                              isLoading={prInCorso}
+                              onClick={() => setConfermaApplica(true)}
+                            />
+                            <Text type="supporting" color="secondary">
+                              Il sito si ricostruisce da solo: online fra qualche minuto.
+                            </Text>
+                          </HStack>
+                        ) : null}
+                      </VStack>
+                    ) : null}
 
                     {esitoSeo ? (
                       <Banner
@@ -1399,6 +1564,20 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         </LayoutContent>
       }
     />
+
+    {/* La domanda dice cosa succede DOPO il sì, non "sei sicuro?": che il
+        sito del cliente cambia e si ripubblica da solo. */}
+    {confermaApplica ? (
+      <AlertDialog
+        isOpen
+        onOpenChange={(aperto) => (aperto ? null : setConfermaApplica(false))}
+        title="Applicare le modifiche al sito?"
+        description={`Le modifiche entrano nel sito di ${s.nome} e Cloudflare lo ricostruisce da solo: fra qualche minuto sono online. Si può tornare indietro, ma da GitHub e a mano.`}
+        actionLabel="Applica"
+        cancelLabel="Lascia stare"
+        onAction={applicaProposta}
+      />
+    ) : null}
 
     {moduloAnagrafica ? (
       <ModuloAzienda

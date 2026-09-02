@@ -266,3 +266,113 @@ export async function apriPR(params: {
   const { html_url: url } = (await rPR.json()) as { html_url: string };
   return url;
 }
+
+/**
+ * Da un URL di PR ai tre pezzi che servono per interrogarla.
+ *
+ * L'URL è l'unica cosa che teniamo in `wesion.sito`: il numero si rilegge da
+ * lì invece di salvarlo a parte, così non ci sono due verità da tenere
+ * allineate.
+ */
+export function pezziPR(urlPR: string): { owner: string; repo: string; numero: number } | null {
+  const m = urlPR.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2], numero: Number(m[3]) };
+}
+
+export interface FileCambiato {
+  percorso: string;
+  aggiunte: number;
+  tolte: number;
+  /** Il diff di questo file, come lo manda GitHub. Assente sui file binari. */
+  patch: string | null;
+}
+
+export interface StatoPR {
+  numero: number;
+  url: string;
+  /** `aperta`, `applicata` (merge fatto), `chiusa` (chiusa senza merge). */
+  stato: 'aperta' | 'applicata' | 'chiusa';
+  file: FileCambiato[];
+}
+
+/**
+ * Cosa c'è dentro una PR, per farla leggere in dashboard invece che su GitHub.
+ *
+ * ⚠️ Serve perché senza, la feature è a metà: la macchina fa l'analisi e poi
+ * la nasconde dietro un link, lasciando all'operatore il lavoro di capire un
+ * diff su un sito esterno. Chi approva un post non va a leggerlo su Google:
+ * lo legge qui. Vale lo stesso per il codice di un sito.
+ */
+export async function leggiPR(urlPR: string, token: string): Promise<StatoPR> {
+  const p = pezziPR(urlPR);
+  if (!p) throw new Error(`Non riconosco questo indirizzo di PR: ${urlPR}`);
+
+  const intestazioni = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+  const base = `https://api.github.com/repos/${p.owner}/${p.repo}/pulls/${p.numero}`;
+
+  const [rPR, rFile] = await Promise.all([
+    fetch(base, { headers: intestazioni }),
+    fetch(`${base}/files?per_page=50`, { headers: intestazioni }),
+  ]);
+
+  if (!rPR.ok) throw new Error(`GitHub (lettura PR): ${(await rPR.text()).slice(0, 300)}`);
+  if (!rFile.ok) throw new Error(`GitHub (file della PR): ${(await rFile.text()).slice(0, 300)}`);
+
+  const pr = (await rPR.json()) as { state: string; merged: boolean; html_url: string };
+  const file = (await rFile.json()) as Array<{
+    filename: string;
+    additions: number;
+    deletions: number;
+    patch?: string;
+  }>;
+
+  return {
+    numero: p.numero,
+    url: pr.html_url,
+    stato: pr.merged ? 'applicata' : pr.state === 'open' ? 'aperta' : 'chiusa',
+    file: file.map((f) => ({
+      percorso: f.filename,
+      aggiunte: f.additions,
+      tolte: f.deletions,
+      patch: f.patch ?? null,
+    })),
+  };
+}
+
+/**
+ * Applica la proposta: il merge.
+ *
+ * ⚠️ È IL BOTTONE DELL'OPERATORE, e da qui in poi il sito del cliente cambia
+ * davvero (Cloudflare Pages ricostruisce da solo al push su main). Per questo
+ * non lo fa nessun giro automatico e non lo fa il modello: lo chiama solo
+ * qualcuno che ha appena guardato il diff in pagina.
+ */
+export async function applicaPR(urlPR: string, token: string, titolo: string): Promise<void> {
+  const p = pezziPR(urlPR);
+  if (!p) throw new Error(`Non riconosco questo indirizzo di PR: ${urlPR}`);
+
+  const risposta = await fetch(
+    `https://api.github.com/repos/${p.owner}/${p.repo}/pulls/${p.numero}/merge`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ commit_title: titolo, merge_method: 'squash' }),
+    }
+  );
+
+  if (!risposta.ok) {
+    const dettaglio = (await risposta.text()).slice(0, 300);
+    // 405 = GitHub dice che non è mergiabile (conflitti, o branch protetto):
+    // è un no motivato, non un guasto nostro, e va detto così.
+    throw new Error(
+      risposta.status === 405
+        ? `GitHub non riesce ad applicarla da sola (di solito: conflitti col branch principale). ${dettaglio}`
+        : `GitHub (merge): ${dettaglio}`
+    );
+  }
+}
