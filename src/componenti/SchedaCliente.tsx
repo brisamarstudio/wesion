@@ -95,7 +95,11 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   // da `messaggio`: dura di più (clona un repo), e il risultato (link alla
   // PR) resta in vista invece di sparire come un banner di conferma.
   const [seoInCorso, setSeoInCorso] = useState(false);
-  const [esitoSeo, setEsitoSeo] = useState<{ pr_url: string | null; riepilogo: string } | null>(null);
+  const [esitoSeo, setEsitoSeo] = useState<{
+    pr_url: string | null;
+    riepilogo: string;
+    scartati: string[];
+  } | null>(null);
 
   async function analizzaSeo() {
     setMessaggio(null);
@@ -106,9 +110,25 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
       const e = await r.json().catch(() => ({}));
       if (!r.ok) {
         setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+        // Anche l'errore nuovo va messo al posto del vecchio, o resta in
+        // vista quello del giro prima — vedi il commento qui sotto.
+        setS((v) => ({ ...v, sito_ultimo_errore: e?.errore ?? 'Non è andata.' }));
         return;
       }
-      setEsitoSeo({ pr_url: e.pr_url ?? null, riepilogo: e.riepilogo ?? '' });
+      setEsitoSeo({ pr_url: e.pr_url ?? null, riepilogo: e.riepilogo ?? '', scartati: e.scartati ?? [] });
+      /**
+       * ⚠️ `router.refresh()` da solo NON basta, e si vede (02/09/2026): dopo
+       * un giro riuscito restava in pagina il banner rosso del giro fallito
+       * prima. Il refresh rigenera il componente server, ma `s` vive in uno
+       * `useState` inizializzato UNA volta sola — i dati nuovi non lo toccano.
+       * Quindi l'esito lo si scrive anche qui, a mano.
+       */
+      setS((v) => ({
+        ...v,
+        sito_ultimo_errore: null,
+        sito_ultima_pr_url: e.pr_url ?? v.sito_ultima_pr_url,
+        sito_ultimo_audit_at: new Date().toISOString(),
+      }));
       router.refresh();
     } finally {
       setSeoInCorso(false);
@@ -682,14 +702,32 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     {esitoSeo ? (
                       <Banner
                         status={esitoSeo.pr_url ? 'success' : 'info'}
-                        title={esitoSeo.pr_url ? 'PR aperta' : 'Nessuna modifica da proporre'}
+                        title={
+                          esitoSeo.pr_url
+                            ? `PR aperta${esitoSeo.scartati.length ? ` · ${esitoSeo.scartati.length} proposte scartate` : ''}`
+                            : 'Nessuna modifica applicata'
+                        }
                         description={esitoSeo.riepilogo}
+                        defaultIsExpanded
                       >
-                        {esitoSeo.pr_url ? (
-                          <Link href={esitoSeo.pr_url} isExternalLink isStandalone>
-                            {esitoSeo.pr_url}
-                          </Link>
-                        ) : null}
+                        <VStack gap={2}>
+                          {esitoSeo.pr_url ? (
+                            <Link href={esitoSeo.pr_url} isExternalLink isStandalone>
+                              {esitoSeo.pr_url}
+                            </Link>
+                          ) : null}
+                          {/* Quello che il modello ha proposto e che NON è
+                              passato: taciuto, si presenterebbe come una
+                              proposta più povera invece che come una difesa
+                              che ha funzionato. */}
+                          {esitoSeo.scartati.length ? (
+                            <List hasDividers density="compact">
+                              {esitoSeo.scartati.map((x, i) => (
+                                <ListItem key={i} label={x} />
+                              ))}
+                            </List>
+                          ) : null}
+                        </VStack>
                       </Banner>
                     ) : null}
                   </VStack>

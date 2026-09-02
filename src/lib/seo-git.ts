@@ -18,9 +18,10 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, writeFile, rm, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { riscrivibileIntero, type ModificaProposta } from './seo-proposta';
 
 const exec = promisify(execFile);
 
@@ -125,44 +126,109 @@ export async function leggiMateriale(dir: string): Promise<MaterialeSito> {
   return { llmsTxt, robotsTxt, fileSchema };
 }
 
-export interface ModificaProposta {
-  /** Relativo alla radice del repo. */
-  percorso: string;
-  contenuto_nuovo: string;
+/**
+ * Applica le modifiche proposte alla copia clonata, e dice cosa NON ha
+ * applicato.
+ *
+ * ⚠️ QUI STA LA DIFESA VERA, e viene da un danno guardato in faccia: la PR #1
+ * su `trattorialafenice` (02/09/2026) riscriveva `Layout.astro` per intero e
+ * nel farlo cancellava schema, accessibilità e lo script del cambio lingua,
+ * lasciando un riferimento a una variabile inesistente — un sito che non
+ * compila. Il modello non aveva "sbagliato": gli avevamo chiesto di rigenerare
+ * un file, e rigenerare vuol dire ricostruire a memoria.
+ *
+ * Perciò:
+ *   - un file che ESISTE si tocca solo con una sostituzione mirata;
+ *   - la sostituzione si applica solo se l'aggancio compare ESATTAMENTE una
+ *     volta: zero volte vuol dire che il modello se l'è inventato, due volte
+ *     che non sa quale dei due intendeva. In tutti e due i casi non si scrive.
+ *
+ * Quello che viene scartato torna indietro, non finisce in un log: chi legge
+ * la PR deve sapere cosa manca.
+ */
+export async function applicaModifiche(
+  dir: string,
+  modifiche: ModificaProposta[]
+): Promise<{ applicate: ModificaProposta[]; scartati: string[] }> {
+  const { mkdir } = await import('node:fs/promises');
+  const applicate: ModificaProposta[] = [];
+  const scartati: string[] = [];
+
+  for (const m of modifiche) {
+    const assoluto = path.join(dir, m.percorso);
+
+    // `path.resolve` normalizza anche i `..` che fossero sfuggiti al parser:
+    // l'ultimo controllo prima della scrittura vera si fa sul percorso finito.
+    if (!path.resolve(assoluto).startsWith(path.resolve(dir) + path.sep)) {
+      scartati.push(`${m.percorso}: finirebbe fuori dal repo`);
+      continue;
+    }
+
+    const attuale = await leggiSeEsiste(assoluto);
+
+    if (m.azione === 'scrivi') {
+      if (attuale !== null && !riscrivibileIntero(m.percorso)) {
+        scartati.push(
+          `${m.percorso}: esiste già e non è un file riscrivibile per intero — ` +
+            'andava proposta una sostituzione mirata, non una riscrittura'
+        );
+        continue;
+      }
+      if (!m.contenuto_nuovo?.trim()) {
+        scartati.push(`${m.percorso}: contenuto vuoto`);
+        continue;
+      }
+      await mkdir(path.dirname(assoluto), { recursive: true });
+      await writeFile(assoluto, m.contenuto_nuovo, 'utf8');
+      applicate.push(m);
+      continue;
+    }
+
+    // sostituzione
+    if (attuale === null) {
+      scartati.push(`${m.percorso}: non esiste, non c'è niente da sostituire`);
+      continue;
+    }
+    const cerca = m.cerca ?? '';
+    const quante = attuale.split(cerca).length - 1;
+    if (quante === 0) {
+      scartati.push(`${m.percorso}: il testo da sostituire non si trova nel file`);
+      continue;
+    }
+    if (quante > 1) {
+      scartati.push(`${m.percorso}: il testo da sostituire compare ${quante} volte, ambiguo`);
+      continue;
+    }
+    await writeFile(assoluto, attuale.replace(cerca, m.con ?? ''), 'utf8');
+    applicate.push(m);
+  }
+
+  return { applicate, scartati };
 }
 
 /**
- * Scrive le modifiche, apre un branch, pusha, apre la PR. Ritorna l'URL.
- *
- * ⚠️ `stat` prima di scrivere una cartella nuova non basta da solo — un file
- * come `public/llms.txt` su un repo che non ha ancora `public/` fallirebbe la
- * `writeFile` con ENOENT. Si crea la cartella se manca.
+ * Apre un branch sulle modifiche già applicate, pusha, apre la PR. Ritorna l'URL.
  */
 export async function apriPR(params: {
   dir: string;
   info: RepoInfo;
   token: string;
-  modifiche: ModificaProposta[];
+  percorsi: string[];
   titolo: string;
   corpo: string;
 }): Promise<string> {
-  const { dir, info, token, modifiche, titolo, corpo } = params;
-  if (!modifiche.length) throw new Error('Nessuna modifica da proporre: niente da aprire come PR.');
+  const { dir, info, token, percorsi, titolo, corpo } = params;
+  if (!percorsi.length) throw new Error('Nessuna modifica applicata: niente da aprire come PR.');
 
-  const { mkdir } = await import('node:fs/promises');
-  for (const m of modifiche) {
-    const assoluto = path.join(dir, m.percorso);
-    await mkdir(path.dirname(assoluto), { recursive: true });
-    await writeFile(assoluto, m.contenuto_nuovo, 'utf8');
-  }
-
-  const branch = `wesion-seo-${new Date().toISOString().slice(0, 10)}`;
+  // Il giorno nel nome basta finché il giro è mensile; l'ora evita che due
+  // prove nello stesso pomeriggio litighino sullo stesso branch.
+  const branch = `wesion-seo-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}`;
   const opzioni = { cwd: dir, timeout: 30_000 };
 
   await exec('git', ['config', 'user.email', 'wesion@mywebby.it'], opzioni);
   await exec('git', ['config', 'user.name', 'Wesion (audit SEO automatico)'], opzioni);
   await exec('git', ['checkout', '-b', branch], opzioni);
-  await exec('git', ['add', ...modifiche.map((m) => m.percorso)], opzioni);
+  await exec('git', ['add', ...percorsi], opzioni);
   await exec('git', ['commit', '-m', titolo], opzioni);
   await exec('git', ['push', urlConToken(info.owner, info.repo, token), `HEAD:${branch}`], opzioni);
 

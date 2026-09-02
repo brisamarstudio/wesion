@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { genera } from '@/lib/generatore';
 import { rendimento, riassumiRendimento } from '@/lib/search-console';
-import { clonaRepo, leggiMateriale, apriPR, pulisci } from '@/lib/seo-git';
+import { clonaRepo, leggiMateriale, applicaModifiche, apriPR, pulisci } from '@/lib/seo-git';
 import { REGOLE_SEO_GEO } from '@/lib/regole-seo';
 import { MARCA, leggiProposta } from '@/lib/seo-proposta';
 
@@ -70,21 +70,43 @@ export async function POST(_richiesta: Request, contesto: { params: Promise<{ id
 
 ${REGOLE_SEO_GEO}
 
-FORMATO DELLA RISPOSTA — testo semplice, NON JSON. Una riga di riepilogo, poi un blocco per ogni file:
+⚠️ REGOLA PIÙ IMPORTANTE DI TUTTE LE ALTRE: NON RIGENERARE FILE CHE ESISTONO GIÀ.
+Un file esistente si tocca solo con sostituzioni mirate. Riscriverlo per intero vuol dire
+ricostruirlo a memoria, e ogni volta si perde qualcosa che c'era e funzionava (schema,
+accessibilità, script, meta tag). Non toglierai NIENTE che c'è già: non commenti, non
+funzionalità, non tag. Aggiungi soltanto quello che manca.
 
+FORMATO DELLA RISPOSTA — testo semplice, NON JSON.
+
+Prima riga:
 ${MARCA.riepilogo}: una frase su cosa hai cambiato e perché
+
+Poi, per un file NUOVO (o per llms.txt / robots.txt, che si possono riscrivere interi):
 
 ${MARCA.file}: public/llms.txt
 ${MARCA.motivo}: non esisteva, serve ai crawler AI
-${MARCA.inizio}
-(qui il file INTERO come deve risultare dopo la modifica, esattamente come va scritto su disco)
+${MARCA.scrivi}
+(il file intero, esattamente come va scritto su disco)
+${MARCA.fine}
+
+Per un file che ESISTE GIÀ — una sostituzione mirata per ogni punto da cambiare:
+
+${MARCA.file}: src/layouts/Layout.astro
+${MARCA.motivo}: manca containedInPlace nel nodo Restaurant
+${MARCA.cerca}
+(poche righe COPIATE ESATTAMENTE dal file che ti ho dato, carattere per carattere,
+ abbastanza da comparire una volta sola in tutto il file)
+${MARCA.con}
+(le stesse righe con dentro l'aggiunta)
 ${MARCA.fine}
 
 Regole del formato:
-- Il percorso è relativo alla radice del repo (es. "public/llms.txt", "src/layouts/Layout.astro").
-- Fra ${MARCA.inizio} e ${MARCA.fine} va il file INTERO, non solo la parte cambiata, senza virgolette e senza blocchi di codice markdown attorno.
-- Non scrivere MAI le righe ${MARCA.inizio} o ${MARCA.fine} dentro il contenuto di un file.
-- Se un file non esiste ancora e va creato, mettilo comunque come blocco.
+- Il percorso è relativo alla radice del repo.
+- Il testo dopo ${MARCA.cerca} deve comparire ESATTAMENTE UNA VOLTA nel file, copiato
+  alla lettera dal contenuto che ti ho passato: se non combacia, la modifica viene buttata.
+- Niente virgolette e niente blocchi di codice markdown attorno al contenuto.
+- Non scrivere MAI le righe ${MARCA.scrivi}, ${MARCA.cerca}, ${MARCA.con} o ${MARCA.fine} dentro il contenuto.
+- Meglio tre sostituzioni piccole e sicure che una grande: ogni blocco è indipendente.
 - Non toccare contenuti editoriali (testi, prezzi, descrizioni del menù): solo struttura SEO/GEO/AEO.
 - Se non c'è niente di sensato da proporre, scrivi solo la riga ${MARCA.riepilogo} e nessun blocco.`;
 
@@ -98,8 +120,22 @@ ${materiale.llmsTxt ?? '(non esiste)'}
 robots.txt attuale:
 ${materiale.robotsTxt ?? '(non esiste)'}
 
-File che sembrano contenere lo schema JSON-LD:
-${materiale.fileSchema.map((f) => `\n--- ${f.percorso} ---\n${f.contenuto.slice(0, 6000)}`).join('\n') || '(nessuno trovato — se il sito ha bisogno di uno schema, proponilo in un file nuovo ragionevole per lo stack di questo repo)'}`;
+File che sembrano contenere lo schema JSON-LD (contenuto ESATTO: è da qui che devi copiare il testo di ${MARCA.cerca}):
+${
+  materiale.fileSchema
+    .map((f) => {
+      // Il testo di CERCA deve combaciare carattere per carattere con il file
+      // vero: se glielo diamo troncato, il modello copia da un pezzo che sul
+      // disco continua diversamente — e la sostituzione viene scartata senza
+      // che si capisca perché. Quando taglia, glielo si dice.
+      const tagliato = f.contenuto.length > 20000;
+      return `\n--- ${f.percorso} ---\n${f.contenuto.slice(0, 20000)}${
+        tagliato ? '\n[…file più lungo: NON proporre sostituzioni oltre questo punto…]' : ''
+      }`;
+    })
+    .join('\n') ||
+  '(nessuno trovato — se il sito ha bisogno di uno schema, proponilo in un file nuovo ragionevole per lo stack di questo repo)'
+}`;
 
     /**
      * ⚠️ `grezzo: true` NON è un dettaglio: `ripulisci` collassa ogni sequenza
@@ -124,21 +160,46 @@ ${materiale.fileSchema.map((f) => `\n--- ${f.percorso} ---\n${f.contenuto.slice(
       );
     }
 
-    if (!dato.modifiche.length) {
+    // 4. Si applica quello che si può applicare, e si tiene il conto di cosa no.
+    const { applicate, scartati: scartatiApplicando } = await applicaModifiche(dir, dato.modifiche);
+    const scartati = [...dato.scartati, ...scartatiApplicando];
+
+    if (!applicate.length) {
       await query(
-        `UPDATE wesion.sito SET ultimo_audit_at = now(), ultimo_errore = NULL WHERE azienda_id = $1`,
-        [aziendaId]
+        `UPDATE wesion.sito SET ultimo_audit_at = now(), ultimo_errore = $2 WHERE azienda_id = $1`,
+        [aziendaId, scartati.length ? `Nessuna modifica applicabile. ${scartati.join(' · ')}`.slice(0, 500) : null]
       );
-      return NextResponse.json({ pr_url: null, riepilogo: dato.riepilogo, modello });
+      return NextResponse.json({
+        pr_url: null,
+        riepilogo: dato.riepilogo,
+        modello,
+        scartati,
+      });
     }
+
+    /**
+     * ⚠️ GLI SCARTI VANNO SCRITTI NELLA PR, non solo restituiti alla dashboard.
+     * Chi apre la PR fra tre giorni non ha davanti lo schermo di oggi: deve
+     * poter leggere lì dentro che il modello aveva promesso cinque cose e ne
+     * sono passate tre, e quali due mancano.
+     */
+    const elencoScarti = scartati.length
+      ? `\n\n### Proposte scartate (${scartati.length})\nNon sono finite in questo diff:\n${scartati.map((s) => `- ${s}`).join('\n')}`
+      : '';
 
     const url = await apriPR({
       dir,
       info,
       token: GITHUB_TOKEN,
-      modifiche: dato.modifiche,
+      percorsi: applicate.map((m) => m.percorso),
       titolo: `Wesion — proposta SEO/GEO/AEO (${new Date().toLocaleDateString('it-IT')})`,
-      corpo: `Generata automaticamente da Wesion (modello: ${modello}).\n\n${dato.riepilogo}\n\n---\n${dato.modifiche.map((m) => `- \`${m.percorso}\`: ${m.motivo}`).join('\n')}\n\n⚠️ Da rivedere a mano prima del merge — nessun controllo umano l'ha ancora guardata.`,
+      corpo:
+        `Generata automaticamente da Wesion (modello: ${modello}).\n\n${dato.riepilogo}\n\n` +
+        `### Modifiche applicate\n${applicate
+          .map((m) => `- \`${m.percorso}\` (${m.azione})${m.motivo ? `: ${m.motivo}` : ''}`)
+          .join('\n')}` +
+        elencoScarti +
+        `\n\n⚠️ Da rivedere a mano prima del merge — nessun controllo umano l'ha ancora guardata.`,
     });
 
     await query(
@@ -146,7 +207,7 @@ ${materiale.fileSchema.map((f) => `\n--- ${f.percorso} ---\n${f.contenuto.slice(
       [aziendaId, url]
     );
 
-    return NextResponse.json({ pr_url: url, riepilogo: dato.riepilogo, modello });
+    return NextResponse.json({ pr_url: url, riepilogo: dato.riepilogo, modello, scartati });
   } catch (errore: unknown) {
     const messaggio = errore instanceof Error ? errore.message : String(errore);
     await query(`UPDATE wesion.sito SET ultimo_audit_at = now(), ultimo_errore = $2 WHERE azienda_id = $1`, [
