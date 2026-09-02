@@ -73,6 +73,28 @@ services:
       GSC_REFRESH_TOKEN: ${GSC_REFRESH_TOKEN}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
 
+      # ⚠️ QUESTA È L'ECCEZIONE VERA, e va letta prima di toccarla (02/09/2026).
+      #
+      # Tutto il resto di questo file segue la regola "la dashboard non pubblica,
+      # quindi niente credenziali di pubblicazione". Questo token la rompe: con
+      # `business.manage` si può anche scrivere sulle schede dei clienti.
+      #
+      # Perché comunque ci sta. In «Servizi» la scheda Google si collega
+      # SCEGLIENDOLA da un elenco letto da Google — mai digitando gli id a mano,
+      # che è la regola nata dal guasto del 21/07/2026 (id sbagliati, 404 da
+      # Google per settimane, su clienti a caso, in silenzio). Per leggere
+      # quell'elenco serve un token, e Google non offre uno scope di sola
+      # lettura: `business.manage` è l'unico che esiste.
+      #
+      # Quindi la scelta era fra due rischi, non fra un rischio e la sicurezza:
+      # un token in più su una macchina in più, oppure gli id a mano — cioè il
+      # guasto che è già costato settimane. Deciso da chi ha le chiavi, non da
+      # chi scriveva il codice.
+      #
+      # Se un domani Google pubblicasse uno scope readonly per la Business
+      # Profile API, questa riga va tolta lo stesso giorno.
+      GBP_REFRESH_TOKEN: ${GBP_REFRESH_TOKEN}
+
     # ⚠️ /entra e non /aziende: da quando c'e' l'autenticazione, /aziende
     # risponde con un redirect al login. Un healthcheck che passa da un
     # redirect dice "sano" anche quando l'unica cosa che funziona e' la porta
