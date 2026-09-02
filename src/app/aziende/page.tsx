@@ -71,7 +71,20 @@ export default async function PaginaAziende({
     : 'campagna';
   const pagina = Math.max(1, Number(p.pagina) || 1);
 
-  /** Il pezzo di WHERE che tutte le query condividono: scritto una volta. */
+  /**
+   * Il pezzo di WHERE che tutte le query condividono: scritto una volta.
+   *
+   * ⚠️ SE AGGIUNGI UN FILTRO QUI, RINUMERA QUELLO CHE VIENE DOPO. I segnaposto
+   * sono posizionali e continuano DENTRO la query principale: `DOVE` occupa
+   * $1..$7, poi vengono $8 (il raggruppamento), $9 e $10 (LIMIT e OFFSET).
+   *
+   * Il 02/09/2026 il filtro «scheda di nessuno» si è preso $7, che era già del
+   * raggruppamento, e la pagina è morta in produzione con «bind message
+   * supplies 10 parameters, but prepared statement requires 9». Né TypeScript
+   * né `next build` possono vederlo: per loro è una stringa. L'unico controllo
+   * che lo trova è contare i segnaposto e i parametri, oppure APRIRE LA PAGINA
+   * — e quella volta non l'avevo aperta.
+   */
   const DOVE = `
     ($1::text IS NULL OR a.stato = $1)
     AND ($2::text = '' OR a.nome ILIKE '%' || $2 || '%' OR a.citta ILIKE '%' || $2 || '%'
@@ -183,14 +196,14 @@ export default async function PaginaAziende({
       */
      ORDER BY
        MAX(ultimo.score) OVER (PARTITION BY
-         CASE $7::text
+         CASE $8::text
            WHEN 'categoria' THEN COALESCE(a.categoria, 'zzz')
            WHEN 'citta'     THEN COALESCE(a.citta, 'zzz')
            WHEN 'campagna'  THEN COALESCE(camp.nome, 'zzz')
            ELSE ''
          END
        ) DESC NULLS LAST,
-       CASE $7::text
+       CASE $8::text
          WHEN 'categoria' THEN COALESCE(a.categoria, 'zzz')
          WHEN 'citta'     THEN COALESCE(a.citta, 'zzz')
          WHEN 'campagna'  THEN COALESCE(camp.nome, 'zzz')
@@ -199,7 +212,7 @@ export default async function PaginaAziende({
        /* A parita' di punteggio vince chi ha piu' recensioni: fra due locali
           senza sito, quello con 629 clienti contenti si chiama per primo. */
        ultimo.score DESC NULLS LAST, recensioni DESC NULLS LAST, a.nome
-     LIMIT $8 OFFSET $9`,
+     LIMIT $9 OFFSET $10`,
       [...filtri, gruppo, PER_PAGINA, (pagina - 1) * PER_PAGINA]
     ),
 
