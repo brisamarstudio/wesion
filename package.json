@@ -14,7 +14,8 @@
     "astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs",
     "router": "node --experimental-strip-types --env-file=.env router/index.ts",
     "cliente": "node --experimental-strip-types --env-file=.env db/configura-cliente.ts",
-    "utente": "node --experimental-strip-types --env-file=.env db/crea-utente.ts"
+    "utente": "node --experimental-strip-types --env-file=.env db/crea-utente.ts",
+    "prova:seo": "node --experimental-strip-types db/prova-seo-proposta.ts"
   },
   "dependencies": {
     "@astryxdesign/cli": "^0.1.9",

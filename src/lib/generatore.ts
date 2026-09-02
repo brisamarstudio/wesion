@@ -144,14 +144,24 @@ export interface EsitoGenerazione {
  *   - le virgolette che avvolgono tutto il testo, che il modello mette perché
  *     gli abbiamo chiesto "il testo del post" e lui te lo cita.
  */
-export function ripulisci(grezzo: string): string {
-  let t = String(grezzo || '');
+/**
+ * Solo il ragionamento ad alta voce, via. Niente altro.
+ *
+ * ⚠️ Separata da `ripulisci` apposta (02/09/2026). Chi chiede CODICE non può
+ * permettersi il resto di quella funzione — collassa gli spazi, e in un file
+ * l'indentazione non è rumore, è il file. Vedi `genera(..., {grezzo: true})`.
+ */
+export function togliRagionamento(grezzo: string): string {
+  return String(grezzo || '')
+    // Anche non chiusi: se il testo è stato troncato a metà di un <think>,
+    // quello che resta è tutto ragionamento e va via.
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*$/i, '')
+    .replace(/<\/?(?:thinking|reasoning|analysis)>/gi, '');
+}
 
-  // I tag di ragionamento, anche non chiusi: se il testo è stato troncato a
-  // metà di un <think>, quello che resta è tutto ragionamento e va via.
-  t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  t = t.replace(/<think>[\s\S]*$/i, '');
-  t = t.replace(/<\/?(?:thinking|reasoning|analysis)>/gi, '');
+export function ripulisci(grezzo: string): string {
+  let t = togliRagionamento(grezzo);
 
   t = t.trim();
 
@@ -187,13 +197,24 @@ export function ripulisci(grezzo: string): string {
  * Chiede a un modello solo. Restituisce null se non se ne fa niente, invece di
  * lanciare: chi chiama deve poter passare al successivo senza try/catch annidati.
  */
+export interface OpzioniGenerazione {
+  /** Il default (1600) basta per un post. Chi restituisce file interi chiede il suo. */
+  maxTokens?: number;
+  /**
+   * Non passare da `ripulisci`: toglie solo il ragionamento e lascia il testo
+   * com'è. Per il codice, dove gli spazi contano.
+   */
+  grezzo?: boolean;
+}
+
 async function chiedi(
   m: Modello,
   sistema: string,
   utente: string,
   secondoGiro = false,
-  maxTokens = 1600
+  opzioni: OpzioniGenerazione = {}
 ): Promise<string | null> {
+  const { maxTokens = 1600, grezzo = false } = opzioni;
   const chiave = process.env[m.chiaveEnv];
   if (!chiave) return null;
 
@@ -242,7 +263,7 @@ async function chiedi(
         const attesa = Math.min(Number(risposta.headers.get('retry-after')) || 3, 12);
         console.warn(`[generatore] ${m.nome} a tetto: aspetto ${attesa}s e riprovo`);
         await new Promise((r) => setTimeout(r, attesa * 1000));
-        return chiedi(m, sistema, utente, true, maxTokens);
+        return chiedi(m, sistema, utente, true, opzioni);
       }
       const dettaglio = (await risposta.text()).slice(0, 200);
       console.warn(`[generatore] ${m.nome} ha risposto ${risposta.status}: ${dettaglio}`);
@@ -250,7 +271,8 @@ async function chiedi(
     }
 
     const dati = await risposta.json();
-    const testo = ripulisci(dati?.choices?.[0]?.message?.content || '');
+    const contenuto = dati?.choices?.[0]?.message?.content || '';
+    const testo = grezzo ? togliRagionamento(contenuto).trim() : ripulisci(contenuto);
     // Un testo vuoto dopo la ripulitura vuol dire che era tutto ragionamento:
     // è un fallimento come un 500, e si passa al prossimo.
     return testo.length > 20 ? testo : null;
@@ -261,12 +283,16 @@ async function chiedi(
 }
 
 /** Scende la catena finché qualcuno risponde. */
-export async function genera(sistema: string, utente: string, maxTokens = 1600): Promise<EsitoGenerazione> {
+export async function genera(
+  sistema: string,
+  utente: string,
+  opzioni: OpzioniGenerazione = {}
+): Promise<EsitoGenerazione> {
   const inizio = Date.now();
   const saltati: string[] = [];
 
   for (const m of CATENA) {
-    const testo = await chiedi(m, sistema, utente, false, maxTokens);
+    const testo = await chiedi(m, sistema, utente, false, opzioni);
     if (testo) return { testo, modello: m.nome, ms: Date.now() - inizio, saltati };
     saltati.push(m.nome);
   }
@@ -294,9 +320,9 @@ export async function generaJson<T>(
   sistema: string,
   utente: string,
   valido: (x: unknown) => x is T,
-  maxTokens = 1600
+  opzioni: OpzioniGenerazione = {}
 ): Promise<{ dato: T; modello: string; ms: number }> {
-  const esito = await genera(sistema, utente, maxTokens);
+  const esito = await genera(sistema, utente, opzioni);
 
   // I modelli imbustano volentieri il JSON in un blocco di codice, e a volte ci
   // mettono una frase davanti. Si prende dalla prima graffa all'ultima.

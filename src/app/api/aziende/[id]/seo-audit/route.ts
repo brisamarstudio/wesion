@@ -9,36 +9,11 @@
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { generaJson } from '@/lib/generatore';
+import { genera } from '@/lib/generatore';
 import { rendimento, riassumiRendimento } from '@/lib/search-console';
 import { clonaRepo, leggiMateriale, apriPR, pulisci } from '@/lib/seo-git';
 import { REGOLE_SEO_GEO } from '@/lib/regole-seo';
-
-interface Modifica {
-  percorso: string;
-  contenuto_nuovo: string;
-  motivo: string;
-}
-interface Proposta {
-  modifiche: Modifica[];
-  riepilogo: string;
-}
-
-function eProposta(x: unknown): x is Proposta {
-  if (typeof x !== 'object' || x === null) return false;
-  const p = x as Record<string, unknown>;
-  return (
-    Array.isArray(p.modifiche) &&
-    p.modifiche.every(
-      (m) =>
-        m &&
-        typeof m === 'object' &&
-        typeof (m as Modifica).percorso === 'string' &&
-        typeof (m as Modifica).contenuto_nuovo === 'string'
-    ) &&
-    typeof p.riepilogo === 'string'
-  );
-}
+import { MARCA, leggiProposta } from '@/lib/seo-proposta';
 
 export async function POST(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
@@ -89,18 +64,29 @@ export async function POST(_richiesta: Request, contesto: { params: Promise<{ id
     dir = cartella;
     const materiale = await leggiMateriale(dir);
 
-    // 3. Il modello propone il diff — mai il file finale senza spiegazione:
-    //    "motivo" nel JSON serve a chi legge la PR, non solo a noi.
+    // 3. Il modello propone le modifiche — mai un file senza spiegazione: il
+    //    MOTIVO finisce nella PR, che è quello che legge chi decide il merge.
     const sistema = `Sei un tecnico SEO/GEO/AEO che propone correzioni concrete al codice di un sito, seguendo QUESTE regole:
 
 ${REGOLE_SEO_GEO}
 
-Rispondi SOLO con un oggetto JSON: {"modifiche": [{"percorso": "...", "contenuto_nuovo": "...", "motivo": "..."}], "riepilogo": "..."}.
-- "percorso" è relativo alla radice del repo (es. "public/llms.txt", "src/Layout.astro").
-- "contenuto_nuovo" è il file INTERO come deve risultare dopo la modifica, non solo la parte cambiata.
-- Se un file non esiste ancora e va creato, mettilo comunque in "modifiche".
-- Non proporre modifiche a contenuti editoriali (testi, prezzi, descrizioni del menù): solo struttura SEO/GEO/AEO.
-- Se non c'è niente di sensato da proporre, rispondi con "modifiche": [].`;
+FORMATO DELLA RISPOSTA — testo semplice, NON JSON. Una riga di riepilogo, poi un blocco per ogni file:
+
+${MARCA.riepilogo}: una frase su cosa hai cambiato e perché
+
+${MARCA.file}: public/llms.txt
+${MARCA.motivo}: non esisteva, serve ai crawler AI
+${MARCA.inizio}
+(qui il file INTERO come deve risultare dopo la modifica, esattamente come va scritto su disco)
+${MARCA.fine}
+
+Regole del formato:
+- Il percorso è relativo alla radice del repo (es. "public/llms.txt", "src/layouts/Layout.astro").
+- Fra ${MARCA.inizio} e ${MARCA.fine} va il file INTERO, non solo la parte cambiata, senza virgolette e senza blocchi di codice markdown attorno.
+- Non scrivere MAI le righe ${MARCA.inizio} o ${MARCA.fine} dentro il contenuto di un file.
+- Se un file non esiste ancora e va creato, mettilo comunque come blocco.
+- Non toccare contenuti editoriali (testi, prezzi, descrizioni del menù): solo struttura SEO/GEO/AEO.
+- Se non c'è niente di sensato da proporre, scrivi solo la riga ${MARCA.riepilogo} e nessun blocco.`;
 
     const utente = `Cliente: ${azienda.nome} (${azienda.categoria ?? 'categoria sconosciuta'}, ${azienda.citta ?? 'città sconosciuta'}).
 
@@ -115,12 +101,28 @@ ${materiale.robotsTxt ?? '(non esiste)'}
 File che sembrano contenere lo schema JSON-LD:
 ${materiale.fileSchema.map((f) => `\n--- ${f.percorso} ---\n${f.contenuto.slice(0, 6000)}`).join('\n') || '(nessuno trovato — se il sito ha bisogno di uno schema, proponilo in un file nuovo ragionevole per lo stack di questo repo)'}`;
 
-    // ⚠️ Il default di generaJson (1600) è tarato per un post di tre righe.
-    // Qui il modello restituisce file interi dentro il JSON: con quel tetto
-    // la risposta arriva tagliata a metà stringa, e sembra un modello che
-    // sbaglia la sintassi mentre è solo il tetto che l'ha zittito a metà
-    // frase (visto in produzione il 02/09/2026: "Unterminated string").
-    const { dato, modello } = await generaJson<Proposta>(sistema, utente, eProposta, 8000);
+    /**
+     * ⚠️ `grezzo: true` NON è un dettaglio: `ripulisci` collassa ogni sequenza
+     * di spazi in uno solo (serve ai post, dove uno spazio esotico rompe i
+     * confronti). Su un file, l'indentazione È il file — passandoci dentro un
+     * `Layout.astro` uscirebbe tutto appiattito contro il margine.
+     *
+     * E il tetto: il default (1600) è tarato su un post di tre righe, qui
+     * tornano file interi.
+     */
+    const { testo, modello } = await genera(sistema, utente, { maxTokens: 8000, grezzo: true });
+    const dato = leggiProposta(testo);
+
+    // ⚠️ "Zero blocchi E zero riepilogo" non vuol dire "va tutto bene": vuol
+    // dire che il modello ha risposto in un formato che non sappiamo leggere.
+    // Senza questo controllo il caso si presenterebbe come un successo con
+    // "nessuna modifica da proporre" — il guasto muto che questo progetto
+    // passa il tempo a evitare.
+    if (!dato.modifiche.length && !dato.riepilogo) {
+      throw new Error(
+        `${modello} ha risposto fuori formato (nessun blocco ${MARCA.file}): ${testo.slice(0, 200)}`
+      );
+    }
 
     if (!dato.modifiche.length) {
       await query(
