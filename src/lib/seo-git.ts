@@ -116,6 +116,14 @@ export interface MaterialeSito {
   llmsPercorso: string | null;
   robotsTxt: string | null;
   robotsPercorso: string | null;
+  /**
+   * Il CODICE che genera `llms.txt`, quando non è un file ma una rotta.
+   *
+   * Se c'è questo, il file statico non si tocca e non si crea: si modifica il
+   * generatore. Vedi `trovaGeneratore`.
+   */
+  llmsGeneratore: { percorso: string; contenuto: string } | null;
+  robotsGeneratore: { percorso: string; contenuto: string } | null;
   fileSchema: Array<{ percorso: string; contenuto: string }>;
 }
 
@@ -160,8 +168,54 @@ async function leggiStatico(
   return null;
 }
 
+/**
+ * Le cartelle di rotte, dove un `llms.txt` può essere codice invece che file.
+ *
+ * Astro e SvelteKit: `src/pages` / `src/routes`. Next: `app` o `pages`, anche
+ * dentro `src/`.
+ */
+const CARTELLE_ROTTE = ['src/pages', 'src/routes', 'src/app', 'app', 'pages'];
+const ESTENSIONI_ROTTA = ['.ts', '.js', '.mjs', '.astro', '.tsx'];
+
+/**
+ * Il codice che GENERA un file di testo, quando quel file non esiste su disco.
+ *
+ * ⚠️ QUESTA È LA VERSIONE ADULTA DELLA LEZIONE DELLA PR #3, e l'abbiamo capita
+ * solo il 02/09/2026 a sera, aprendo il repo della Fenice a mano. Lì
+ * `llms.txt` non è un file: è `src/pages/llms.txt.ts`, una rotta Astro che a
+ * ogni richiesta rilegge gli articoli da Neon — cioè quelli che pubblica
+ * Wesion — e sputa un documento con FAQ, contatti, orari e blog aggiornato.
+ *
+ * Cercarlo in `public/`, `static/` e radice non bastava: non lo trovavamo lo
+ * stesso, dicevamo al modello «non esiste», e lui ne creava uno statico. E in
+ * Astro un file in `public/` VINCE sulla rotta che ha lo stesso nome. Quindi
+ * il file che abbiamo creato ha coperto il generatore: online usciva un
+ * decimo di quello che il sito sapeva dire, senza un errore, con la pagina che
+ * rispondeva 200 come sempre. Il modo peggiore di rompere una cosa.
+ *
+ * Perciò prima di dire «non esiste» si guarda anche se qualcuno lo fabbrica.
+ */
+async function trovaGeneratore(
+  dir: string,
+  nome: string
+): Promise<{ percorso: string; contenuto: string } | null> {
+  for (const cartella of CARTELLE_ROTTE) {
+    for (const estensione of ESTENSIONI_ROTTA) {
+      const relativo = `${cartella}/${nome}${estensione}`;
+      const contenuto = await leggiSeEsiste(path.join(dir, relativo));
+      if (contenuto !== null) return { percorso: relativo, contenuto };
+    }
+  }
+  return null;
+}
+
 export async function leggiMateriale(dir: string): Promise<MaterialeSito> {
-  const [llms, robots] = await Promise.all([leggiStatico(dir, 'llms.txt'), leggiStatico(dir, 'robots.txt')]);
+  const [llms, robots, llmsGeneratore, robotsGeneratore] = await Promise.all([
+    leggiStatico(dir, 'llms.txt'),
+    leggiStatico(dir, 'robots.txt'),
+    trovaGeneratore(dir, 'llms.txt'),
+    trovaGeneratore(dir, 'robots.txt'),
+  ]);
 
   const percorsi = await trovaFileSchema(dir);
   const fileSchema = await Promise.all(
@@ -173,6 +227,8 @@ export async function leggiMateriale(dir: string): Promise<MaterialeSito> {
     llmsPercorso: llms?.percorso ?? null,
     robotsTxt: robots?.contenuto ?? null,
     robotsPercorso: robots?.percorso ?? null,
+    llmsGeneratore,
+    robotsGeneratore,
     fileSchema,
   };
 }
@@ -229,6 +285,29 @@ export async function applicaModifiche(
       if (!nuovo.trim()) {
         scartati.push(`${m.percorso}: contenuto vuoto`);
         continue;
+      }
+
+      // ⚠️ UN FILE STATICO CHE COPRE UN GENERATORE — il danno peggiore di
+      //    tutta questa storia, e l'unico già finito online (Fenice,
+      //    02/09/2026). `llms.txt` lì è `src/pages/llms.txt.ts`, una rotta che
+      //    rilegge il blog dal database a ogni richiesta. Un `public/llms.txt`
+      //    creato accanto VINCE su quella rotta: il generatore continua a
+      //    girare e non lo legge più nessuno. Nessun errore, pagina 200, e
+      //    online esce un decimo di quello che il sito sapeva dire.
+      //
+      //    Non è una preferenza di stile: è una scrittura che spegne codice
+      //    funzionante restando invisibile. Si rifiuta, e si dice dove
+      //    guardare.
+      const nomeFile = m.percorso.split('/').pop()?.toLowerCase() ?? '';
+      if (attuale === null && riscrivibileIntero(m.percorso)) {
+        const generatore = await trovaGeneratore(dir, nomeFile);
+        if (generatore) {
+          scartati.push(
+            `${m.percorso}: questo sito genera ${nomeFile} da codice (${generatore.percorso}) — ` +
+              'un file statico lo coprirebbe in silenzio, le modifiche vanno fatte nel generatore'
+          );
+          continue;
+        }
       }
 
       // ⚠️ ANCHE UN FILE RISCRIVIBILE PER INTERO, SE ESISTE, NON PUÒ USCIRNE

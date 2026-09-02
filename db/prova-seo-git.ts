@@ -173,6 +173,59 @@ console.log('\nQuello che difendevamo già');
   verifica('fuori dal repo non si scrive', applicate.length === 0 && scartati[0].includes('fuori dal repo'));
 }
 
+// ── 3bis. Il caso Fenice: llms.txt non è un file, è una rotta ───────────────
+// Il danno peggiore della giornata, e l'unico finito online: un public/llms.txt
+// creato accanto a src/pages/llms.txt.ts vince sulla rotta, e il generatore —
+// che rilegge il blog dal database — smette di servire a qualcosa senza dare
+// un solo errore.
+console.log('\nQuando llms.txt è codice, non un file');
+const GENERATORE = `import { leggiArticoli } from '../lib/blog';
+export async function GET() {
+  const articoli = await leggiArticoli();
+  return new Response('# Trattoria La Fenice\\n' + articoli.length);
+}
+`;
+{
+  const dir = await apri({ 'src/pages/llms.txt.ts': GENERATORE });
+  const m = await leggiMateriale(dir);
+  verifica('il generatore viene trovato', m.llmsGeneratore?.percorso === 'src/pages/llms.txt.ts', `${m.llmsGeneratore?.percorso}`);
+  verifica('e col suo codice dentro', m.llmsGeneratore?.contenuto === GENERATORE);
+  verifica('il file statico giustamente non esiste', m.llmsTxt === null && m.llmsPercorso === null);
+}
+{
+  const dir = await apri({ 'src/pages/llms.txt.ts': GENERATORE });
+  const statico: ModificaProposta = {
+    percorso: 'public/llms.txt',
+    motivo: 'non esisteva, serve ai crawler AI',
+    azione: 'scrivi',
+    contenuto_nuovo: '# Trattoria La Fenice\n\nUn elenco piatto di URL.\n',
+  };
+  const { applicate, scartati } = await applicaModifiche(dir, [statico]);
+  verifica('creare il file statico viene RIFIUTATO', applicate.length === 0);
+  verifica(
+    'e lo scarto dice dove sta il generatore',
+    scartati[0]?.includes('src/pages/llms.txt.ts') === true,
+    scartati[0]
+  );
+}
+{
+  // La controprova: senza generatore, crearlo resta la cosa giusta.
+  const dir = await apri({ 'README.md': '# niente\n' });
+  const statico: ModificaProposta = {
+    percorso: 'public/llms.txt',
+    motivo: 'non esisteva',
+    azione: 'scrivi',
+    contenuto_nuovo: LLMS_PIATTO,
+  };
+  const { applicate } = await applicaModifiche(dir, [statico]);
+  verifica('senza generatore invece si crea, come prima', applicate.length === 1);
+}
+{
+  const dir = await apri({ 'src/routes/robots.txt.js': 'export function GET() {}\n' });
+  const m = await leggiMateriale(dir);
+  verifica('vale anche per robots.txt, e per SvelteKit', m.robotsGeneratore?.percorso === 'src/routes/robots.txt.js', `${m.robotsGeneratore?.percorso}`);
+}
+
 // ── 4. Su quale repo stiamo per agire ───────────────────────────────────────
 // `pezziPR` decide owner/repo/numero di ogni chiamata a GitHub, `chiudiPR`
 // compresa — che chiude una PR e cancella un ramo. Una svista qui non dà

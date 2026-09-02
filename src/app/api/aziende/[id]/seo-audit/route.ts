@@ -15,6 +15,37 @@ import { clonaRepo, leggiMateriale, applicaModifiche, apriPR, pulisci } from '@/
 import { REGOLE_SEO_GEO } from '@/lib/regole-seo';
 import { MARCA, leggiProposta } from '@/lib/seo-proposta';
 
+/**
+ * Come si racconta al modello un file di testo del sito.
+ *
+ * ⚠️ TRE STATI, NON DUE, e il terzo è quello che ci è costato caro (Fenice,
+ * 02/09/2026). Un `llms.txt` può non esistere, esistere come file, oppure
+ * ESSERE GENERATO DA CODICE — lì è `src/pages/llms.txt.ts`, che rilegge il
+ * blog dal database a ogni richiesta. Se il terzo caso lo raccontiamo come il
+ * primo, il modello propone un file statico, e in Astro quel file VINCE sulla
+ * rotta: il generatore resta acceso e non lo legge più nessuno.
+ *
+ * Perciò quando c'è un generatore gli si dà il CODICE, non il vuoto, e gli si
+ * dice che il file statico è vietato invece che consigliato male.
+ */
+function descriviTestuale(
+  nome: string,
+  percorso: string | null,
+  contenuto: string | null,
+  generatore: { percorso: string; contenuto: string } | null
+): string {
+  if (generatore) {
+    return `${nome} — GENERATO DA CODICE, non è un file: ${generatore.percorso}
+⚠️ NON creare un ${nome} statico (né in public/ né altrove): coprirebbe questa rotta e il
+sito perderebbe quello che il codice qui sotto sa fare. Se vuoi migliorarlo, proponi una
+SOSTITUZIONE MIRATA dentro ${generatore.percorso}.
+
+${generatore.contenuto}`;
+  }
+  if (percorso && contenuto !== null) return `${nome} attuale — ${percorso}:\n${contenuto}`;
+  return `${nome} — NON ESISTE, né come file né come rotta. Se lo crei, scrivilo in public/${nome}.\n(non esiste)`;
+}
+
 export async function POST(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
   const aziendaId = Number(id);
@@ -124,11 +155,9 @@ Regole del formato:
 
 ${rendimentoTesto}
 
-llms.txt attuale — ${materiale.llmsPercorso ?? 'NON ESISTE: se lo crei, scrivilo in public/llms.txt'}:
-${materiale.llmsTxt ?? '(non esiste)'}
+${descriviTestuale('llms.txt', materiale.llmsPercorso, materiale.llmsTxt, materiale.llmsGeneratore)}
 
-robots.txt attuale — ${materiale.robotsPercorso ?? 'NON ESISTE: se lo crei, scrivilo in public/robots.txt'}:
-${materiale.robotsTxt ?? '(non esiste)'}
+${descriviTestuale('robots.txt', materiale.robotsPercorso, materiale.robotsTxt, materiale.robotsGeneratore)}
 
 File che sembrano contenere lo schema JSON-LD (contenuto ESATTO: è da qui che devi copiare il testo di ${MARCA.cerca}):
 ${
