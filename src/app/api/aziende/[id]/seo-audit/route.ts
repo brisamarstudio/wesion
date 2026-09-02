@@ -115,7 +115,12 @@ ${materiale.robotsTxt ?? '(non esiste)'}
 File che sembrano contenere lo schema JSON-LD:
 ${materiale.fileSchema.map((f) => `\n--- ${f.percorso} ---\n${f.contenuto.slice(0, 6000)}`).join('\n') || '(nessuno trovato — se il sito ha bisogno di uno schema, proponilo in un file nuovo ragionevole per lo stack di questo repo)'}`;
 
-    const { dato, modello } = await generaJson<Proposta>(sistema, utente, eProposta);
+    // ⚠️ Il default di generaJson (1600) è tarato per un post di tre righe.
+    // Qui il modello restituisce file interi dentro il JSON: con quel tetto
+    // la risposta arriva tagliata a metà stringa, e sembra un modello che
+    // sbaglia la sintassi mentre è solo il tetto che l'ha zittito a metà
+    // frase (visto in produzione il 02/09/2026: "Unterminated string").
+    const { dato, modello } = await generaJson<Proposta>(sistema, utente, eProposta, 8000);
 
     if (!dato.modifiche.length) {
       await query(

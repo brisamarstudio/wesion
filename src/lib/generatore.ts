@@ -191,7 +191,8 @@ async function chiedi(
   m: Modello,
   sistema: string,
   utente: string,
-  secondoGiro = false
+  secondoGiro = false,
+  maxTokens = 1600
 ): Promise<string | null> {
   const chiave = process.env[m.chiaveEnv];
   if (!chiave) return null;
@@ -210,8 +211,11 @@ async function chiedi(
       // token a pensare PRIMA di scrivere: misurato il 27/08/2026, un post da
       // tre righe è costato 839 token in tutto. Con un tetto stretto la
       // risposta arriva troncata a metà frase — ed è successo davvero, con
-      // `gpt-oss-20b` a 400.
-      max_tokens: 1600,
+      // `gpt-oss-20b` a 400. Il default (1600) basta per un post; l'audit SEO,
+      // che restituisce file interi dentro il JSON, chiede il suo (02/09/2026,
+      // visto in produzione: "JSON rotto" era una stringa tagliata a metà per
+      // il tetto, non un modello che sbaglia la sintassi).
+      max_tokens: maxTokens,
     };
     // Il compito è scrivere tre righe seguendo regole scritte, non risolvere un
     // problema: pensarci a lungo non migliora il testo, allunga solo l'attesa.
@@ -238,7 +242,7 @@ async function chiedi(
         const attesa = Math.min(Number(risposta.headers.get('retry-after')) || 3, 12);
         console.warn(`[generatore] ${m.nome} a tetto: aspetto ${attesa}s e riprovo`);
         await new Promise((r) => setTimeout(r, attesa * 1000));
-        return chiedi(m, sistema, utente, true);
+        return chiedi(m, sistema, utente, true, maxTokens);
       }
       const dettaglio = (await risposta.text()).slice(0, 200);
       console.warn(`[generatore] ${m.nome} ha risposto ${risposta.status}: ${dettaglio}`);
@@ -257,12 +261,12 @@ async function chiedi(
 }
 
 /** Scende la catena finché qualcuno risponde. */
-export async function genera(sistema: string, utente: string): Promise<EsitoGenerazione> {
+export async function genera(sistema: string, utente: string, maxTokens = 1600): Promise<EsitoGenerazione> {
   const inizio = Date.now();
   const saltati: string[] = [];
 
   for (const m of CATENA) {
-    const testo = await chiedi(m, sistema, utente);
+    const testo = await chiedi(m, sistema, utente, false, maxTokens);
     if (testo) return { testo, modello: m.nome, ms: Date.now() - inizio, saltati };
     saltati.push(m.nome);
   }
@@ -289,9 +293,10 @@ export async function genera(sistema: string, utente: string): Promise<EsitoGene
 export async function generaJson<T>(
   sistema: string,
   utente: string,
-  valido: (x: unknown) => x is T
+  valido: (x: unknown) => x is T,
+  maxTokens = 1600
 ): Promise<{ dato: T; modello: string; ms: number }> {
-  const esito = await genera(sistema, utente);
+  const esito = await genera(sistema, utente, maxTokens);
 
   // I modelli imbustano volentieri il JSON in un blocco di codice, e a volte ci
   // mettono una frase davanti. Si prende dalla prima graffa all'ultima.
