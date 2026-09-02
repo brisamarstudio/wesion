@@ -121,6 +121,24 @@ da solo appena lo promuovi.
 | **Il mese** | Il piano editoriale suo: cosa esce e quando. |
 | **Da approvare** | 🔴 **L'ultimo bottone.** Le bozze pronte. Finché non premi tu, non esce niente. |
 
+### Non ricopiare mai Place ID e URL di Maps
+
+Nel modulo «Modifica» c'è **«Leggi dalla scheda Google»**. Se il cliente ha la
+scheda collegata, quel bottone prende da Google **Place ID, URL di Maps,
+indirizzo, città, provincia, CAP, categoria, telefono e sito** e li mette nei
+campi.
+
+Due cose che fa apposta:
+
+- **riempie solo i campi vuoti.** Se un campo è già compilato e Google dice
+  un'altra cosa, non lo tocca: te lo segnala e decidi tu. Quello che c'è in
+  tabella spesso l'ha corretto qualcuno a mano, e Google non lo sa.
+- **non salva niente.** Compila e basta: il salvataggio resta il tuo «Salva».
+
+> Il Place ID è l'**identità** dell'azienda in tabella. Ricopiarlo a mano da
+> `ChIJCz7Caq7ZhkcRhFP5-SRLuq4` è solo un modo lento di sbagliarlo — e
+> sbagliarlo non dà errore, crea un doppione.
+
 ### L'audit SEO/GEO/AEO (dentro «Chi è»)
 
 Serve a far trovare il cliente **dalle AI**, non solo da Google. Wesion legge il

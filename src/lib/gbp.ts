@@ -216,6 +216,71 @@ export async function elencaSchede(): Promise<SchedaGoogle[]> {
   return fuori;
 }
 
+/** Quello che Google sa del posto, e che noi ricopiavamo a mano. */
+export interface AnagraficaScheda {
+  titolo: string;
+  place_id: string;
+  maps_url: string;
+  sito: string;
+  telefono: string;
+  indirizzo: string;
+  cap: string;
+  citta: string;
+  provincia: string;
+  categoria: string;
+  /** `true` se la scheda è rivendicata da qualcuno (Voice of Merchant). */
+  rivendicata: boolean;
+}
+
+/**
+ * I dati anagrafici di una scheda Google, per non ricopiarli a mano.
+ *
+ * ⚠️ NASCE DA UNA DOMANDA GIUSTA (02/09/2026): «URL di Maps e Place ID, dove
+ * cavolo le trovo?». La risposta era: sul sito degli sviluppatori di Google,
+ * con un cercatore di Place ID, incollando e sperando di non sbagliare riga.
+ * Ma quei dati Google ce li stava già dando — bastava chiedere `metadata`
+ * nella `readMask`, un campo in più su una chiamata che facevamo già.
+ *
+ * Un dato che si può leggere non si fa ricopiare a una persona: ricopiare a
+ * mano un `ChIJCz7Caq7ZhkcRhFP5-SRLuq4` è solo un modo lento di sbagliarlo, e
+ * il Place ID è L'IDENTITÀ dell'azienda in tabella — sbagliarlo non dà errore,
+ * crea un doppione.
+ *
+ * NON è la stessa cosa del `locationId`: quello è l'id interno di Google
+ * Business Profile (`12152690749846843306`), il Place ID è `ChIJ...`. Sono due
+ * numeri diversi dello stesso posto, e confonderli costa un pomeriggio.
+ */
+export async function leggiSchedaGoogle(locationId: string): Promise<AnagraficaScheda> {
+  const token = await tokenAccesso();
+  const campi =
+    'name,title,metadata,storefrontAddress,websiteUri,phoneNumbers,categories';
+  const risposta = await fetch(
+    `https://mybusinessbusinessinformation.googleapis.com/v1/locations/${locationId}?readMask=${campi}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!risposta.ok) {
+    throw new Error(`Scheda Google non leggibile: ${(await risposta.text()).slice(0, 200)}`);
+  }
+
+  const d = await risposta.json();
+  const indirizzo = d.storefrontAddress ?? {};
+  return {
+    titolo: d.title || '',
+    place_id: d.metadata?.placeId || '',
+    maps_url: d.metadata?.mapsUri || '',
+    sito: d.websiteUri || '',
+    telefono: d.phoneNumbers?.primaryPhone || '',
+    // `addressLines` è un elenco: Google ci mette via e civico separati quando
+    // il posto li ha separati, e una riga sola quando no.
+    indirizzo: (indirizzo.addressLines ?? []).join(', '),
+    cap: indirizzo.postalCode || '',
+    citta: indirizzo.locality || '',
+    provincia: indirizzo.administrativeArea || '',
+    categoria: d.categories?.primaryCategory?.displayName || '',
+    rivendicata: d.metadata?.hasVoiceOfMerchant === true,
+  };
+}
+
 /**
  * La descrizione che il cliente ha scritto di sé sulla propria scheda.
  *

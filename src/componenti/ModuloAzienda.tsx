@@ -109,11 +109,100 @@ export function ModuloAzienda({
 }) {
   const [dati, setDati] = useState<AziendaModulo>(azienda ?? AZIENDA_VUOTA);
   const [errore, setErrore] = useState<string | null>(null);
+  const [importando, setImportando] = useState(false);
+  const [esitoImport, setEsitoImport] = useState<{
+    messi: string[];
+    diversi: string[];
+    rivendicata: boolean;
+  } | null>(null);
 
   const nuova = !azienda?.id;
 
   function cambia(campo: keyof AziendaModulo, valore: string) {
     setDati((d) => ({ ...d, [campo]: valore }));
+  }
+
+  /**
+   * Importa l'anagrafica dalla scheda Google.
+   *
+   * ⚠️ RIEMPIE SOLO I CAMPI VUOTI, e dice quali ha lasciato stare.
+   *
+   * Sovrascrivere sarebbe stato più comodo da scrivere e sbagliato da usare:
+   * quello che c'è in tabella qualcuno l'ha messo o corretto a mano, e Google
+   * non sa che è stato corretto. Un import che ripassa sopra un indirizzo
+   * sistemato ieri annulla il lavoro di ieri senza dirlo — e nessuno se ne
+   * accorge finché non parte una lettera all'indirizzo vecchio.
+   *
+   * Quindi: i vuoti si riempiono, i pieni si segnalano e li decide una persona.
+   * È la stessa regola dell'audit SEO coi fatti sul cliente, applicata qui.
+   */
+  async function importaDaGoogle() {
+    setErrore(null);
+    setEsitoImport(null);
+    setImportando(true);
+    try {
+      const r = await fetch(`/api/aziende/${azienda?.id}/google`);
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setErrore(e?.errore ?? "Non sono riuscito a leggere la scheda Google.");
+        return;
+      }
+      const s = e.scheda as Record<string, string | boolean>;
+
+      const campi: Array<[keyof AziendaModulo, string, string]> = [
+        ["place_id", String(s.place_id ?? ""), "Place ID"],
+        ["maps_url", String(s.maps_url ?? ""), "URL di Maps"],
+        ["indirizzo", String(s.indirizzo ?? ""), "Indirizzo"],
+        ["citta", String(s.citta ?? ""), "Città"],
+        ["provincia", String(s.provincia ?? ""), "Provincia"],
+        ["cap", String(s.cap ?? ""), "CAP"],
+        ["categoria", String(s.categoria ?? ""), "Categoria"],
+      ];
+
+      const messi: string[] = [];
+      const diversi: string[] = [];
+      const prossimo = { ...dati };
+
+      for (const [campo, valore, etichetta] of campi) {
+        if (!valore) continue;
+        const attuale = String(prossimo[campo] ?? "").trim();
+        if (!attuale) {
+          (prossimo[campo] as string) = valore;
+          messi.push(etichetta);
+        } else if (attuale !== valore) {
+          diversi.push(`${etichetta} (Google dice «${valore}»)`);
+        }
+      }
+
+      // I contatti sono un elenco, non un campo: si aggiunge quello che manca,
+      // senza toccare i numeri che ci sono — spesso il cellulare del titolare
+      // vale più del fisso che sta su Google.
+      const contatti = [...prossimo.contatti];
+      for (const [tipo, valore, etichetta] of [
+        ["telefono", String(s.telefono ?? ""), "Telefono"],
+        ["sito", String(s.sito ?? ""), "Sito"],
+      ] as const) {
+        if (!valore) continue;
+        if (contatti.some((c) => c.tipo === tipo)) {
+          if (!contatti.some((c) => c.valore.trim() === valore)) {
+            diversi.push(`${etichetta} (Google dice «${valore}»)`);
+          }
+          continue;
+        }
+        contatti.push({ tipo, valore, e_titolare: false });
+        messi.push(etichetta);
+      }
+      prossimo.contatti = contatti;
+
+      setDati(prossimo);
+      setEsitoImport({
+        messi,
+        diversi,
+        rivendicata: s.rivendicata === true,
+      });
+    } finally {
+      setImportando(false);
+    }
   }
 
   function cambiaContatto(indice: number, modifica: Partial<ContattoModulo>) {
@@ -317,6 +406,52 @@ export function ModuloAzienda({
               </VStack>
 
               <Divider />
+
+              {/* ⚠️ Il bottone c'è solo su un'azienda già salvata: la rotta
+                  cerca l'id della scheda Google fra i suoi servizi, e una
+                  che non esiste ancora servizi non ne ha. */}
+              {!nuova ? (
+                <VStack gap={2}>
+                  <HStack gap={2} align="center" wrap="wrap">
+                    <Button
+                      label="Leggi dalla scheda Google"
+                      size="sm"
+                      variant="secondary"
+                      isLoading={importando}
+                      clickAction={importaDaGoogle}
+                    />
+                    <Text type="supporting" color="secondary">
+                      Place ID, Maps, indirizzo e telefono: li ha già Google, non si ricopiano a mano.
+                    </Text>
+                  </HStack>
+
+                  {esitoImport ? (
+                    <Banner
+                      status={esitoImport.diversi.length ? "warning" : "success"}
+                      title={
+                        esitoImport.messi.length
+                          ? `Compilati ${esitoImport.messi.length} campi vuoti`
+                          : "Non c’era niente da riempire"
+                      }
+                      description={
+                        [
+                          esitoImport.messi.length ? `Presi da Google: ${esitoImport.messi.join(", ")}.` : "",
+                          esitoImport.diversi.length
+                            ? `Lasciati com’erano perché già compilati e diversi — guardali e decidi tu: ${esitoImport.diversi.join(" · ")}.`
+                            : "",
+                          esitoImport.rivendicata
+                            ? ""
+                            : "⚠️ Questa scheda Google non risulta rivendicata da nessuno.",
+                          "Niente è ancora salvato: premi «Salva» in fondo.",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")
+                      }
+                      defaultIsExpanded
+                    />
+                  ) : null}
+                </VStack>
+              ) : null}
 
               <HStack gap={3}>
                 <TextInput
