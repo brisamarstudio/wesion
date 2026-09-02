@@ -1,8 +1,8 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 01/09/2026. Il commit più recente è ancora quello del
-30/08 (`docs(blog)`) — tutto quello che segue in §0.1 è nella working tree,
-non ancora committato.*
+*Ultimo aggiornamento: 02/09/2026, sera. La giornata è tutta sull'audit
+SEO/GEO/AEO: acceso, tre PR vere su un cliente vero, e tre difese nate una per
+volta guardando cosa combinava — §14.2.*
 
 Se apri questo progetto adesso, **leggi solo questo file**.
 
@@ -707,7 +707,7 @@ quello vecchio), quindi non pubblicano mai la stessa cosa. **I webhook di WAHA p
 ancora al vecchio**: spostarli è un'operazione a sé, tenant per tenant, e finché non si fa
 il router nuovo riceve zero messaggi WhatsApp — fa solo il giro delle pubblicazioni.
 
-## 14.2 L'audit SEO/GEO/AEO automatico (02/09/2026) — costruito, non ancora acceso
+## 14.2 L'audit SEO/GEO/AEO automatico (02/09/2026) — **acceso**, tre PR vere
 
 L'idea: Wesion legge Search Console + il repo del sito di un cliente, propone da sola le
 correzioni SEO/GEO/AEO (grafo JSON-LD, `llms.txt`, `robots.txt` — regole in
@@ -725,13 +725,18 @@ bozza GBP. Vedi la nota in cima a `src/lib/seo-git.ts`.
 - `src/lib/seo-git.ts` — clona il repo (via HTTPS+token, MAI l'alias SSH incollato nel
   campo: si estrae sempre `owner/repo` con una regex), scrive le modifiche, apre la PR via
   API GitHub.
-- `POST /api/aziende/[id]/seo-audit` — il giro intero. Bottone "Analizza SEO" nella scheda,
-  tab «Dati». **Manuale per ora**, non un cron: il primo lotto di PR va guardato uno per
-  uno prima di lasciarlo andare da solo ogni mese.
+- `POST /api/aziende/[id]/seo-audit` — il giro intero. **Manuale per ora**, non un cron: il
+  primo lotto di PR va guardato uno per uno prima di lasciarlo andare da solo ogni mese —
+  e la tabella qui sotto dice perché non è prudenza per modo di dire.
+- `POST /api/aziende/[id]/seo-pr` — legge la PR aperta e la applica al sito.
+- Il tutto sta nella **scheda cliente**, linguetta «Chi è», blocco «Audit SEO/GEO/AEO»
+  (`SchedaCliente.tsx`): "Analizza SEO" → "Guarda la proposta" (diff file per file, con gli
+  scarti) → "Applica al sito". Il giro si chiude dove è cominciato, senza passare da GitHub
+  — che resta lì per chi vuole leggere la PR per intero.
 
-**⚠️ Due credenziali mancano, e non sono cose che si possano generare da sole — servono un
-consenso OAuth nel browser e una scelta di scope su GitHub, quindi le procura chi ha le
-chiavi dell'agenzia, non un giro di codice:**
+**Le due credenziali ci sono** (procurate il 02/09). Non si generano da sole — servono un
+consenso OAuth nel browser e una scelta di scope su GitHub — quindi il procedimento resta
+scritto qui: serve daccapo il giorno che si cambia server, o che scade il token.
 
 1. **`GSC_REFRESH_TOKEN`** — un token Search Console, di sola lettura, SEPARATO da
    `GBP_REFRESH_TOKEN` (quello ha solo lo scope `business.manage`, non basta).
@@ -758,12 +763,52 @@ chiavi dell'agenzia, non un giro di codice:**
 Senza queste due, il bottone "Analizza SEO" risponde con un errore che dice esattamente
 cosa manca (non un fallimento muto) — vedi i controlli in cima alla rotta.
 
-**Il primo test vero: Trattoria La Fenice.** Prima di premere il bottone: aprire "Modifica"
-sulla sua scheda e compilare «Repository del sito» (il link Git) e «Property Search
-Console» (il valore in alto a sinistra su search.google.com/search-console per il suo
-dominio). Poi rebuild della dashboard (serve anche perché il `Dockerfile` ora installa
-`git`, mancava) e le due variabili sopra nel `.env` di Contabo prima di ripartire il
-container.
+### Il primo cliente vero: Trattoria La Fenice, tre PR e tre lezioni
+
+Il giro ha girato davvero (`repo_url` + `gsc_proprieta` compilati da "Modifica", `git` nel
+`Dockerfile` — mancava — e le due variabili nel `.env` di Contabo). Ne sono uscite tre PR
+in un pomeriggio, e **nessuna delle tre è stata mergiata così com'era**: ognuna ha
+insegnato una cosa, ed è per questo che il primo lotto si guarda uno per uno invece di
+mettere un cron.
+
+| PR | Cosa ha provato a fare | Difesa che ne è nata |
+|---|---|---|
+| #1 | Rigenerare `Layout.astro` intero: 85 righe tolte, schema BlogPosting, skip-link e cambio lingua spariti, una variabile inesistente — un sito che non compila | Un file che esiste si tocca **solo** con sostituzioni mirate, che falliscono da sole se l'aggancio non combacia (`applicaModifiche`) |
+| #2 | Proposta buona (`containedInPlace`, `knowsAbout`) con dentro, di nascosto, `priceRange` da `$$` a `$` | `CHIAVI_DI_FATTO`: un blocco che cambia un fatto sul cliente viene buttato **intero**, anche se il resto era giusto (`fattiAlterati`) |
+| #3 | Coprire un `llms.txt` buono con un elenco piatto di URL | `leggiStatico` + il pavimento sulla lunghezza — sotto |
+
+**La #3 merita il dettaglio, perché la colpa non era del modello.** `llms.txt` lo cercavamo
+solo nella radice del repo; su un sito Astro sta in `public/`. Quindi nel prompt gli
+scrivevamo, testuale, «llms.txt attuale: (non esiste)» — e uno che non esiste si crea da
+zero. Ha fatto la cosa giusta rispetto alla fotografia del sito che gli avevamo dato. Che
+la fotografia fosse sbagliata era colpa nostra, e `robots.txt` due righe sotto era già
+cercato in tutti e due i posti.
+
+Da lì, tre cambi:
+
+- **`leggiStatico`** (`seo-git.ts`): i file statici si cercano in `public/`, poi `static/`,
+  poi radice, per `llms.txt` e `robots.txt` insieme — così l'asimmetria non torna su uno
+  solo dei due. Torna anche **il percorso** in cui il file è stato trovato, e finisce nel
+  prompt: senza, il modello riscrive nella radice e il sito si ritrova due `llms.txt`, con
+  quello servito online che resta il vecchio. Nessun errore, nessuno se ne accorge.
+- **Il pavimento**: un file «riscrivibile intero» che **esiste già** non può essere
+  sostituito da uno più corto. `RISCRIVIBILI_INTERI` nasceva da «lì non c'è nulla da
+  perdere», vero finché quei file non esistevano, falso il giorno dopo che li scriviamo
+  noi. Lo scarto finisce nella PR coi numeri, quindi chi legge lo vede.
+- **`db/prova-seo-git.ts`** (`npm run prova:seo-git`): 17 prove su cartelle finte — i
+  quattro layout di repo, «ci sono tutti e due, vince `public/`», la riscrittura più povera
+  respinta col file originale intatto, e le difese di #1 e #2 ancora in piedi. Non c'erano
+  prove su questo modulo perché `seo-git.ts` importava `./seo-proposta` senza estensione e
+  Node non riusciva a caricarlo: ora ce l'ha, come in `router/`. **È il modulo che scrive
+  sui repo dei clienti: deve restare provabile fuori dall'app.**
+
+**La regola che tengono insieme tutte e tre:** meglio perdere una proposta buona che
+cambiare qualcosa in silenzio. Uno scarto si legge nella PR e si rifà a mano in due minuti;
+un file coperto senza dirlo non lo scopre nessuno finché non serve.
+
+⚠️ **La PR #3 è ancora aperta e contiene l'`llms.txt` peggiorato.** Non mergiarla: dopo il
+prossimo rilascio della dashboard basta un nuovo giro di «Analizza SEO» per averne una
+onesta, e a quel punto la #3 si chiude senza merge.
 
 ## 15. Il tono, se devi scrivere codice qui
 

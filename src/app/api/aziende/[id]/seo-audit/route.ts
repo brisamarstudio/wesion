@@ -89,6 +89,11 @@ ${MARCA.scrivi}
 (il file intero, esattamente come va scritto su disco)
 ${MARCA.fine}
 
+Se llms.txt o robots.txt ESISTONO GIÀ (te li ho dati qui sotto, col loro percorso vero):
+riscrivili a quel percorso ESATTO — non nella radice, o ne nasce un secondo che online non
+legge nessuno — e la versione nuova deve contenere TUTTO quello che c'era, più l'aggiunta.
+Una riscrittura più corta dell'originale viene buttata via: su questi file si aggiunge.
+
 Per un file che ESISTE GIÀ — una sostituzione mirata per ogni punto da cambiare:
 
 ${MARCA.file}: src/layouts/Layout.astro
@@ -119,10 +124,10 @@ Regole del formato:
 
 ${rendimentoTesto}
 
-llms.txt attuale:
+llms.txt attuale — ${materiale.llmsPercorso ?? 'NON ESISTE: se lo crei, scrivilo in public/llms.txt'}:
 ${materiale.llmsTxt ?? '(non esiste)'}
 
-robots.txt attuale:
+robots.txt attuale — ${materiale.robotsPercorso ?? 'NON ESISTE: se lo crei, scrivilo in public/robots.txt'}:
 ${materiale.robotsTxt ?? '(non esiste)'}
 
 File che sembrano contenere lo schema JSON-LD (contenuto ESATTO: è da qui che devi copiare il testo di ${MARCA.cerca}):

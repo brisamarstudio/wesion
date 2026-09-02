@@ -21,7 +21,11 @@ import { promisify } from 'node:util';
 import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { riscrivibileIntero, fattiAlterati, type ModificaProposta } from './seo-proposta';
+// Import con estensione .ts, come in `router/`: senza, questo file lo può
+// caricare solo Next, e la sua prova (`db/prova-seo-git.ts`, che gira con
+// --experimental-strip-types) non parte. È il modulo che scrive sui repo dei
+// clienti: deve restare provabile fuori dall'app.
+import { riscrivibileIntero, fattiAlterati, type ModificaProposta } from './seo-proposta.ts';
 
 const exec = promisify(execFile);
 
@@ -108,22 +112,69 @@ export async function trovaFileSchema(radice: string, massimo = 5): Promise<stri
 
 export interface MaterialeSito {
   llmsTxt: string | null;
+  /** Dove sta davvero, relativo alla radice del repo. `null` se non c'è. */
+  llmsPercorso: string | null;
   robotsTxt: string | null;
+  robotsPercorso: string | null;
   fileSchema: Array<{ percorso: string; contenuto: string }>;
 }
 
+/**
+ * La cartella da cui il sito serve i file statici, per i generatori che usiamo.
+ *
+ * Astro e Next li tengono in `public/`, SvelteKit e Hugo in `static/`. La
+ * radice viene per ultima perché è il posto in cui NON stanno quasi mai: se un
+ * repo ha tutti e due, quello servito online è quello dentro la cartella.
+ */
+const CARTELLE_STATICHE = ['public', 'static', ''];
+
+/**
+ * Il primo dei posti possibili in cui un file statico esiste davvero, insieme
+ * al percorso con cui chiamarlo.
+ *
+ * ⚠️ NASCE DALLA PR #3 SU `trattorialafenice` (02/09/2026), e il danno è stato
+ * la riscrittura di un `llms.txt` buono con uno scritto alla cieca. La causa
+ * NON era il modello: `llms.txt` lo cercavamo solo nella radice, mentre su un
+ * sito Astro sta in `public/` — e `robots.txt`, due righe più sotto, era già
+ * cercato in tutti e due i posti. Così il prompt gli diceva «llms.txt attuale:
+ * (non esiste)», e uno che non esiste si crea da zero: ha fatto la cosa
+ * giusta rispetto a quello che gli avevamo raccontato del sito.
+ *
+ * Morale, che vale oltre questa funzione: prima di accusare il modello di aver
+ * distrutto qualcosa, si guarda cosa gli abbiamo messo davanti.
+ *
+ * Il percorso torna insieme al contenuto perché senza il modello scrive dove
+ * gli pare — di solito nella radice — e il sito si ritrova DUE `llms.txt`, con
+ * quello servito online che resta il vecchio: un file nuovo che non legge
+ * nessuno, e nessun errore da nessuna parte.
+ */
+async function leggiStatico(
+  dir: string,
+  nome: string
+): Promise<{ percorso: string; contenuto: string } | null> {
+  for (const cartella of CARTELLE_STATICHE) {
+    const relativo = cartella ? `${cartella}/${nome}` : nome;
+    const contenuto = await leggiSeEsiste(path.join(dir, relativo));
+    if (contenuto !== null) return { percorso: relativo, contenuto };
+  }
+  return null;
+}
+
 export async function leggiMateriale(dir: string): Promise<MaterialeSito> {
-  const [llmsTxt, robotsTxt] = await Promise.all([
-    leggiSeEsiste(path.join(dir, 'llms.txt')),
-    leggiSeEsiste(path.join(dir, 'public', 'robots.txt')).then((v) => v ?? leggiSeEsiste(path.join(dir, 'robots.txt'))),
-  ]);
+  const [llms, robots] = await Promise.all([leggiStatico(dir, 'llms.txt'), leggiStatico(dir, 'robots.txt')]);
 
   const percorsi = await trovaFileSchema(dir);
   const fileSchema = await Promise.all(
     percorsi.map(async (p) => ({ percorso: p, contenuto: (await leggiSeEsiste(path.join(dir, p))) ?? '' }))
   );
 
-  return { llmsTxt, robotsTxt, fileSchema };
+  return {
+    llmsTxt: llms?.contenuto ?? null,
+    llmsPercorso: llms?.percorso ?? null,
+    robotsTxt: robots?.contenuto ?? null,
+    robotsPercorso: robots?.percorso ?? null,
+    fileSchema,
+  };
 }
 
 /**
@@ -174,12 +225,41 @@ export async function applicaModifiche(
         );
         continue;
       }
-      if (!m.contenuto_nuovo?.trim()) {
+      const nuovo = m.contenuto_nuovo ?? '';
+      if (!nuovo.trim()) {
         scartati.push(`${m.percorso}: contenuto vuoto`);
         continue;
       }
+
+      // ⚠️ ANCHE UN FILE RISCRIVIBILE PER INTERO, SE ESISTE, NON PUÒ USCIRNE
+      //    PIÙ POVERO DI COM'È ENTRATO — PR #3 su `trattorialafenice`
+      //    (02/09/2026): un `llms.txt` strutturato (sezioni, link con
+      //    descrizione) sostituito da un elenco piatto di URL, 13 righe tolte
+      //    per cinque messe. `RISCRIVIBILI_INTERI` nasceva dall'idea che su
+      //    quei file «non c'è nulla da perdere»: vero quando non esistono,
+      //    falso il giorno dopo, quando esistono perché li abbiamo scritti noi.
+      //
+      //    La causa di quel giro era un'altra (vedi `leggiStatico`) ed è
+      //    riparata, ma la porta restava aperta per il prossimo che sbaglia
+      //    percorso. Il metro è la lunghezza, non un giudizio sul contenuto:
+      //    una proposta buona su questi file AGGIUNGE, e un file più corto è
+      //    l'unica forma che ha qui il «l'ho ricostruito a memoria».
+      //
+      //    Si perde qualche riscrittura legittima più stringata. Va bene: lo
+      //    scarto finisce nella PR, chi legge lo vede e lo fa a mano in due
+      //    minuti — mentre un file buono coperto in silenzio non lo vede
+      //    nessuno finché non serve.
+      if (attuale !== null && nuovo.trim().length < attuale.trim().length) {
+        scartati.push(
+          `${m.percorso}: la riscrittura è più corta del file che c'è già ` +
+            `(${nuovo.trim().length} caratteri contro ${attuale.trim().length}) — ` +
+            'su questi file si aggiunge, non si sostituisce con meno di quello che c\'era'
+        );
+        continue;
+      }
+
       await mkdir(path.dirname(assoluto), { recursive: true });
-      await writeFile(assoluto, m.contenuto_nuovo, 'utf8');
+      await writeFile(assoluto, nuovo, 'utf8');
       applicate.push(m);
       continue;
     }

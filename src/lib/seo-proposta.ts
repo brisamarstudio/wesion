@@ -23,11 +23,27 @@
  *    intero è concesso solo a chi nasce adesso, o ai file piccoli e
  *    autocontenuti (`llms.txt`, `robots.txt`), dove non c'è nulla da perdere.
  *
+ * 3. «DOVE NON C'È NULLA DA PERDERE» SCADE (02/09/2026, PR #3). Era vero
+ *    finché quei file non esistevano; il giorno dopo esistono perché li
+ *    abbiamo scritti noi, e la riscrittura ne ha coperto uno buono con un
+ *    elenco piatto di URL. L'eccezione qui sotto resta — un `llms.txt` va
+ *    riscritto per intero, non a pezzi — ma non è più senza rete: in
+ *    `applicaModifiche` una riscrittura più corta del file che c'era viene
+ *    scartata. La causa vera era comunque a monte, e non era il modello:
+ *    cercavamo `llms.txt` nel posto sbagliato e gli dicevamo che non esisteva.
+ *    Vedi `leggiStatico` in `seo-git.ts`.
+ *
  * Sta in `lib/` e non nel route perché è logica, e perché così si prova senza
- * accendere mezzo mondo — vedi `db/prova-seo-proposta.ts`.
+ * accendere mezzo mondo — vedi `db/prova-seo-proposta.ts` (e
+ * `db/prova-seo-git.ts` per la parte che tocca il disco).
  */
 
-/** Un file che, anche se esiste, si può riscrivere per intero senza rischi. */
+/**
+ * Un file che, anche se esiste, si riscrive per intero invece che a pezzi.
+ *
+ * «Senza rischi» non è più la parola giusta: la riscrittura passa solo se non
+ * accorcia quello che c'era — vedi il punto 3 qui sopra.
+ */
 export const RISCRIVIBILI_INTERI = ['llms.txt', 'robots.txt', 'llm.txt'];
 
 export interface ModificaProposta {
