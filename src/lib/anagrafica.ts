@@ -45,6 +45,10 @@ export interface DatiAzienda {
   campagna_id?: number | null;
   note?: string | null;
   contatti?: ContattoInput[];
+  /** Dove sta il codice del sito, per l'audit SEO/GEO automatico. Vedi
+   *  `wesion.sito` nello schema — tabella a parte, non colonne qui. */
+  sito_repo_url?: string | null;
+  sito_gsc_proprieta?: string | null;
 }
 
 export interface Anagrafica {
@@ -62,6 +66,8 @@ export interface Anagrafica {
   fonte: string;
   note: string | null;
   contatti: Array<{ id: number; tipo: string; valore: string; normalizzato: string | null; e_titolare: boolean }>;
+  sito_repo_url: string | null;
+  sito_gsc_proprieta: string | null;
 }
 
 /**
@@ -123,20 +129,63 @@ export async function salvaContatti(aziendaId: number, contatti: ContattoInput[]
   }
 }
 
+/**
+ * Il repo e la property Search Console: `NULL` se non è ancora nota, non una
+ * riga vuota. `repo_url` da sola senza `gsc_proprieta` è comunque utile — si
+ * può clonare e leggere il codice prima ancora di sapere come si chiama la
+ * property, che magari va cercata la prima volta guardando Search Console.
+ */
+export async function salvaSito(
+  aziendaId: number,
+  repoUrl: string | null | undefined,
+  gscProprieta: string | null | undefined
+): Promise<void> {
+  const repo = String(repoUrl ?? '').trim() || null;
+  const gsc = String(gscProprieta ?? '').trim() || null;
+
+  if (!repo) {
+    // Niente repo, niente riga: un'azienda senza sito non deve tenersi una
+    // riga fantasma in `wesion.sito` con tutto a NULL.
+    await query(`DELETE FROM wesion.sito WHERE azienda_id = $1`, [aziendaId]);
+    return;
+  }
+
+  await query(
+    `INSERT INTO wesion.sito (azienda_id, repo_url, gsc_proprieta)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (azienda_id) DO UPDATE
+       SET repo_url = EXCLUDED.repo_url, gsc_proprieta = EXCLUDED.gsc_proprieta, aggiornato_at = now()`,
+    [aziendaId, repo, gsc]
+  );
+}
+
 export async function leggiAnagrafica(aziendaId: number): Promise<Anagrafica | null> {
-  const [a] = await query<Omit<Anagrafica, 'contatti'>>(
+  const [a] = await query<Omit<Anagrafica, 'contatti' | 'sito_repo_url' | 'sito_gsc_proprieta'>>(
     `SELECT id, nome, slug, categoria, citta, provincia, indirizzo, cap, maps_url, place_id, stato, fonte, note
        FROM wesion.azienda WHERE id = $1`,
     [aziendaId]
   );
   if (!a) return null;
 
-  const contatti = await query<Anagrafica['contatti'][number]>(
-    `SELECT id, tipo, valore, normalizzato, e_titolare FROM wesion.contatto
-      WHERE azienda_id = $1 ORDER BY e_titolare DESC, tipo, id`,
-    [aziendaId]
-  );
-  return { ...a, contatti };
+  const [contatti, sitoRighe] = await Promise.all([
+    query<Anagrafica['contatti'][number]>(
+      `SELECT id, tipo, valore, normalizzato, e_titolare FROM wesion.contatto
+        WHERE azienda_id = $1 ORDER BY e_titolare DESC, tipo, id`,
+      [aziendaId]
+    ),
+    query<{ repo_url: string; gsc_proprieta: string | null }>(
+      `SELECT repo_url, gsc_proprieta FROM wesion.sito WHERE azienda_id = $1`,
+      [aziendaId]
+    ),
+  ]);
+  const sito = sitoRighe[0];
+
+  return {
+    ...a,
+    contatti,
+    sito_repo_url: sito?.repo_url ?? null,
+    sito_gsc_proprieta: sito?.gsc_proprieta ?? null,
+  };
 }
 
 export interface EsitoCreazione {
@@ -197,6 +246,7 @@ export async function creaAzienda(d: DatiAzienda): Promise<EsitoCreazione> {
   );
 
   if (d.contatti?.length) await salvaContatti(creata.id, d.contatti);
+  if (d.sito_repo_url !== undefined) await salvaSito(creata.id, d.sito_repo_url, d.sito_gsc_proprieta);
 
   await query(
     `INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio) VALUES ($1, 'azienda_creata', 'dashboard', $2)`,
@@ -245,6 +295,7 @@ export async function aggiornaAzienda(aziendaId: number, d: Partial<DatiAzienda>
   );
 
   if (d.contatti) await salvaContatti(aziendaId, d.contatti);
+  if (d.sito_repo_url !== undefined) await salvaSito(aziendaId, d.sito_repo_url, d.sito_gsc_proprieta);
 
   await query(
     `INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio) VALUES ($1, 'anagrafica_modificata', 'dashboard', $2)`,

@@ -54,6 +54,10 @@ export interface AziendaModulo {
   stato: string;
   note: string;
   contatti: ContattoModulo[];
+  /** Dove sta il codice del sito e la sua property Search Console — per
+   *  l'audit SEO/GEO automatico. Vuoto per chi non ha ancora un sito. */
+  sito_repo_url: string;
+  sito_gsc_proprieta: string;
 }
 
 export const AZIENDA_VUOTA: AziendaModulo = {
@@ -68,6 +72,8 @@ export const AZIENDA_VUOTA: AziendaModulo = {
   stato: "prospect",
   note: "",
   contatti: [],
+  sito_repo_url: "",
+  sito_gsc_proprieta: "",
 };
 
 const STATI = [
@@ -323,6 +329,29 @@ export function ModuloAzienda({
                   labelTooltip="L’identità del posto. Se c’è già in tabella, invece di creare un doppione ritroviamo quella."
                   value={dati.place_id}
                   onChange={(v) => cambia("place_id", v)}
+                />
+              </HStack>
+
+              <Divider />
+
+              {/* Per l'audit SEO/GEO automatico: senza questi due, il bottone
+                  "Analizza SEO" nella scheda non ha né codice da leggere né
+                  numeri da guardare. Facoltativi apposta — un lead senza sito
+                  non li avrà mai, e non deve essere costretto a inventarli. */}
+              <HStack gap={3}>
+                <TextInput
+                  label="Repository del sito"
+                  labelTooltip="Il link Git del codice — dove Wesion clona per proporre le correzioni SEO/GEO. Non l'URL pubblico del sito, quello è già nei Contatti."
+                  placeholder="github-wesion:brisamarstudio/sitobracemia.git"
+                  value={dati.sito_repo_url}
+                  onChange={(v) => cambia("sito_repo_url", v)}
+                />
+                <TextInput
+                  label="Property Search Console"
+                  labelTooltip="Il valore selezionato in alto a sinistra su search.google.com/search-console — un dominio (sc-domain:bracemia.it) o un prefisso URL esatto."
+                  placeholder="sc-domain:bracemia.it"
+                  value={dati.sito_gsc_proprieta}
+                  onChange={(v) => cambia("sito_gsc_proprieta", v)}
                 />
               </HStack>
 

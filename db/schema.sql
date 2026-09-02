@@ -358,3 +358,26 @@ ALTER TABLE wesion.azienda
     CHECK (ultimo_contatto_canale IN ('telefono','whatsapp','email','sito',
                                        'facebook','instagram')),
   ADD COLUMN IF NOT EXISTS ultimo_contatto_at TIMESTAMPTZ;
+
+-- ============ AGGIUNTA DEL 02/09/2026 — il sito, per l'audit SEO/GEO ============
+--
+-- Dove sta il codice vero di un cliente, non cosa dice il suo sito (quello e'
+-- `contatto.tipo='sito'`, l'URL pubblico). Serve a un mestiere nuovo: leggere
+-- Search Console + il repo e proporre da soli le correzioni SEO/GEO/AEO (vedi
+-- il playbook, 08-SEO-GEO.md) — cosa che oggi si rifà a mano cliente per
+-- cliente, ogni volta che Google cambia le regole.
+--
+-- Tabella a parte e non colonne su `azienda`, stesso motivo di `voce`/`fatto`:
+-- e' un mestiere diverso da chi e' l'azienda e a che punto e' commercialmente.
+--
+-- `gsc_proprieta` e' quello che Search Console chiama "sito": o un dominio
+-- (`sc-domain:bracemia.it`, tutti i sottodomini/protocolli insieme) o un
+-- prefisso URL esatto (`https://www.bracemia.it/`). Si legge dalla stessa
+-- pagina degli screenshot: è il valore già selezionato in alto a sinistra.
+CREATE TABLE IF NOT EXISTS wesion.sito (
+  azienda_id    BIGINT PRIMARY KEY REFERENCES wesion.azienda(id) ON DELETE CASCADE,
+  repo_url      TEXT NOT NULL,
+  gsc_proprieta TEXT,
+  creato_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  aggiornato_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

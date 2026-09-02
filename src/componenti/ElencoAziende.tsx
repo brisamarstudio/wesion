@@ -339,6 +339,8 @@ export function ElencoAziende({
         valore: c.valore,
         e_titolare: c.e_titolare,
       })),
+      sito_repo_url: a.sito_repo_url ?? '',
+      sito_gsc_proprieta: a.sito_gsc_proprieta ?? '',
     });
   }
 
