@@ -125,7 +125,27 @@ const ETICHETTA: Record<string, string> = {
   perso: 'Perse',
 };
 
+/**
+ * Gli stati che si possono ASSEGNARE dal pannello: tutti e cinque.
+ * `cliente` c'è, e deve esserci: è il click che chiude la vendita.
+ */
 const STATI = ['prospect', 'contattato', 'in_trattativa', 'cliente', 'perso'];
+
+/**
+ * Gli stati che fanno da LINGUETTA in cima all'elenco: gli stessi meno
+ * `cliente`.
+ *
+ * ⚠️ NON È LO STESSO ELENCO, ED È IL PUNTO (02/09/2026). Questa pagina serve a
+ * decidere chi chiamare: un cliente che ha già firmato non è una telefonata da
+ * fare, e vederselo in mezzo ai lead è solo una riga da saltare ogni volta. Ha
+ * la sua pagina, `/clienti`, dove il pannello parla la lingua giusta.
+ *
+ * Assegnare `cliente` resta possibile da qui — anzi è il momento più bello —
+ * solo che dopo quel click la riga sparisce da questo elenco e compare di là.
+ * Per questo i due elenchi sono separati invece di essere uno solo filtrato:
+ * uno dice cosa si può diventare, l'altro cosa si guarda adesso.
+ */
+const STATI_ELENCO = STATI.filter((s) => s !== 'cliente');
 
 /** Il canale con cui si è scritto davvero, non un tipo di contatto qualsiasi:
  *  per questo non c'è 'lid' né 'facebook'/'instagram' — sono identità dei
@@ -569,7 +589,7 @@ export function ElencoAziende({
                 value="tutti"
                 label={`Tutte (${Object.values(conteggi).reduce((a, b) => a + b, 0)})`}
               />
-              {STATI.filter((s) => conteggi[s]).map((s) => (
+              {STATI_ELENCO.filter((s) => conteggi[s]).map((s) => (
                 <SegmentedControlItem key={s} value={s} label={`${ETICHETTA[s]} (${conteggi[s]})`} />
               ))}
             </SegmentedControl>

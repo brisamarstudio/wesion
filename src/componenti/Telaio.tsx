@@ -21,7 +21,7 @@ import { AppShell } from '@astryxdesign/core/AppShell';
 import { SideNav, SideNavHeading, SideNavItem } from '@astryxdesign/core/SideNav';
 import { Button } from '@astryxdesign/core/Button';
 import { Icon } from '@astryxdesign/core/Icon';
-import { Megaphone, Building2, Users, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut } from 'lucide-react';
+import { Megaphone, Building2, Users, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut, BookOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /**
@@ -47,6 +47,19 @@ const VOCI = [
   { href: '/spie', label: 'Spie', icona: Siren },
   { href: '/insights', label: 'Da fare', icona: TrendingUp },
 ];
+
+/**
+ * Il manuale: come si USA Wesion, pagina per pagina.
+ *
+ * ⚠️ STA NEL MENU E NON IN UN SEGNALIBRO perche' un link che vive fuori dal
+ * programma lo perde chi entra dopo — ed e' esattamente chi ne ha bisogno. Il
+ * testo e' anche in `MANUALE.md` dentro il repo, ma il repo i commerciali non
+ * ce l'hanno.
+ *
+ * Si apre in una scheda nuova: chi lo consulta di solito sta facendo altro qui
+ * dentro, e non deve perdere la riga su cui era.
+ */
+const MANUALE = 'https://claude.ai/code/artifact/f871dc3e-0167-4019-ad5f-5ecbb6dc8444';
 
 export function Telaio({
   children,
@@ -115,6 +128,11 @@ export function Telaio({
               isSelected={attiva === v.href}
             />
           ))}
+          <SideNavItem
+            label="Manuale"
+            icon={BookOpen}
+            onClick={() => window.open(MANUALE, '_blank', 'noopener,noreferrer')}
+          />
         </SideNav>
       }
     >

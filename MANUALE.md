@@ -57,8 +57,12 @@ città, quante. Poi **aspetti** e premi «Raccogli».
 
 ## 🏢 Aziende — *chi chiamo per primo*
 
-**A cosa serve:** è la lista delle telefonate. Tutti i lead raccolti, ordinati
-per quanto conviene chiamarli.
+**A cosa serve:** è la lista delle telefonate. I lead raccolti, ordinati per
+quanto conviene chiamarli.
+
+**Chi ha già firmato non è qui.** Appena metti qualcuno su «cliente», la riga
+sparisce da questo elenco e compare in «Clienti». È voluto: questa pagina serve
+a decidere chi chiamare, e un cliente non è una telefonata da fare.
 
 **Come si legge una riga.** In fondo a ogni riga ci sono i segnali, e ognuno
 vuol dire una cosa precisa:
@@ -99,12 +103,12 @@ richiami la stessa persona.
 
 ## 👥 Clienti — *chi ha già firmato*
 
-**A cosa serve:** gli stessi nomi di «Aziende», ma il pannello a destra parla
-un'altra lingua. Qui non c'è «chi chiamo per primo»: c'è la scheda vera del
-cliente, con tutto il suo lavoro.
+**A cosa serve:** chi ha già firmato. Qui non c'è «chi chiamo per primo»: c'è la
+scheda vera del cliente, con tutto il suo lavoro.
 
-**Perché due pagine e non un filtro:** perché a un cliente da sei mesi non devi
-proporre di aprire il discorso. Era il primo sintomo, ed era ridicolo.
+**Perché una pagina sua e non un filtro:** perché a un cliente da sei mesi non
+devi proporre di aprire il discorso. In «Aziende» non compare più — ci finisce
+da solo appena lo promuovi.
 
 ### Le linguette della scheda cliente
 

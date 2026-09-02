@@ -86,7 +86,21 @@ export default async function PaginaAziende({
    * — e quella volta non l'avevo aperta.
    */
   const DOVE = `
-    ($1::text IS NULL OR a.stato = $1)
+    /*
+     * ⚠️ I CLIENTI NON STANNO QUI (02/09/2026). Questa pagina serve a decidere
+     * chi chiamare, e chi ha gia' firmato non e' una telefonata da fare: era
+     * una riga da saltare ogni volta, con accanto un pannello che gli proponeva
+     * di "aprire il discorso". Hanno la loro pagina, /clienti, dove
+     * l'ispettore parla la lingua giusta.
+     *
+     * Si escludono QUI e non nella vista, cosi' valgono per tutte le query
+     * insieme - elenco, conteggio e paginazione dicono lo stesso numero. E si
+     * puo' comunque PROMUOVERE un lead a cliente dal pannello: dopo quel click
+     * la riga sparisce di qua e compare di la', che e' esattamente quello che
+     * deve succedere.
+     */
+    a.stato <> 'cliente'
+    AND ($1::text IS NULL OR a.stato = $1)
     AND ($2::text = '' OR a.nome ILIKE '%' || $2 || '%' OR a.citta ILIKE '%' || $2 || '%'
          OR a.categoria ILIKE '%' || $2 || '%'
          OR EXISTS (SELECT 1 FROM wesion.contatto c
@@ -236,7 +250,8 @@ export default async function PaginaAziende({
     // I conteggi per stato guardano SEMPRE tutte le aziende: dicono quanto c'è
     // di là, non quanto se ne vede di qua.
     query<{ stato: string; quanti: number }>(
-      `SELECT stato, count(*)::int AS quanti FROM wesion.azienda GROUP BY stato`
+      `SELECT stato, count(*)::int AS quanti FROM wesion.azienda
+        WHERE stato <> 'cliente' GROUP BY stato`
     ),
 
     query<{ valore: string; quanti: number }>(
