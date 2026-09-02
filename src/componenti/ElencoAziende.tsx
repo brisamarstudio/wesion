@@ -87,6 +87,8 @@ export interface Azienda {
   /** Le stelle di Google e quante persone le hanno date. */
   voto: string | number | null;
   recensioni: number | null;
+  /** La scheda Google esiste ma non l'ha rivendicata nessuno — vedi il badge. */
+  scheda_da_rivendicare: boolean | null;
 }
 
 /**
@@ -183,6 +185,7 @@ interface Vista {
   citta: string;
   campagna: string;
   sito: string;
+  scheda: string;
 }
 
 interface Opzioni {
@@ -510,7 +513,9 @@ export function ElencoAziende({
     }
   }
 
-  const filtriAttivi = [vista.categoria, vista.citta, vista.campagna, vista.sito].filter(Boolean).length;
+  const filtriAttivi = [vista.categoria, vista.citta, vista.campagna, vista.sito, vista.scheda].filter(
+    Boolean
+  ).length;
 
   /**
    * Cosa scrivere sotto il nome, e cosa NO.
@@ -614,6 +619,13 @@ export function ElencoAziende({
                     Nessun sito, ma già tante recensioni buone: ha i clienti e non ha la
                     vetrina. È il caso migliore che puoi trovare.
                   </MetadataListItem>
+                  <MetadataListItem label="scheda di nessuno (giallo)">
+                    La scheda Google esiste — con foto, orari e recensioni — ma nessuno l’ha
+                    mai rivendicata. Non vuol dire «non ce l’ha»: vuol dire che non è sua.
+                    Non può rispondere a una recensione, non può pubblicare un post, e
+                    chiunque può farle modificare gli orari. Finché resta così non può
+                    comprare Wesion nemmeno volendo: è la telefonata più facile che hai.
+                  </MetadataListItem>
                   <MetadataListItem label="Da contattare">
                     A che punto sei con lui. Dopo la telefonata lo cambi tu, dalla riga.
                   </MetadataListItem>
@@ -701,6 +713,18 @@ export function ElencoAziende({
                     { value: 'si', label: 'Con un sito' },
                   ]}
                 />
+                {/* Filtro a sé e non una spunta dentro «Sito»: è un'altra
+                    vendita, con un'altra telefonata. */}
+                <Selector
+                  label="Scheda Google"
+                  isLabelHidden
+                  size="sm"
+                  hasClear
+                  placeholder="Tutte le schede"
+                  value={vista.scheda}
+                  onChange={(v) => vaiA({ scheda: v ?? '', pagina: 1 })}
+                  options={[{ value: 'nessuno', label: 'Scheda di nessuno' }]}
+                />
               </HStack>
 
               <HStack gap={2} align="center" wrap="wrap">
@@ -735,7 +759,7 @@ export function ElencoAziende({
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      vaiA({ categoria: '', citta: '', campagna: '', sito: '', pagina: 1 })
+                      vaiA({ categoria: '', citta: '', campagna: '', sito: '', scheda: '', pagina: 1 })
                     }
                   />
                 ) : null}
@@ -946,6 +970,14 @@ export function ElencoAziende({
                                 />
                               ) : null}
                               {!a.sito ? <Badge variant="error" label="senza sito" /> : null}
+                              {/* ⚠️ Non è «non ha Google»: la scheda ce l'ha,
+                                  con recensioni e foto. Non è di nessuno. Il
+                                  titolare non può rispondere a una recensione
+                                  né pubblicare un post — cioè Wesion, per lui,
+                                  oggi è impossibile da comprare. */}
+                              {a.scheda_da_rivendicare ? (
+                                <Badge variant="warning" label="scheda di nessuno" />
+                              ) : null}
                               <Text type="supporting">{a.telefono ?? ''}</Text>
                             </HStack>
                           }

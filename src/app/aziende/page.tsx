@@ -48,6 +48,7 @@ export default async function PaginaAziende({
     citta?: string;
     campagna?: string;
     sito?: string;
+    scheda?: string;
     gruppo?: string;
     pagina?: string;
   }>;
@@ -60,6 +61,11 @@ export default async function PaginaAziende({
   const campagna = p.campagna ? Number(p.campagna) : null;
   // 'no' = solo chi non ha un sito: per chi vende siti è il filtro che conta.
   const sito = p.sito === 'no' ? false : p.sito === 'si' ? true : null;
+  // La scheda Google c'e' ma non l'ha rivendicata nessuno: e' un filtro a se'
+  // perche' e' un'altra vendita. "Senza sito" e' un problema che il cliente ha
+  // imparato a tollerare; la scheda di nessuno e' un problema che non sa di
+  // avere, e finche' resta cosi' NON PUO' comprare Wesion nemmeno volendo.
+  const scheda = p.scheda === 'nessuno' ? true : null;
   const gruppo = ['categoria', 'citta', 'campagna', 'nessuno'].includes(p.gruppo ?? '')
     ? (p.gruppo as string)
     : 'campagna';
@@ -76,9 +82,10 @@ export default async function PaginaAziende({
     AND ($4::text IS NULL OR a.citta = $4)
     AND ($5::bigint IS NULL OR a.campagna_id = $5)
     AND ($6::boolean IS NULL OR
-         EXISTS (SELECT 1 FROM wesion.contatto c WHERE c.azienda_id = a.id AND c.tipo = 'sito') = $6)`;
+         EXISTS (SELECT 1 FROM wesion.contatto c WHERE c.azienda_id = a.id AND c.tipo = 'sito') = $6)
+    AND ($7::boolean IS NULL OR (a.raw_json->>'claimThisBusiness' = 'true') = $7)`;
 
-  const filtri = [stato, cerca, categoria, citta, campagna, sito];
+  const filtri = [stato, cerca, categoria, citta, campagna, sito, scheda];
 
   /**
    * ⚠️ TUTTE INSIEME, non una dietro l'altra.
@@ -130,7 +137,26 @@ export default async function PaginaAziende({
         * sito, non quanta gente li' dentro ci va contenta.
         */
        (a.raw_json->>'totalScore')::numeric   AS voto,
-       (a.raw_json->>'reviewsCount')::int     AS recensioni
+       (a.raw_json->>'reviewsCount')::int     AS recensioni,
+       /*
+        * ⚠️ LA SCHEDA GOOGLE ESISTE MA NON E' DI NESSUNO (02/09/2026).
+        *
+        * Google se le genera da sola, le schede: nome, foto, orari, recensioni.
+        * Averla non vuol dire possederla. Finche' nessuno la rivendica il
+        * titolare non puo' rispondere a una recensione, non puo' pubblicare un
+        * post — cioe' il prodotto centrale di Wesion e' per lui impossibile —
+        * e chiunque puo' suggerire una modifica ai suoi orari.
+        *
+        * Ludovico Il Moro, Vigevano: 677 recensioni, 361 foto, nessun
+        * proprietario. Verificato a mano su Maps, che gli chiede ancora "Sei il
+        * proprietario di quest'attivita'?" — quella riga Google la mostra solo
+        * sulle schede non rivendicate. Due fonti indipendenti, stesso verdetto.
+        *
+        * Perche' vale piu' di "senza sito": senza sito e' un problema che il
+        * cliente ha imparato a tollerare, la scheda di nessuno e' un problema
+        * che non sa di avere e che gli dimostri in trenta secondi.
+        */
+       (a.raw_json->>'claimThisBusiness') = 'true' AS scheda_da_rivendicare
      FROM wesion.azienda a
      LEFT JOIN wesion.campagna camp ON camp.id = a.campagna_id
      LEFT JOIN wesion.sito sito ON sito.azienda_id = a.id
@@ -235,6 +261,7 @@ export default async function PaginaAziende({
           citta: citta ?? '',
           campagna: p.campagna ?? '',
           sito: p.sito ?? '',
+          scheda: p.scheda ?? '',
         }}
         opzioni={{ categorie, citte, campagne }}
       />
