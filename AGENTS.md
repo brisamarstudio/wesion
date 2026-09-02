@@ -19,6 +19,14 @@
 >
 > Un backtick dentro una stringa SQL in un template literal chiude la stringa: nei
 > commenti `--` dentro le query non si usano backtick.
+>
+> **Se un modello sembra aver distrutto qualcosa, guarda prima cosa gli hai messo
+> davanti.** Il 02/09/2026 tre guasti di fila sul sito di un cliente sembravano tre
+> volte «il modello sbaglia», ed erano tre volte la stessa cosa: noi che gli passavamo
+> una descrizione sbagliata del sito. Il peggiore e' finito online — cercavamo
+> `llms.txt` solo nella radice, li' e' `src/pages/llms.txt.ts`, gli dicevamo «non
+> esiste» e lui giustamente ne creava uno statico, che in Astro **copre** la rotta.
+> Regole e antidoti in `CONTRATTO-SITO.md`, sezione «L'audit SEO/GEO/AEO».
 
 <!-- Sotto qui il contenuto e' rigenerato da tooling: non scriverci dentro. -->
 

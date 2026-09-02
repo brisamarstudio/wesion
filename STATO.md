@@ -1,8 +1,9 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 02/09/2026, sera. La giornata è tutta sull'audit
-SEO/GEO/AEO: acceso, tre PR vere su un cliente vero, e tre difese nate una per
-volta guardando cosa combinava — §14.2.*
+*Ultimo aggiornamento: 02/09/2026, sera tardi. La giornata è tutta sull'audit
+SEO/GEO/AEO: acceso, tre PR vere su un cliente vero, tre difese nate una per volta
+guardando cosa combinava, e un danno riparato in produzione — §14.2. Dashboard
+ricostruita e `healthy` alle 16:58; tutto committato e pushato (`main` = `master`).*
 
 Se apri questo progetto adesso, **leggi solo questo file**.
 
@@ -678,6 +679,17 @@ riavvia il container.
    wget -qO- -S http://127.0.0.1:3020/entra   # 200 OK atteso — NON /aziende, redirige al login
    ```
 
+   Lo stato deve dire **`healthy`**. Se dice `unhealthy` mentre la dashboard risponde 200,
+   guarda `ENV HOSTNAME=0.0.0.0` nel `Dockerfile` prima di cercare altrove: il `server.js`
+   standalone di Next si lega a `process.env.HOSTNAME`, che **Docker imposta da solo
+   all'ID del container**. Senza quella riga il processo ascolta su `172.22.0.2:3000` e
+   basta — dall'host via port mapping funziona tutto, ma il healthcheck chiama
+   `127.0.0.1:3000` da dentro e si prende `Connection refused`. Trovato il 02/09/2026 dopo
+   cinque ore di `unhealthy` su un container sanissimo. Un healthcheck rotto non sbaglia
+   dicendo «sano»: dice «malato» **sempre**, e il giorno che la dashboard muore davvero lo
+   stato non cambia e non se ne accorge nessuno — lo stesso danno della riga che dava per
+   spento il router mentre girava, qui sotto.
+
 Tutto il ciclo (push → pull → build → verifica) richiede un paio di minuti, quasi tutti
 per il build Docker.
 
@@ -787,6 +799,7 @@ mettere un cron.
 | #1 | Rigenerare `Layout.astro` intero: 85 righe tolte, schema BlogPosting, skip-link e cambio lingua spariti, una variabile inesistente — un sito che non compila | Un file che esiste si tocca **solo** con sostituzioni mirate, che falliscono da sole se l'aggancio non combacia (`applicaModifiche`) |
 | #2 | Proposta buona (`containedInPlace`, `knowsAbout`) con dentro, di nascosto, `priceRange` da `$$` a `$` | `CHIAVI_DI_FATTO`: un blocco che cambia un fatto sul cliente viene buttato **intero**, anche se il resto era giusto (`fattiAlterati`) |
 | #3 | Coprire un `llms.txt` buono con un elenco piatto di URL | `leggiStatico` + il pavimento sulla lunghezza — sotto |
+| #3 bis | La stessa #3, ma **applicata** e finita online: aveva coperto un generatore | `trovaGeneratore` + il rifiuto di creare un file statico che copre codice |
 
 **La #3 merita il dettaglio, perché la colpa non era del modello.** `llms.txt` lo cercavamo
 solo nella radice del repo; su un sito Astro sta in `public/`. Quindi nel prompt gli
@@ -817,9 +830,56 @@ Da lì, tre cambi:
 cambiare qualcosa in silenzio. Uno scarto si legge nella PR e si rifà a mano in due minuti;
 un file coperto senza dirlo non lo scopre nessuno finché non serve.
 
-⚠️ **La PR #3 è ancora aperta e contiene l'`llms.txt` peggiorato.** Non mergiarla: dopo il
-prossimo rilascio della dashboard basta un nuovo giro di «Analizza SEO» per averne una
-onesta, e a quel punto la #3 si chiude senza merge.
+### Il quarto guasto, quello vero: `llms.txt` non era un file
+
+Aprendo il repo della Fenice a mano, la sera del 02/09, si è visto che lì `llms.txt` **è
+codice**: `src/pages/llms.txt.ts`, una rotta Astro che a ogni richiesta rilegge gli
+articoli da Neon — quelli che pubblica Wesion — e produce un documento con FAQ per
+assistenti AI, contatti, orari e blog aggiornato.
+
+Online però usciva un `public/llms.txt` di 14 righe. **In Astro un file in `public/` vince
+sulla rotta con lo stesso nome**: il generatore girava e non lo leggeva più nessuno.
+
+E quel file l'aveva messo Wesion: commit `7f31b01` sul repo del cliente, «SEO/GEO/AEO da
+Wesion — Trattoria La Fenice (prova)», applicato a mano dalla dashboard alle 11:41. La
+catena intera: *Wesion cerca nel posto sbagliato → dice al modello «non esiste» → il
+modello crea in buona fede → una persona applica come prova → il sito perde una funzione,
+in silenzio.*
+
+L'ultimo bottone ha funzionato come previsto. Il problema è che **quel diff sembrava
+innocuo**: aggiungeva un file, non ne toglieva nessuno. Nessuno poteva vedere, guardandolo,
+che stava spegnendo qualcosa.
+
+**Riparato:**
+- `trovaGeneratore` (`seo-git.ts`) cerca `<nome>.{ts,js,mjs,astro,tsx}` in `src/pages`,
+  `src/routes`, `src/app`, `app`, `pages` — Astro, SvelteKit e Next.
+- Il prompt ha **tre** stati invece di due (`descriviTestuale` nel route): non esiste,
+  esiste come file, è generato da codice. Nel terzo caso il modello riceve il codice e il
+  divieto esplicito di creare un file statico.
+- `applicaModifiche` **rifiuta** di creare un `llms.txt`/`robots.txt` statico quando esiste
+  un generatore, e lo scarto dice dove sta.
+- Sul sito del cliente: `public/llms.txt` rimosso (commit `a065236`). `llms.txt` è tornato
+  da 14 righe a 38, con i sei articoli, le tre FAQ, contatti e orari. Non è servito altro:
+  la rotta rilegge il database da sola.
+
+Il contratto completo — cosa Wesion può toccare del repo di un cliente e cosa no — sta in
+`CONTRATTO-SITO.md`, sezione «L'audit SEO/GEO/AEO».
+
+### Dove sono le PR, e come ci si arriva
+
+I rami `wesion-seo-*` restano sul repo del cliente anche a PR chiusa: chiudere non cancella
+il ramo, e il nuovo «Scarta la proposta» cancella solo i rami che iniziano per
+`wesion-seo-` — su un repo di un cliente non si tocca un ramo che non abbiamo creato noi.
+
+⚠️ **Per arrivare al repo di un cliente da questo PC non basta una chiave globale**: ogni
+sito in `SITI/` ha la sua deploy key configurata in locale con `core.sshcommand` (per la
+Fenice: `SITI/trattorialafenice/.ssh/id_ed25519`). Un `git clone` normale fallisce con
+«Repository not found», che sembra un problema di permessi e invece è la chiave sbagliata.
+Si clona così:
+
+```bash
+GIT_SSH_COMMAND="ssh -i '<percorso>/.ssh/id_ed25519' -o IdentitiesOnly=yes" git clone git@github.com:...
+```
 
 ## 15. Il tono, se devi scrivere codice qui
 

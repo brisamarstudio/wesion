@@ -205,3 +205,71 @@ croccante» — la macinatura e il pane non stanno in nessun fatto.
 Nessuno di questi è un errore che un controllo automatico possa vedere: sono frasi corrette,
 fluenti, plausibili. Per questo un articolo si legge prima di approvarlo, e per questo il
 bottone che pubblica è di una persona.
+
+---
+
+## L'audit SEO/GEO/AEO — cosa Wesion può toccare del repo, e cosa no
+
+L'altra metà del contratto. Sul blog Wesion manda una richiesta HTTP e il sito decide;
+sull'audit SEO **clona il repo del sito e propone modifiche al codice**, che finiscono in
+una Pull Request. Il merge lo decide una persona, sempre — stessa regola dell'ultimo
+bottone, applicata al codice invece che a una bozza.
+
+Le regole qui sotto non sono buone maniere: ognuna è un danno già successo, il 02/09/2026,
+sul repo di un cliente vero (`trattorialafenice`).
+
+### 1. Un file che esiste non si rigenera, si modifica in un punto
+
+Chiesto di restituire `Layout.astro` intero, un modello non lo modifica: lo **ricostruisce
+a memoria**. Nella PR #1 sono sparite 85 righe — schema BlogPosting, skip-link,
+`og:site_name`, lo script del cambio lingua — e restava un riferimento a una variabile
+inesistente: un sito che non compila.
+
+Quindi un file esistente si tocca solo con una sostituzione mirata, che fallisce da sola se
+il punto d'aggancio non combacia esattamente una volta.
+
+### 2. I fatti sul cliente non li decide un modello
+
+Nella PR #2, dentro una proposta per il resto buona, `"priceRange": "$$"` era diventato
+`"$"`: la fascia di prezzo di un ristorante vero, riclassificata da chi non poteva saperla.
+
+`priceRange`, telefono, email, indirizzo, coordinate, orari, `servesCuisine`, voti e
+recensioni: una modifica che ne cambia anche uno solo viene scartata **intera**, anche se il
+resto era giusto. Si correggono a mano, dall'anagrafica.
+
+### 3. ⚠️ `llms.txt` e `robots.txt` possono essere CODICE, non file
+
+**Il danno peggiore, e l'unico finito online senza che nessuno se ne accorgesse.**
+
+Sulla Fenice `llms.txt` non è un file: è `src/pages/llms.txt.ts`, una rotta Astro che a ogni
+richiesta rilegge gli articoli dal database — quelli che pubblica Wesion — e produce un
+documento con FAQ per assistenti AI, contatti, orari e blog aggiornato.
+
+Wesion lo cercava solo nella radice del repo. Non trovandolo, diceva al modello «llms.txt
+attuale: (non esiste)», e uno che non esiste si crea da zero: il modello ha fatto la cosa
+giusta rispetto alla fotografia del sito che gli avevamo dato. Ma **in Astro un file in
+`public/` vince sulla rotta con lo stesso nome**: da quel merge in poi online uscivano 14
+righe invece di 38, senza FAQ, senza contatti e senza nessuno dei sei articoli. Pagina 200,
+nessun errore, e il sito che diceva un decimo di quello che sapeva.
+
+Perciò, per ogni sito cliente:
+
+| | |
+|---|---|
+| Dove si cerca un file statico | `public/`, `static/`, poi la radice — in quest'ordine |
+| Dove si cerca un generatore | `<nome>.{ts,js,mjs,astro,tsx}` in `src/pages`, `src/routes`, `src/app`, `app`, `pages` |
+| Se il generatore c'è | il file statico **non si crea**: si propone una sostituzione dentro il generatore |
+| Se il file esiste già | la riscrittura non può essere più corta di quello che c'era |
+
+Il codice sta in `trovaGeneratore` e `leggiStatico` (`src/lib/seo-git.ts`); le prove, col
+caso Fenice per intero, in `db/prova-seo-git.ts` (`npm run prova:seo-git`).
+
+### Cosa resta a carico di una persona, anche qui
+
+La PR #3 fu applicata da un umano, come prova. L'ultimo bottone ha funzionato: il problema è
+che **quel diff sembrava innocuo** — aggiungeva un file, non ne toglieva nessuno. Nessuno
+poteva vedere, guardandolo, che stava spegnendo una funzione del sito.
+
+Per questo oggi lo scarto dice sempre *dove* sta il generatore, e per questo la proposta si
+può anche **rifiutare** dalla scheda («Scarta la proposta») invece che solo applicare: un
+bottone che ha solo il sì non è una decisione.
