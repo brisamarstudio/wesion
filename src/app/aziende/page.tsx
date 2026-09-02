@@ -95,6 +95,7 @@ export default async function PaginaAziende({
     query<Azienda>(
     `SELECT
        a.id, a.slug, a.nome, a.categoria, a.citta, a.provincia, a.stato, a.maps_url,
+       a.ultimo_contatto_canale, a.ultimo_contatto_at,
        camp.nome AS campagna,
        ultimo.score, ultimo.note AS audit_note, ultimo.hook AS audit_hook,
        ultimo.scansione AS audit_scansione, ultimo.modello AS audit_modello,

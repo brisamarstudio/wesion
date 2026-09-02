@@ -640,6 +640,47 @@ mai rigenerate, o il router vecchio si romperebbe mentre serve sei numeri veri.
    tutto il file prima di guardare quale servizio gli hai chiesto, quindi su Contabo
    pretendeva `ROUTER_SECRET`. Ora sono due file, uno per server.
 
+### Come si fa un deploy della dashboard (passo-passo, per non reinventarlo ogni volta)
+
+Non è on-the-fly: Astryx è solo la libreria di componenti React usata scrivendo il
+codice, il container gira da `node server.js` (l'output **standalone** di `next build`,
+niente `next dev`). Cambiare un file locale non basta finché non lo si builda e non si
+riavvia il container.
+
+1. **Push del codice** (dal PC di sviluppo, dove sta la deploy key che scrive):
+   ```bash
+   git push origin main
+   ```
+   ⚠️ Se il branch locale è `master` (capita, vedi lo storico), il push va indirizzato
+   esplicitamente: `git push origin master:main` — altrimenti si crea un branch `master`
+   separato su GitHub che il server non legge mai.
+
+2. **Collegarsi al Contabo.** Niente chiave SSH: password a `root`, presa da
+   `WeMenuQR/backup_contabo_v2.py` (costante `PASS`), via paramiko — vedi
+   `_MYWEBBY-PLAYBOOK/02-INFRASTRUTTURA.md` per lo snippet Python pronto.
+
+3. **Aggiornare i sorgenti sul server:**
+   ```bash
+   cd /opt/wesion && git pull
+   ```
+
+4. **Ricostruire e riavviare SOLO la dashboard** (il file è mirato: build dal contesto
+   `.`, un solo servizio `dashboard` / container `wesion-dashboard`, porta
+   `127.0.0.1:3020` — non tocca `mywebby-frontend`, `puntiplus-*` né altro sulla stessa
+   macchina):
+   ```bash
+   cd /opt/wesion && docker compose -f docker-compose.dashboard.yml up -d --build
+   ```
+
+5. **Verificare che sia davvero su, non solo "up":**
+   ```bash
+   docker ps --filter name=wesion-dashboard --format "{{.Status}}"
+   wget -qO- -S http://127.0.0.1:3020/entra   # 200 OK atteso — NON /aziende, redirige al login
+   ```
+
+Tutto il ciclo (push → pull → build → verifica) richiede un paio di minuti, quasi tutti
+per il build Docker.
+
 **Router su Oracle — immagine costruita, container NON avviato.**
 
 ⚠️ **Non è una dimenticanza.** Appena parte, entro 30 secondi fa il primo giro e pubblica

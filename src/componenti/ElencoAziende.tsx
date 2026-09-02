@@ -37,6 +37,7 @@ import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { Button } from '@astryxdesign/core/Button';
+import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -59,6 +60,10 @@ export interface Azienda {
   provincia: string | null;
   stato: string;
   maps_url: string | null;
+  /** L'ultimo canale usato per scrivere/chiamare, e quando. Solo l'ultimo,
+   *  non uno storico: vedi la nota nello schema del 02/09/2026. */
+  ultimo_contatto_canale: string | null;
+  ultimo_contatto_at: string | null;
   campagna: string | null;
   score: number | null;
   telefono: string | null;
@@ -112,6 +117,24 @@ const ETICHETTA: Record<string, string> = {
 };
 
 const STATI = ['prospect', 'contattato', 'in_trattativa', 'cliente', 'perso'];
+
+/** Il canale con cui si è scritto davvero, non un tipo di contatto qualsiasi:
+ *  per questo non c'è 'lid' né 'facebook'/'instagram' — sono identità dei
+ *  contatti, non posti dove si apre un discorso commerciale. */
+const CANALI_CONTATTO: { valore: string; etichetta: string }[] = [
+  { valore: 'whatsapp', etichetta: 'WhatsApp' },
+  { valore: 'telefono', etichetta: 'Telefono' },
+  { valore: 'email', etichetta: 'Email' },
+];
+
+const ETICHETTA_CANALE: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  telefono: 'Telefono',
+  email: 'Email',
+  sito: 'Sito',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+};
 
 /**
  * Un numero fisso non sta su WhatsApp.
@@ -387,12 +410,12 @@ export function ElencoAziende({
     else gruppi.push({ titolo: chiave, righe: [a] });
   }
 
-  async function cambiaStato(id: number, nuovo: string) {
+  async function cambiaStato(id: number, nuovo: string, canale?: string) {
     setMessaggio(null);
     const r = await fetch(`/api/aziende/${id}/stato`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stato: nuovo }),
+      body: JSON.stringify({ stato: nuovo, canale }),
     });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
@@ -1002,17 +1025,48 @@ export function ElencoAziende({
 
               <VStack gap={2}>
                 <Text type="supporting">Com’è andata</Text>
-                <HStack gap={2} wrap="wrap">
-                  {STATI.map((s) => (
-                    <Button
-                      key={s}
-                      label={ETICHETTA[s]}
-                      size="sm"
-                      variant={selezionata.stato === s ? 'primary' : 'ghost'}
-                      clickAction={() => cambiaStato(selezionata.id, s)}
-                    />
-                  ))}
+                <HStack gap={2} wrap="wrap" align="center">
+                  {STATI.map((s) =>
+                    s === 'contattato' ? (
+                      // «Contattate» non è un semplice tag: è un fatto che
+                      // succede su un canale preciso, in un momento preciso.
+                      // Un click secco perdeva entrambi — vedi lo schema del
+                      // 02/09/2026. Il menu chiede il canale UNA volta, non
+                      // ogni volta: ricliccare senza scegliere terrebbe quello
+                      // dell'ultima volta.
+                      <DropdownMenu
+                        key={s}
+                        button={{
+                          label: ETICHETTA[s],
+                          size: 'sm',
+                          variant: selezionata.stato === s ? 'primary' : 'ghost',
+                        }}
+                        items={CANALI_CONTATTO.map((c) => ({
+                          label: c.etichetta,
+                          onClick: () => cambiaStato(selezionata.id, s, c.valore),
+                        }))}
+                      />
+                    ) : (
+                      <Button
+                        key={s}
+                        label={ETICHETTA[s]}
+                        size="sm"
+                        variant={selezionata.stato === s ? 'primary' : 'ghost'}
+                        clickAction={() => cambiaStato(selezionata.id, s)}
+                      />
+                    )
+                  )}
                 </HStack>
+                {/* Non solo quando stato==='contattato': anche un'azienda già
+                    passata a «In trattativa» o «Cliente» resta comunque
+                    qualcuno a cui abbiamo scritto — il canale non deve
+                    sparire quando lo stato avanza. */}
+                {selezionata.ultimo_contatto_at ? (
+                  <Badge
+                    variant="neutral"
+                    label={`${ETICHETTA_CANALE[selezionata.ultimo_contatto_canale ?? ''] ?? selezionata.ultimo_contatto_canale} · contattata il ${soloData(selezionata.ultimo_contatto_at)}`}
+                  />
+                ) : null}
               </VStack>
 
               <TabList value={dettaglio} onChange={setDettaglio} hasDivider>

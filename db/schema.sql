@@ -341,3 +341,20 @@ ALTER TABLE wesion.pubblicazione
 CREATE INDEX IF NOT EXISTS idx_pubbl_da_verificare
   ON wesion.pubblicazione (verificata_at NULLS FIRST)
   WHERE destinazione = 'gbp' AND esito = 'ok';
+
+-- ============ AGGIUNTA DEL 02/09/2026 — con cosa e quando ============
+--
+-- Il bottone "Contattate" cambiava `stato` e basta: un lead passato a mano
+-- via WhatsApp con un messaggio scritto apposta finiva indistinguibile da uno
+-- mai più toccato dopo. Fra una settimana, senza queste due righe, l'unico
+-- modo di sapere "gli ho scritto io il 2/9 su WhatsApp" era ricordarselo.
+--
+-- Non e' uno storico (quello, se servira' un giorno, e' una tabella a parte):
+-- e' solo l'ULTIMO contatto, quello che serve a decidere se e quando
+-- ripassare. `canale` ricalca i tipi di `contatto`, tolto 'lid' — non è un
+-- posto dove si scrive un messaggio di apertura, e' un dettaglio del router.
+ALTER TABLE wesion.azienda
+  ADD COLUMN IF NOT EXISTS ultimo_contatto_canale TEXT
+    CHECK (ultimo_contatto_canale IN ('telefono','whatsapp','email','sito',
+                                       'facebook','instagram')),
+  ADD COLUMN IF NOT EXISTS ultimo_contatto_at TIMESTAMPTZ;
