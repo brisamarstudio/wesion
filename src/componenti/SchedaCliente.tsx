@@ -119,6 +119,45 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const [prInCorso, setPrInCorso] = useState(false);
   const [confermaApplica, setConfermaApplica] = useState(false);
 
+  /**
+   * L'ultimo click sulle bozze, dentro la scheda.
+   *
+   * ⚠️ APPROVATA NON VUOL DIRE PUBBLICATA, e va detto dove si preme. Questa
+   * rotta scrive `stato='approvata'` e basta: pubblica il router, dall'altra
+   * parte, al suo giro (30 secondi). La dashboard non ha nessuna porta verso
+   * di lui — vedi la nota in cima a `/api/bozze/[id]`.
+   */
+  const [bozzaInCorso, setBozzaInCorso] = useState<number | null>(null);
+
+  async function decidiBozza(idBozza: number, azione: 'approva' | 'rifiuta') {
+    setMessaggio(null);
+    setBozzaInCorso(idBozza);
+    try {
+      const r = await fetch(`/api/bozze/${idBozza}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ azione }),
+      });
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+        return;
+      }
+      // Via dall'elenco: ha smesso di essere una cosa da decidere.
+      setS((v) => ({ ...v, daApprovare: v.daApprovare.filter((b) => b.id !== idBozza) }));
+      setMessaggio({
+        tipo: 'success',
+        testo:
+          azione === 'approva'
+            ? 'Approvata. Non è ancora pubblicata: la prende il router al prossimo giro, entro un minuto.'
+            : 'Rifiutata: non uscirà.',
+      });
+      router.refresh();
+    } finally {
+      setBozzaInCorso(null);
+    }
+  }
+
   async function guardaProposta() {
     setMessaggio(null);
     setPrInCorso(true);
@@ -581,6 +620,16 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   compaiono quando diventa cliente. */}
               {eCliente ? <Tab value="servizi" label="Servizi" /> : null}
               {eCliente ? <Tab value="mese" label="Il mese" /> : null}
+              {/* L'ultimo click: c'è solo quando c'è davvero qualcosa da
+                  decidere, e dice quanto. Una linguetta che si apre vuota
+                  insegna a non cliccarla. */}
+              {s.daApprovare.length > 0 ? (
+                <Tab
+                  value="approvare"
+                  label="Da approvare"
+                  endContent={<Badge variant="warning" label={String(s.daApprovare.length)} />}
+                />
+              ) : null}
               {/* Lo storico compare solo quando c'e' qualcosa dentro: una
                   linguetta che si apre sempre vuota insegna a non cliccarla. */}
               {s.storico.length > 0 ? (
@@ -1372,6 +1421,68 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   clickAction={() => chiama(`/api/aziende/${s.id}/audit`, 'Analizzo')}
                 />
               </HStack>
+            </VStack>
+            ) : null}
+
+            {/* ── 6. Da approvare ──────────────────────────────────────────
+                Il cerchio si chiude qui: la scheda sapeva già costruire il
+                piano, scrivere un post e un articolo, ma per dire di sì si
+                doveva uscire e andare in `/bozze`. L'ultimo click era il più
+                lontano di tutti. */}
+            {sezione === 'approvare' ? (
+            <VStack gap={3}>
+              <Banner
+                status="info"
+                title="Approvare non è pubblicare"
+                description="Qui si autorizza. A pubblicare ci pensa il router, al suo giro: entro un minuto sulla scheda Google, il blog o il sito."
+              />
+
+              {s.daApprovare.map((b) => (
+                <Card key={b.id}>
+                  <VStack gap={2} padding={3}>
+                    <HStack gap={2} align="center" wrap="wrap">
+                      <Badge
+                        variant="neutral"
+                        label={
+                          b.tipo === 'post_gbp'
+                            ? 'Post scheda Google'
+                            : b.tipo === 'articolo'
+                              ? 'Articolo del blog'
+                              : b.tipo === 'menu'
+                                ? 'Menù del giorno'
+                                : b.tipo
+                        }
+                      />
+                      <Text type="supporting" color="secondary">
+                        {b.pubblica_at ? `programmato per il ${quandoBreve(b.pubblica_at)}` : 'esce appena approvato'}
+                      </Text>
+                    </HStack>
+
+                    {b.titolo ? <Text weight="bold">{b.titolo}</Text> : null}
+                    {/* Il testo intero, non un'anteprima tagliata: si approva
+                        quello che si è letto, non quello che si intuisce. */}
+                    <Text style={{ whiteSpace: 'pre-wrap' }}>{b.testo ?? '(nessun testo)'}</Text>
+
+                    <HStack gap={2}>
+                      <Button
+                        label="Approva"
+                        variant="primary"
+                        size="sm"
+                        isLoading={bozzaInCorso === b.id}
+                        clickAction={() => decidiBozza(b.id, 'approva')}
+                      />
+                      <Button
+                        label="Rifiuta"
+                        variant="ghost"
+                        size="sm"
+                        isDisabled={bozzaInCorso === b.id}
+                        clickAction={() => decidiBozza(b.id, 'rifiuta')}
+                      />
+                      <Link href={`/bozze?cliente=${s.id}`}>Aprila in Bozze per correggerne il testo</Link>
+                    </HStack>
+                  </VStack>
+                </Card>
+              ))}
             </VStack>
             ) : null}
 

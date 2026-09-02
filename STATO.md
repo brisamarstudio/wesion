@@ -681,7 +681,15 @@ riavvia il container.
 Tutto il ciclo (push → pull → build → verifica) richiede un paio di minuti, quasi tutti
 per il build Docker.
 
-**Router su Oracle — immagine costruita, container NON avviato.**
+**Router su Oracle — ACCESO** (verificato il 02/09/2026: `wesion-router`, up e healthy).
+
+⚠️ Questa riga diceva "container NON avviato" fino al 02/09/2026, quando il router girava
+già da un pezzo. Una documentazione che dice spento quello che è acceso è peggio di nessuna
+documentazione: fa ragionare su un impianto che non esiste. **Conseguenza pratica, oggi: una
+bozza approvata ESCE davvero, entro il giro del router (30 secondi).**
+
+Sotto, com'era la nota di quando non era ancora partito — si tiene perché la ragione per cui
+non lo si avviava resta valida ogni volta che si riparte da fermi:
 
 ⚠️ **Non è una dimenticanza.** Appena parte, entro 30 secondi fa il primo giro e pubblica
 la bozza approvata che sta in coda (MyWebby #75) sulla **scheda Google vera**. Quello è un

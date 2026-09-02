@@ -87,6 +87,28 @@ export interface Scheda {
    * domanda che si fa prima di una telefonata, o quando il cliente chiede.
    */
   storico: VoceStorico[];
+  /**
+   * Quello che aspetta un sì, per QUESTO cliente.
+   *
+   * ⚠️ Aggiunte il 02/09/2026, e il motivo è lo stesso dell'audit SEO: la
+   * scheda sapeva GENERARE un post e un articolo, ma per approvarli si doveva
+   * uscire e andare in `/bozze`. Il giro completo — costruisci, guarda,
+   * approva — non stava in nessuna pagina sola, e l'ultimo click, che è il
+   * più importante, era quello più lontano.
+   */
+  daApprovare: BozzaDaApprovare[];
+}
+
+export interface BozzaDaApprovare {
+  id: number;
+  tipo: string;
+  stato: string;
+  titolo: string | null;
+  testo: string | null;
+  foto: string | null;
+  /** Quando dovrebbe uscire: `null` vuol dire "appena approvata". */
+  pubblica_at: string | null;
+  creata_at: string;
 }
 
 /** Una cosa uscita: il post com'è, e dove è finito. */
@@ -228,6 +250,27 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
     [aziendaId]
   );
 
+  /**
+   * Le bozze che aspettano una decisione.
+   *
+   * Gli stessi stati che accetta `PATCH /api/bozze/[id]` — se qui ne
+   * comparisse uno che quella rotta rifiuta, il bottone sarebbe lì e non
+   * funzionerebbe. Le `vuota` restano fuori apposta: non hanno ancora un testo
+   * da leggere, approvarle alla cieca non vorrebbe dire niente.
+   */
+  const daApprovare = await query<BozzaDaApprovare>(
+    `SELECT b.id, b.tipo, b.stato,
+            b.contenuto->>'titolo' AS titolo,
+            b.contenuto->>'testo'  AS testo,
+            b.contenuto->>'foto'   AS foto,
+            b.pubblica_at, b.creata_at
+       FROM wesion.bozza b
+      WHERE b.azienda_id = $1
+        AND b.stato IN ('generata','attesa_approvazione')
+      ORDER BY b.pubblica_at NULLS FIRST, b.creata_at`,
+    [aziendaId]
+  );
+
   return {
     ...azienda,
     settore: (azienda.settore ?? []) as TagAttivita[],
@@ -236,6 +279,7 @@ export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
     servizi,
     titolari,
     storico,
+    daApprovare,
   };
 }
 
