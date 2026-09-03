@@ -11,6 +11,8 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { genera } from '@/lib/generatore';
 import { rendimento, riassumiRendimento } from '@/lib/search-console';
+import { salvaSnapshotRendimento, leggiUltimoSnapshot, confrontaRendimento, segnalaCandidatiTitle } from '@/lib/rendimento-storico';
+import { controllaIndicizzazione, riassumiIndicizzazione } from '@/lib/indicizzazione';
 import { clonaRepo, leggiMateriale, applicaModifiche, apriPR, pulisci } from '@/lib/seo-git';
 import { REGOLE_SEO_GEO } from '@/lib/regole-seo';
 import { MARCA, leggiProposta } from '@/lib/seo-proposta';
@@ -78,6 +80,13 @@ export async function POST(_richiesta: Request, contesto: { params: Promise<{ id
     // 1. Search Console — se manca la property o il token, si prosegue lo
     //    stesso: meglio una proposta senza numeri che nessuna proposta.
     let rendimentoTesto = '(Search Console non collegata: nessun numero disponibile, solo il codice.)';
+    /**
+     * Il pezzo per gli UMANI, non per il modello: confronto col giro
+     * precedente e query da rivedere a mano. Non entra nel prompt (il
+     * modello segue solo REGOLE_SEO_GEO, tecniche) — finisce nella PR, dove
+     * lo legge chi decide se e cosa toccare sui testi.
+     */
+    let notaRendimentoUmano = '';
     if (sito.gsc_proprieta) {
       try {
         const [perQuery, perPagina] = await Promise.all([
@@ -85,8 +94,34 @@ export async function POST(_richiesta: Request, contesto: { params: Promise<{ id
           rendimento(sito.gsc_proprieta, 28, 'page'),
         ]);
         rendimentoTesto = riassumiRendimento(perQuery, perPagina);
+
+        // Leggi PRIMA di scrivere: altrimenti il confronto sarebbe con se stesso.
+        const precedente = await leggiUltimoSnapshot(aziendaId);
+        await salvaSnapshotRendimento(aziendaId, perQuery, perPagina);
+
+        notaRendimentoUmano = precedente
+          ? confrontaRendimento(precedente.contenuto, { perQuery, perPagina }, precedente.creato_at)
+          : 'Primo audit con Search Console collegata: da qui in poi ogni giro si confronta col precedente.';
+        notaRendimentoUmano += segnalaCandidatiTitle(perQuery);
       } catch (e) {
         rendimentoTesto = `(Search Console non leggibile: ${e instanceof Error ? e.message : String(e)})`;
+      }
+
+      /**
+       * L'indicizzazione, a parte dal rendimento e con un try suo: è la
+       * domanda più concreta dell'audit («Google conosce queste pagine?») e
+       * non deve cadere se Search Console tarda su un'altra chiamata. La
+       * sitemap si cerca dove sta sempre — se un sito la mette altrove, il
+       * giro salta e lo dice, invece di fingere che sia tutto indicizzato.
+       */
+      try {
+        const base = sito.gsc_proprieta.startsWith('sc-domain:')
+          ? `https://${sito.gsc_proprieta.slice('sc-domain:'.length)}/`
+          : sito.gsc_proprieta;
+        const esito = await controllaIndicizzazione(sito.gsc_proprieta, new URL('sitemap.xml', base).toString());
+        notaRendimentoUmano += `\n\n### Indicizzazione\n${riassumiIndicizzazione(esito)}`;
+      } catch (e) {
+        notaRendimentoUmano += `\n\n### Indicizzazione\n(non verificata: ${e instanceof Error ? e.message : String(e)})`;
       }
     }
 
@@ -213,6 +248,7 @@ ${
         riepilogo: dato.riepilogo,
         modello,
         scartati,
+        nota_rendimento: notaRendimentoUmano || null,
       });
     }
 
@@ -238,6 +274,7 @@ ${
           .map((m) => `- \`${m.percorso}\` (${m.azione})${m.motivo ? `: ${m.motivo}` : ''}`)
           .join('\n')}` +
         elencoScarti +
+        (notaRendimentoUmano ? `\n\n### Rendimento (Search Console)\n${notaRendimentoUmano}` : '') +
         `\n\n⚠️ Da rivedere a mano prima del merge — nessun controllo umano l'ha ancora guardata.`,
     });
 
@@ -246,7 +283,7 @@ ${
       [aziendaId, url]
     );
 
-    return NextResponse.json({ pr_url: url, riepilogo: dato.riepilogo, modello, scartati });
+    return NextResponse.json({ pr_url: url, riepilogo: dato.riepilogo, modello, scartati, nota_rendimento: notaRendimentoUmano || null });
   } catch (errore: unknown) {
     const messaggio = errore instanceof Error ? errore.message : String(errore);
     await query(`UPDATE wesion.sito SET ultimo_audit_at = now(), ultimo_errore = $2 WHERE azienda_id = $1`, [

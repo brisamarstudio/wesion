@@ -94,7 +94,30 @@ export const CATENA: Modello[] = [
     costa: false,
   },
   /**
-   * Z.AI, terzo — per velocità, non per qualità.
+   * Nara a pagamento, quarto — messo qui apposta, PRIMA di Z.AI.
+   *
+   * Il 03/09/2026, lo stesso pomeriggio in cui `minimax-m3-free` sopra dava
+   * 502 su 7 richieste su 10 (e pure `minimax-m3` A PAGAMENTO, stesso
+   * fornitore: 6 su 8), tre modelli a pagamento sono stati messi alla prova
+   * sullo stesso prompt con un tetto di 20s:
+   *   - `deepseek-v4-pro`: 5 tentativi, 5 timeout. Scartato, non risponde.
+   *   - `glm-5.3-flash`: 5/5 riuscite ma 8,3-17s, ballerino.
+   *   - `qwen3.7-flash`: 5/5 riuscite, 9,0-12,3s, mai un'impennata. Vince.
+   *
+   * Sta prima di Z.AI (15s fisso) perché è più veloce e più stabile di lui,
+   * anche se quello è a forfait e questo consuma credito vero (Rp372/Rp1680
+   * per milione di token, spiccioli sul volume di Wesion). Non ha bisogno di
+   * `reasoning_effort`: testato senza, ha sempre risposto pulito.
+   */
+  {
+    nome: 'nara/qwen3.7-flash',
+    url: 'https://router.bynara.id/v1/chat/completions',
+    chiaveEnv: 'NARA_API_KEY',
+    modello: 'qwen3.7-flash',
+    costa: true,
+  },
+  /**
+   * Z.AI, quinto — per velocità, non per qualità.
    *
    * Il piano è già pagato a forfait, quindi qui non si consuma a token: sulla
    * carta dovrebbe stare più in alto. Ma misurato il 27/08/2026 sullo stesso

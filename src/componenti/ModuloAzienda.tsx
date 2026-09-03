@@ -115,6 +115,12 @@ export function ModuloAzienda({
     diversi: string[];
     rivendicata: boolean;
   } | null>(null);
+  const [cercandoRepo, setCercandoRepo] = useState(false);
+  const [esitoRepo, setEsitoRepo] = useState<{
+    tipo: "trovato" | "candidati" | "non_disponibile" | "vuoto";
+    messaggio: string;
+    candidati?: { cartella: string; repo_url: string }[];
+  } | null>(null);
 
   const nuova = !azienda?.id;
 
@@ -202,6 +208,51 @@ export function ModuloAzienda({
       });
     } finally {
       setImportando(false);
+    }
+  }
+
+  /**
+   * Propone `repo_url` guardando dentro `SITI/`, sul PC di sviluppo.
+   *
+   * Come `importaDaGoogle`: riempie solo se il campo è vuoto, non sovrascrive
+   * mai quello che c'è già — un repo sbagliato incollato da qualcuno resta lì
+   * finché non lo si corregge a mano, questo bottone non lo tocca.
+   */
+  async function cercaRepoLocale() {
+    setErrore(null);
+    setEsitoRepo(null);
+    setCercandoRepo(true);
+    try {
+      const r = await fetch(`/api/aziende/${azienda?.id}/repo-locale`);
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setEsitoRepo({ tipo: "non_disponibile", messaggio: e?.errore ?? "Ricerca non disponibile." });
+        return;
+      }
+      if (e.trovato) {
+        if (dati.sito_repo_url.trim()) {
+          setEsitoRepo({
+            tipo: "candidati",
+            messaggio: `Il campo è già compilato: trovato anche "${e.trovato.cartella}" → ${e.trovato.repo_url}. Confronta e decidi tu.`,
+          });
+        } else {
+          setDati((d) => ({ ...d, sito_repo_url: e.trovato.repo_url }));
+          setEsitoRepo({
+            tipo: "trovato",
+            messaggio: `Preso da "${e.trovato.cartella}": ${e.trovato.repo_url}. Niente è ancora salvato: premi «Salva».`,
+          });
+        }
+      } else if (e.candidati?.length) {
+        setEsitoRepo({
+          tipo: "candidati",
+          messaggio: `Più di una cartella possibile (o nessuna chiaramente sua): scegli tu.`,
+          candidati: e.candidati,
+        });
+      } else {
+        setEsitoRepo({ tipo: "vuoto", messaggio: "Nessuna cartella con un repo Git trovata in SITI/." });
+      }
+    } finally {
+      setCercandoRepo(false);
     }
   }
 
@@ -489,6 +540,47 @@ export function ModuloAzienda({
                   onChange={(v) => cambia("sito_gsc_proprieta", v)}
                 />
               </HStack>
+
+              {/* Solo su una scheda già salvata, come il bottone Google sopra:
+                  cerca il repo dentro SITI/ — funziona solo dal PC di sviluppo
+                  (SITI_LOCAL_PATH), su Contabo la rotta lo dice e basta. */}
+              {!nuova ? (
+                <VStack gap={2}>
+                  <HStack gap={2} align="center" wrap="wrap">
+                    <Button
+                      label="Leggi da SITI/ in locale"
+                      size="sm"
+                      variant="secondary"
+                      isLoading={cercandoRepo}
+                      clickAction={cercaRepoLocale}
+                    />
+                    <Text type="supporting" color="secondary">
+                      Il repository ce l&apos;ha già la cartella sul disco, non si ricopia a mano.
+                    </Text>
+                  </HStack>
+
+                  {esitoRepo ? (
+                    <Banner
+                      status={esitoRepo.tipo === "trovato" ? "success" : "warning"}
+                      title={
+                        esitoRepo.tipo === "trovato"
+                          ? "Repository trovato"
+                          : esitoRepo.tipo === "vuoto"
+                            ? "Niente da proporre"
+                            : esitoRepo.tipo === "non_disponibile"
+                              ? "Ricerca non disponibile"
+                              : "Serve una scelta"
+                      }
+                      description={
+                        esitoRepo.candidati?.length
+                          ? `${esitoRepo.messaggio} ${esitoRepo.candidati.map((c) => `"${c.cartella}" → ${c.repo_url}`).join(" · ")}`
+                          : esitoRepo.messaggio
+                      }
+                      defaultIsExpanded
+                    />
+                  ) : null}
+                </VStack>
+              ) : null}
 
               <TextArea
                 label="Note"
