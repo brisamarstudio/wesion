@@ -310,18 +310,33 @@ export function ModaleNuovoPost({
             </HStack>
           ) : null}
 
-          <FileInput
-            label={immagini.length > 0 ? 'Aggiungi un’altra foto' : 'Carica una o più foto'}
-            placeholder={caricandoFoto ? 'Sto caricando la foto…' : 'Scegli immagine (JPG/PNG)'}
-            mode="dropzone"
-            accept="image/*"
-            maxSize={8 * 1024 * 1024}
-            value={null}
-            isLoading={caricandoFoto}
-            description="JPG o PNG fino a 8 MB. Le foto salgono su media.mywebby.it per essere servite a Google/Sito."
-            onChange={() => undefined}
-            changeAction={caricaFoto}
-          />
+          {/* Un post della scheda Google porta UNA foto sola.
+              Verificato sul campo il 04/09/2026: mandate tre immagini, Google
+              ne ha restituita una e ha scartato le altre due senza dirlo.
+              Meglio impedirlo qui che far scoprire dopo che due foto scelte
+              con cura non sono mai uscite. */}
+          {tipo === 'post_gbp' && immagini.length >= 1 ? (
+            <Text type="supporting">
+              Google pubblica una sola foto per post: per aggiungerne un’altra togli prima questa.
+            </Text>
+          ) : (
+            <FileInput
+              label={immagini.length > 0 ? 'Aggiungi un’altra foto' : 'Carica una foto'}
+              placeholder={caricandoFoto ? 'Sto caricando la foto…' : 'Scegli immagine (JPG/PNG)'}
+              mode="dropzone"
+              accept="image/*"
+              maxSize={8 * 1024 * 1024}
+              value={null}
+              isLoading={caricandoFoto}
+              description={
+                tipo === 'post_gbp'
+                  ? 'JPG o PNG fino a 8 MB. Una sola foto: è il massimo che la scheda Google accetta per un post.'
+                  : 'JPG o PNG fino a 8 MB. Le foto salgono su media.mywebby.it per essere servite a Google/Sito.'
+              }
+              onChange={() => undefined}
+              changeAction={caricaFoto}
+            />
+          )}
         </VStack>
 
         {/* Selezione CTA (Pulsante sotto il post per Google) */}
