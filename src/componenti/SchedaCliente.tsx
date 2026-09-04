@@ -45,8 +45,9 @@ import { quandoBreve } from '@/lib/quando';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { DateInput } from '@astryxdesign/core/DateInput';
-import { Pencil } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { ModuloAzienda, type AziendaModulo } from './ModuloAzienda';
+import { ModaleNuovoPost } from './ModaleNuovoPost';
 import type { Scheda } from '@/lib/scheda';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
@@ -91,6 +92,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
    * si riusa lo stesso `ModuloAzienda` di quella lista, stesse API.
    */
   const [moduloAnagrafica, setModuloAnagrafica] = useState<AziendaModulo | null>(null);
+  const [apertoPostAlVolo, setApertoPostAlVolo] = useState(false);
 
   // L'audit SEO/GEO — vedi /api/aziende/[id]/seo-audit. Stato locale a parte
   // da `messaggio`: dura di più (clona un repo), e il risultato (link alla
@@ -1447,6 +1449,12 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
             {sezione === 'mese' ? (
             <VStack gap={3}>
               <HStack gap={2} wrap="wrap">
+                <Button
+                  label="+ Post al Volo"
+                  variant="primary"
+                  icon={<Plus size={16} />}
+                  onClick={() => setApertoPostAlVolo(true)}
+                />
                 {/* ⚠️ PORTA ALL'ANTEPRIMA, non crea niente.
                     Prima questo bottone faceva direttamente il POST, e il piano
                     lo si scopriva dopo guardando diciotto righe gia' fatte —
@@ -1455,7 +1463,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     sia la strada piu' comoda. */}
                 <Button
                   label="Costruisci il piano del mese"
-                  variant="primary"
+                  variant="secondary"
                   isDisabled={!salvato}
                   tooltip={salvato ? undefined : 'Salva prima la scheda: il piano nasce da questi fatti.'}
                   onClick={() => router.push(`/piano?cliente=${s.id}`)}
@@ -1780,6 +1788,14 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         }}
       />
     ) : null}
+
+    <ModaleNuovoPost
+      aperto={apertoPostAlVolo}
+      aziendaIdPreselezionata={s.id}
+      aziendeDisponibili={[{ id: s.id, nome: s.nome }]}
+      onChiudi={() => setApertoPostAlVolo(false)}
+      onCreato={() => router.refresh()}
+    />
     </>
   );
 }

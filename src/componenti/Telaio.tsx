@@ -21,29 +21,17 @@ import { AppShell } from '@astryxdesign/core/AppShell';
 import { SideNav, SideNavHeading, SideNavItem } from '@astryxdesign/core/SideNav';
 import { Button } from '@astryxdesign/core/Button';
 import { Icon } from '@astryxdesign/core/Icon';
-import { Megaphone, Building2, Users, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut, BookOpen } from 'lucide-react';
+import { Megaphone, Building2, Users, CalendarDays, LayoutGrid, PenLine, Siren, TrendingUp, LogOut, BookOpen, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-/**
- * Le icone servono a ritrovare la voce senza rileggerla, quindi ognuna dice il
- * MESTIERE della pagina e non la sua categoria: il megafono e' il lavoro che
- * esce (campagne), la penna e' il lavoro che aspetta un giudizio (bozze), la
- * sirena e' l'unica che chiede di essere guardata subito (spie).
- *
- * Sono componenti Lucide passati diretti: `icon` di SideNavItem accetta un nome
- * semantico OPPURE un componente SVG (`astryx docs icons`). I nomi semantici li
- * mappa gia' il tema, ma nessuno di quei 26 nomi vuol dire "piano editoriale".
- */
 const VOCI = [
   { href: '/campagne', label: 'Campagne', icona: Megaphone },
   { href: '/aziende', label: 'Aziende', icona: Building2 },
-  // Non lo stesso posto di "Aziende": lì il pannello parla a chi deve ancora
-  // chiamare (gancio, urgenza). Qui c'è chi è già dentro — vedi la nota in
-  // cima a app/clienti/page.tsx.
   { href: '/clienti', label: 'Clienti', icona: Users },
   { href: '/calendario', label: 'Calendario', icona: CalendarDays },
   { href: '/piano', label: 'Piano', icona: LayoutGrid },
   { href: '/bozze', label: 'Bozze', icona: PenLine },
+  { href: '/bozze?nuovo=1', label: '+ Post al Volo', icona: Plus },
   { href: '/spie', label: 'Spie', icona: Siren },
   { href: '/insights', label: 'Da fare', icona: TrendingUp },
 ];

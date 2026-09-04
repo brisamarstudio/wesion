@@ -23,8 +23,8 @@
  *    router leggendo lo stato, e puo' fallire dopo. Scrivere "fatto" qui
  *    sarebbe la stessa bugia dei guasti muti: rassicurante e non verificata.
  */
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout, LayoutContent, LayoutHeader, LayoutPanel } from '@astryxdesign/core/Layout';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
@@ -57,6 +57,8 @@ import { controllaBozza } from '@/lib/controlloTesto';
 import { quandoBreve, scadenza } from '@/lib/quando';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
+import { ModaleNuovoPost } from './ModaleNuovoPost';
+import { Plus } from 'lucide-react';
 
 /** Il colore dice a colpo d'occhio se la riga aspetta una persona o no. */
 const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 'neutral'> = {
@@ -105,6 +107,7 @@ function cosaSuccedeOra(b: Bozza, adesso: number | null): string {
 
 export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   // L'ora arriva dopo il montaggio: prima non si sa, e va bene cosi'.
   const adesso = useAdesso();
   const [filtro, setFiltro] = useState('da_decidere');
@@ -116,6 +119,13 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const [errore, setErrore] = useState<string | null>(null);
   /** Vero mentre la foto sale: il media server ci mette qualche secondo. */
   const [caricando, setCaricando] = useState(false);
+  const [apertoModaleNuovo, setApertoModaleNuovo] = useState(false);
+
+  useEffect(() => {
+    if (searchParams?.get('nuovo') === '1') {
+      setApertoModaleNuovo(true);
+    }
+  }, [searchParams]);
 
   const filtrate = useMemo(() => {
     const q = cerca.trim().toLowerCase();
@@ -262,6 +272,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
+    <>
     <Layout
       height="fill"
       header={
@@ -278,13 +289,22 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
         <LayoutContent padding={0}>
           <VStack gap={0}>
             <VStack padding={3} gap={3}>
-              <SegmentedControl label="Cosa mostrare" value={filtro} onChange={setFiltro} size="sm">
-                <SegmentedControlItem value="da_decidere" label={`Da decidere (${conta.daDecidere})`} />
-                <SegmentedControlItem value="attenzione" label={`Con avvisi (${conta.conAvvisi})`} />
-                <SegmentedControlItem value="pubblicate" label={`Pubblicate (${conta.pubblicate})`} />
-                <SegmentedControlItem value="fallite" label={`Fallite (${conta.fallite})`} />
-                <SegmentedControlItem value="tutte" label={`Tutte (${bozze.length})`} />
-              </SegmentedControl>
+              <HStack justify="between" align="center" wrap="wrap" gap={3}>
+                <SegmentedControl label="Cosa mostrare" value={filtro} onChange={setFiltro} size="sm">
+                  <SegmentedControlItem value="da_decidere" label={`Da decidere (${conta.daDecidere})`} />
+                  <SegmentedControlItem value="attenzione" label={`Con avvisi (${conta.conAvvisi})`} />
+                  <SegmentedControlItem value="pubblicate" label={`Pubblicate (${conta.pubblicate})`} />
+                  <SegmentedControlItem value="fallite" label={`Fallite (${conta.fallite})`} />
+                  <SegmentedControlItem value="tutte" label={`Tutte (${bozze.length})`} />
+                </SegmentedControl>
+                <Button
+                  label="+ CREA POST SINGOLO AL VOLO"
+                  variant="primary"
+                  size="sm"
+                  icon={<Plus size={16} />}
+                  onClick={() => setApertoModaleNuovo(true)}
+                />
+              </HStack>
 
               {clienti.length > 1 ? (
                 <Selector
@@ -723,5 +743,11 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
         </LayoutPanel>
       }
     />
+    <ModaleNuovoPost
+      aperto={apertoModaleNuovo}
+      onChiudi={() => setApertoModaleNuovo(false)}
+      onCreato={() => router.refresh()}
+    />
+    </>
   );
 }

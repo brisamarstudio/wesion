@@ -72,6 +72,7 @@ export interface PostGoogle {
   locationId: string;
   testo: string;
   urlImmagine?: string | null;
+  immagini?: string[] | null;
   /**
    * Il bottone sotto il post. Assente = nessun bottone, che e' quello che
    * facevamo sempre prima del 01/09/2026 senza averlo deciso: `pubblicaPost`
@@ -106,8 +107,16 @@ export async function pubblicaPost(post: PostGoogle): Promise<unknown> {
     topicType: 'STANDARD',
   };
 
-  if (post.urlImmagine && post.urlImmagine.startsWith('http')) {
-    corpo.media = [{ mediaFormat: 'PHOTO', sourceUrl: post.urlImmagine }];
+  const listaImmagini = Array.isArray(post.immagini) && post.immagini.length > 0
+    ? post.immagini
+    : post.urlImmagine
+      ? [post.urlImmagine]
+      : [];
+
+  if (listaImmagini.length > 0) {
+    corpo.media = listaImmagini
+      .filter((url) => url && typeof url === 'string' && url.startsWith('http'))
+      .map((sourceUrl) => ({ mediaFormat: 'PHOTO', sourceUrl }));
   }
   /**
    * Il bottone, se richiesto.
