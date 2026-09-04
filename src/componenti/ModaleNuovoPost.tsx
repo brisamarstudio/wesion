@@ -143,6 +143,16 @@ export function ModaleNuovoPost({
       setErrore('Inserisci il testo del post');
       return;
     }
+    /* Un bottone senza indirizzo non viene mandato a Google: senza questo
+       controllo il post usciva senza pulsante e nessuno lo diceva. Il campo
+       mostra l'indirizzo come suggerimento grigio, quindi sembra pieno
+       anche quando e' vuoto. */
+    if (ctaTipo && VUOLE_URL(ctaTipo) && !ctaUrl.trim()) {
+      setErrore(
+        'Il bottone ha bisogno di un indirizzo: scrivilo, oppure scegli "Nessun bottone".'
+      );
+      return;
+    }
 
     setErrore(null);
     setInInvio(true);
@@ -355,7 +365,8 @@ export function ModaleNuovoPost({
               {ctaTipo && VUOLE_URL(ctaTipo) ? (
                 <TextInput
                   label="Dove porta il pulsante (URL)"
-                  placeholder="https://trattorialafenice.it/prenota"
+                  description="Obbligatorio: senza indirizzo Google non mostra il bottone."
+                  placeholder="Incolla qui l’indirizzo…"
                   value={ctaUrl}
                   onChange={setCtaUrl}
                 />
