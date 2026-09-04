@@ -55,6 +55,9 @@ export function ModaleNuovoPost({
   const [caricandoFoto, setCaricandoFoto] = useState(false);
   const [inInvio, setInInvio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  /* Il messaggio che conferma cosa e' successo: senza, si torna alla lista
+     senza sapere se il post e' partito, ed e' esattamente cio' che frustra. */
+  const [esito, setEsito] = useState<string | null>(null);
 
   // Carica l'elenco dei clienti se non passato nelle props
   useEffect(() => {
@@ -163,14 +166,25 @@ export function ModaleNuovoPost({
         return;
       }
 
-      // Reset form
+      const quandoTesto = quando
+        ? `programmato per il ${new Date(quando).toLocaleDateString('it-IT')}`
+        : 'in uscita al prossimo giro del router, entro pochi minuti';
+
+      setEsito(
+        approvaSubito
+          ? `Post approvato e ${quandoTesto}.`
+          : 'Salvato in bozza: lo trovi in consolle, in attesa di approvazione.'
+      );
+
+      // Reset del modulo: cosi' si puo' scriverne subito un altro
       setTesto('');
       setTitolo('');
       setImmagini([]);
       setCtaTipo('');
       setCtaUrl('');
       setQuando('');
-      onChiudi();
+
+      // La lista dietro si aggiorna, ma la modale resta aperta a mostrare l'esito
       if (onCreato) onCreato();
     } catch (err: any) {
       setErrore(err?.message || 'Errore durante il salvataggio');
@@ -199,6 +213,7 @@ export function ModaleNuovoPost({
           <LayoutContent>
             <VStack gap={4}>
         {errore ? <Banner status="error" title="Attenzione" description={errore} /> : null}
+        {esito ? <Banner status="success" title="Fatto" description={esito} /> : null}
 
         {/* Selezione Cliente */}
         {clienti.length > 0 && (
@@ -336,21 +351,34 @@ export function ModaleNuovoPost({
         footer={
           <LayoutFooter>
             <HStack gap={2} justify="end" wrap="wrap">
-              <Button label="Annulla" variant="ghost" onClick={onChiudi} isDisabled={inInvio} />
-              <Button
-                label="Salva in Bozza"
-                variant="secondary"
-                isLoading={inInvio}
-                isDisabled={inInvio || !testo.trim()}
-                clickAction={() => salvaPost(false)}
-              />
-              <Button
-                label="Approva & Pubblica Subito"
-                variant="primary"
-                isLoading={inInvio}
-                isDisabled={inInvio || !testo.trim()}
-                clickAction={() => salvaPost(true)}
-              />
+              {esito ? (
+                <>
+                  <Button
+                    label="Scrivine un altro"
+                    variant="secondary"
+                    onClick={() => setEsito(null)}
+                  />
+                  <Button label="Chiudi" variant="primary" onClick={onChiudi} />
+                </>
+              ) : (
+                <>
+                  <Button label="Annulla" variant="ghost" onClick={onChiudi} isDisabled={inInvio} />
+                  <Button
+                    label="Salva in Bozza"
+                    variant="secondary"
+                    isLoading={inInvio}
+                    isDisabled={inInvio || !testo.trim()}
+                    clickAction={() => salvaPost(false)}
+                  />
+                  <Button
+                    label="Approva & Pubblica Subito"
+                    variant="primary"
+                    isLoading={inInvio}
+                    isDisabled={inInvio || !testo.trim()}
+                    clickAction={() => salvaPost(true)}
+                  />
+                </>
+              )}
             </HStack>
           </LayoutFooter>
         }
