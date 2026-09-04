@@ -20,7 +20,7 @@ import { Banner } from '@astryxdesign/core/Banner';
 import { Selector } from '@astryxdesign/core/Selector';
 import { FileInput } from '@astryxdesign/core/FileInput';
 import { Thumbnail } from '@astryxdesign/core/Thumbnail';
-import { DateInput } from '@astryxdesign/core/DateInput';
+import { DateTimeInput, type ISODateTimeString } from '@astryxdesign/core/DateTimeInput';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { Plus, X } from 'lucide-react';
 
@@ -181,8 +181,14 @@ export function ModaleNuovoPost({
       }
 
       const quandoTesto = quando
-        ? `programmato per il ${new Date(quando).toLocaleDateString('it-IT')}`
-        : 'in uscita al prossimo giro del router, entro pochi minuti';
+        ? `programmato per ${new Date(quando).toLocaleString('it-IT', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}`
+        : 'in uscita entro mezzo minuto, al prossimo giro del router';
 
       setEsito(
         approvaSubito
@@ -376,11 +382,16 @@ export function ModaleNuovoPost({
         ) : null}
 
         {/* Data e Ora Uscita */}
-        <DateInput
+        {/* Giorno E ora: il campo pubblica_at a database e' un timestamp, l'ora
+            la regge da sempre. Con la sola data un post del menu' del venerdi'
+            usciva alle 10:00 fisse, che per una cena non e' l'orario giusto. */}
+        <DateTimeInput
           label="Quando deve uscire"
-          description="Lascia vuoto per far uscire il post subito al prossimo giro del router."
-          value={(quando || undefined) as DataISO | undefined}
-          min={new Date().toISOString().slice(0, 10) as DataISO}
+          description="Lascia vuoto per farlo uscire subito, al prossimo giro del router (30 secondi)."
+          value={(quando || undefined) as ISODateTimeString | undefined}
+          min={new Date().toISOString() as ISODateTimeString}
+          hourFormat="24h"
+          timeIncrement={15}
           onChange={(v) => setQuando(v ?? '')}
         />
             </VStack>
