@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
 import { VStack } from '@astryxdesign/core/VStack';
 import { HStack } from '@astryxdesign/core/HStack';
 import { Text } from '@astryxdesign/core/Text';
@@ -165,13 +166,24 @@ export function ModaleNuovoPost({
   }
 
   return (
-    <Dialog isOpen onOpenChange={(o) => (o ? null : onChiudi())} purpose="form" width={640}>
-      <DialogHeader
-        title="Nuovo Post al Volo"
-        subtitle="Crea e pubblica subito o programma senza vincoli"
-        onOpenChange={(o) => (o ? null : onChiudi())}
-      />
-      <VStack gap={4} padding={4}>
+    <Dialog
+      isOpen
+      onOpenChange={(o) => (o ? null : onChiudi())}
+      purpose="form"
+      width={640}
+      maxHeight="85vh"
+    >
+      <Layout
+        header={
+          <DialogHeader
+            title="Nuovo Post al Volo"
+            subtitle="Crea e pubblica subito o programma senza vincoli"
+            onOpenChange={(o) => (o ? null : onChiudi())}
+          />
+        }
+        content={
+          <LayoutContent>
+            <VStack gap={4}>
         {errore ? <Banner status="error" title="Attenzione" description={errore} /> : null}
 
         {/* Selezione Cliente */}
@@ -304,26 +316,31 @@ export function ModaleNuovoPost({
           min={new Date().toISOString().slice(0, 10) as DataISO}
           onChange={(v) => setQuando(v ?? '')}
         />
-
-        {/* Bottoni d'Azione */}
-        <HStack gap={2} justify="end" wrap="wrap">
-          <Button label="Annulla" variant="ghost" onClick={onChiudi} isDisabled={inInvio} />
-          <Button
-            label="Salva in Bozza"
-            variant="secondary"
-            isLoading={inInvio}
-            isDisabled={inInvio || !testo.trim()}
-            clickAction={() => salvaPost(false)}
-          />
-          <Button
-            label="Approva & Pubblica Subito"
-            variant="primary"
-            isLoading={inInvio}
-            isDisabled={inInvio || !testo.trim()}
-            clickAction={() => salvaPost(true)}
-          />
-        </HStack>
-      </VStack>
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter>
+            <HStack gap={2} justify="end" wrap="wrap">
+              <Button label="Annulla" variant="ghost" onClick={onChiudi} isDisabled={inInvio} />
+              <Button
+                label="Salva in Bozza"
+                variant="secondary"
+                isLoading={inInvio}
+                isDisabled={inInvio || !testo.trim()}
+                clickAction={() => salvaPost(false)}
+              />
+              <Button
+                label="Approva & Pubblica Subito"
+                variant="primary"
+                isLoading={inInvio}
+                isDisabled={inInvio || !testo.trim()}
+                clickAction={() => salvaPost(true)}
+              />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }
