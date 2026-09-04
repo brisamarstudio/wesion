@@ -86,7 +86,11 @@ export function ModaleNuovoPost({
             return;
           }
 
-          if (!aziendaId) {
+          /* Nessuna preselezione: con piu' clienti in lista, sceglierne uno
+             al posto dell'operatore significa pubblicare sulla scheda Google
+             sbagliata al primo momento di distrazione. Se il cliente e' uno
+             solo non c'e' ambiguita' e lo si imposta. */
+          if (!aziendaId && attivi.length === 1) {
             setAziendaId(String(attivi[0].id));
           }
         })
@@ -95,7 +99,7 @@ export function ModaleNuovoPost({
         .catch((e: unknown) =>
           setErrore(e instanceof Error ? e.message : 'non riesco a caricare i clienti')
         );
-    } else if (!aziendaId && clientiProp.length > 0) {
+    } else if (!aziendaId && clientiProp.length === 1) {
       setAziendaId(String(clientiProp[0].id));
     }
   }, [aperto, aziendaIdPreselezionata, clientiProp, aziendaId]);
@@ -219,10 +223,18 @@ export function ModaleNuovoPost({
         {clienti.length > 0 && (
           <Selector
             label="Cliente"
+            description={
+              aziendaId
+                ? undefined
+                : 'Su quale scheda Google finisce il post: sceglilo prima di scrivere.'
+            }
             value={aziendaId}
             onChange={(v) => setAziendaId(String(v))}
             hasSearch={clienti.length > 5}
-            options={clienti.map((c) => ({ value: String(c.id), label: c.nome }))}
+            options={[
+              { value: '', label: '— scegli il cliente —' },
+              ...clienti.map((c) => ({ value: String(c.id), label: c.nome })),
+            ]}
           />
         )}
 
