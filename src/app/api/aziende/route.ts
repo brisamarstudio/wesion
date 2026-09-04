@@ -11,6 +11,35 @@
  */
 import { NextResponse } from 'next/server';
 import { creaAzienda, type DatiAzienda } from '@/lib/anagrafica';
+import { query } from '@/lib/db';
+
+/**
+ * L'elenco delle aziende, per chi deve sceglierne una da un menu a tendina.
+ *
+ * Serviva gia' a ModaleNuovoPost, che la chiedeva a questa rotta: ma qui
+ * c'era solo la POST, quindi la fetch falliva in silenzio e il selettore del
+ * cliente spariva, lasciando la modale in un vicolo cieco.
+ */
+export async function GET(richiesta: Request) {
+  const stato = new URL(richiesta.url).searchParams.get('stato');
+
+  try {
+    const righe = await query<{ id: number; nome: string; stato: string; citta: string | null }>(
+      `SELECT id, nome, stato, citta
+         FROM wesion.azienda
+        ${stato ? 'WHERE stato = $1' : ''}
+        ORDER BY nome`,
+      stato ? [stato] : []
+    );
+
+    return NextResponse.json(righe);
+  } catch (errore: unknown) {
+    return NextResponse.json(
+      { errore: errore instanceof Error ? errore.message : 'elenco aziende non disponibile' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(richiesta: Request) {
   let corpo: DatiAzienda;

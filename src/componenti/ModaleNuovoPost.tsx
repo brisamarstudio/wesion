@@ -64,20 +64,34 @@ export function ModaleNuovoPost({
     }
     if (!clientiProp || clientiProp.length === 0) {
       fetch('/api/aziende')
-        .then((r) => r.json())
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`elenco clienti non disponibile (HTTP ${r.status})`);
+          return r.json();
+        })
         .then((dati) => {
-          if (Array.isArray(dati)) {
-            const attivi = dati
-              .filter((a: any) => a.stato === 'cliente' || a.id === aziendaIdPreselezionata)
-              .map((a: any) => ({ id: a.id, nome: a.nome }))
-              .sort((a: any, b: any) => a.nome.localeCompare(b.nome));
-            setClienti(attivi);
-            if (!aziendaId && attivi.length > 0) {
-              setAziendaId(String(attivi[0].id));
-            }
+          if (!Array.isArray(dati)) throw new Error('elenco clienti in un formato inatteso');
+
+          const attivi = dati
+            .filter((a: any) => a.stato === 'cliente' || a.id === aziendaIdPreselezionata)
+            .map((a: any) => ({ id: a.id, nome: a.nome }))
+            .sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+
+          setClienti(attivi);
+
+          if (attivi.length === 0) {
+            setErrore('Nessun cliente disponibile: aggiungine uno prima di creare un post.');
+            return;
+          }
+
+          if (!aziendaId) {
+            setAziendaId(String(attivi[0].id));
           }
         })
-        .catch(() => undefined);
+        /* Prima qui c'era un catch vuoto: la lista restava vuota, il selettore
+           spariva e la modale diventava un vicolo cieco senza dire perche'. */
+        .catch((e: unknown) =>
+          setErrore(e instanceof Error ? e.message : 'non riesco a caricare i clienti')
+        );
     } else if (!aziendaId && clientiProp.length > 0) {
       setAziendaId(String(clientiProp[0].id));
     }
