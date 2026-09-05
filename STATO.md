@@ -188,7 +188,38 @@ Il test end-to-end di §0.3 ha lasciato aperte queste. In ordine di quanto mordo
 *oggi*, non di gravità teorica. I primi due riguardano solo Google, che per La Fenice
 è spenta apposta: **sono la condizione per riaccenderla**.
 
-1b. ⚠️ **I due che bloccano la riaccensione di `post_gbp`.**
+> **Stato la sera del 05/09/2026: 1b, 3b, 4b e 5b sono chiusi** (commit `e576444` e
+> quello successivo). Restano **2b** — un numero titolare su due aziende, che per ora
+> è una regola operativa e non un vincolo — e le **sezioni del menù (6b)**, che è la
+> cosa da fare prima di dire a Deborah di mandare al bot. Il testo dei chiusi resta
+> qui sotto: serve a non ricascarci, e a spiegare perché il codice è fatto così.
+
+1b. ~~⚠️ **I due che bloccano la riaccensione di `post_gbp`.**~~ — **fatti il
+   05/09/2026, sera.** `post_gbp` di La Fenice si può riaccendere: manca solo
+   farlo con un menù di oggi e il cliente avvisato. Cosa è cambiato:
+
+   - **La presa.** `pubblicaBozza` adesso reclama la bozza prima di parlare con
+     chiunque: `UPDATE ... SET stato='pubblicando' WHERE id=$1 AND stato='approvata'
+     RETURNING id`. La riga la ottiene una strada sola, l'altra se ne va — e chi
+     se ne va, se è il «SI» del titolare, aspetta l'altra (`attendiEsito`) e
+     racconta il *suo* esito invece di inventarne uno. Il lucchetto sta nel
+     database e non in memoria apposta: un processo che muore col lucchetto in
+     mano lo lascia scritto. Per quello c'è `presa_at` — dopo cinque minuti la
+     presa si può rubare, e il giro le prese abbandonate le ripesca.
+   - **Il ritentativo per destinazione.** `pubblicata` adesso vuol dire
+     *arrivata dappertutto*: finché ne manca una la bozza torna `approvata`, che
+     è il modo che ha il giro di sapere che c'è ancora lavoro. Quello che era già
+     riuscito non si rifà (`destinazioniRiuscite`), quindi riprovare il sito non
+     può ripubblicare su Google. Il tetto dei tre tentativi vale per
+     destinazione, non per bozza intera.
+   - Costo di questa scelta, scritto perché non sorprenda: `'pubblicando'` è uno
+     stato nuovo. Sta nel `CHECK` di `bozza`, nelle tre mappe di etichette della
+     dashboard, e nella spia `bozze-approvate-ferme` — che ora guarda anche le
+     prese, o tacerebbe proprio nel caso in cui il router è morto davvero.
+     **Va applicato lo schema (`npm run db:schema`) prima di far girare il router
+     nuovo**: senza la colonna `presa_at` non parte niente.
+
+   *Com'erano, per memoria:*
 
    - **Doppio post su Google.** `pubblicaBozza` (`router/pubblica.ts:105-207`) non
      controlla lo stato della bozza e non c'è nessun lucchetto fra le due strade che la
@@ -218,23 +249,44 @@ Il test end-to-end di §0.3 ha lasciato aperte queste. In ordine di quanto mordo
    registra lo stesso numero su due clienti per provare. **Regola operativa intanto: un
    numero, un cliente.**
 
-3b. **I messaggi di gruppo passano come comandi privati.** `candidati()`
+3b. ~~**I messaggi di gruppo passano come comandi privati.**~~ — **fatto il
+   05/09/2026** (`e576444`): si scarta ogni evento con `from` che finisce in
+   `@g.us`, prima di cercare il mittente, in silenzio e senza rispondere — una
+   risposta del bot dentro un gruppo la leggerebbero tutti. Il controllo è
+   ripetuto dentro `riconosci()`, perché il buco non si riapra il giorno che ci
+   si arriva da un'altra strada. Com'era: `candidati()`
    (`riconosci.ts:44-58`) legge anche `author` e `participant` — che nei gruppi dicono
    *chi ha scritto dentro il gruppo* — e non c'è nessun controllo su `@g.us`. Se il numero
    bot finisse in un gruppo col titolare, un «SI» scritto lì pubblicherebbe davvero.
    **Decisione presa il 05/09: un numero = un bot, i gruppi non si usano mai.** Quindi si
    scarta ogni evento con `from` che finisce in `@g.us`, prima di cercare il mittente.
 
-4b. **`normalizzaTelefono` è ambiguo sui locali che iniziano per «39».**
-   `src/lib/normalizza.ts:24-32` decide se anteporre il prefisso guardando se la stringa
+4b. ~~**`normalizzaTelefono` è ambiguo sui locali che iniziano per «39».**~~ —
+   **fatto il 05/09/2026** (`e576444`): il prefisso si decide dalla **lunghezza**,
+   che non è ambigua (un cellulare nazionale ha 9-10 cifre, col 39 davanti ne ha
+   11-12; e un numero che inizia per 0 è sempre nazionale). Resta aperto il
+   contorno: il modulo della dashboard **continua a non mostrare il normalizzato
+   calcolato**, quindi un numero scritto male non si vede ancora compilando.
+   Com'era: `src/lib/normalizza.ts:24-32` decideva se anteporre il prefisso guardando se la stringa
    comincia già per `39`: un cellulare il cui numero *nazionale* inizia per 39, scritto
    senza `+`, non viene mai completato — e da WhatsApp arriva invece sempre col prefisso.
    Le due forme non coincidono mai e il titolare **non viene mai riconosciuto, in
    silenzio**. Il modulo della dashboard non mostra il normalizzato calcolato (la CLI sì:
    `db/configura-cliente.ts:161`), quindi non c'è modo di accorgersene compilando.
 
-5b. **Le Spie non controllano `WAHA_API_KEY` né il refresh token di Google.**
-   `src/lib/spie.ts` verifica solo `OPENROUTER_API_KEY` (righe 564-600). Se la chiave WAHA
+5b. ~~**Le Spie non controllano `WAHA_API_KEY` né il refresh token di Google.**~~ —
+   **fatto il 05/09/2026** (`e576444`). Con una scoperta che vale più della
+   correzione: **quel controllo nelle Spie non poteva starci.** Le Spie girano
+   sulla dashboard, su Contabo, dove `WAHA_*` non esiste apposta e dove WAHA —
+   che ascolta sul `127.0.0.1` di Oracle — non è raggiungibile: si sarebbe accesa
+   per sempre a vuoto, e una spia che grida sempre è una spia che si impara a
+   ignorare. Quindi il controllo lo fa **chi ha la chiave e la rete per usarla**,
+   il router (`router/impianto.ts`, ogni 5 minuti), e il risultato passa dal
+   database, che è già l'unico ponte fra le due metà. Il `vista_at` fa da
+   **battito**: se smette di arrivare, la dashboard lo dice invece di mostrare
+   «tutto bene» — un router fermo non scrive «sono rotto», non scrive niente.
+   Il token di Google invece la dashboard può provarlo da sé, e quello è una
+   spia normale. Com'era: `src/lib/spie.ts` verificava solo `OPENROUTER_API_KEY`. Se la chiave WAHA
    venisse ruotata di nuovo — è già successo il 29/07 — **si ripeterebbe identico il
    guasto a tre sintomi di §0.3, e lo scoprirebbe il cliente**. È la lezione dell'incidente
    Brace Mia, sullo stesso identico punto. Da fare per primo: è poco codice e chiude un

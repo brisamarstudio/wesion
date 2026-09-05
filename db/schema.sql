@@ -152,9 +152,13 @@ CREATE TABLE IF NOT EXISTS wesion.bozza (
   -- e' sbagliato lo vedi in dieci secondi da una griglia, non da trenta testi.
   fatto_id      BIGINT REFERENCES wesion.fatto(id) ON DELETE SET NULL,
   contenuto     JSONB NOT NULL DEFAULT '{}',
+  -- 'pubblicando' e' la PRESA: la scrive chi sta pubblicando in quel momento,
+  -- e serve solo a impedire che due strade pubblichino la stessa bozza insieme
+  -- (vedi il blocco del 05/09/2026 in fondo a questo file).
   stato         TEXT NOT NULL DEFAULT 'vuota'
                 CHECK (stato IN ('vuota','generata','attesa_approvazione',
-                                 'approvata','pubblicata','rifiutata','scaduta')),
+                                 'approvata','pubblicando','pubblicata',
+                                 'rifiutata','scaduta')),
   -- Il controllo rilegge il testo generato e accende avvisi. NON blocca, apposta:
   -- un falso positivo che blocca il lavoro viene disattivato entro una settimana.
   avvisi        JSONB NOT NULL DEFAULT '[]',
@@ -390,3 +394,35 @@ ALTER TABLE wesion.sito
   ADD COLUMN IF NOT EXISTS ultimo_audit_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS ultima_pr_url   TEXT,
   ADD COLUMN IF NOT EXISTS ultimo_errore   TEXT;
+
+-- ============ AGGIUNTA DEL 05/09/2026 — la presa sulla bozza ============
+--
+-- ⚠️ SU GOOGLE UN POST DOPPIO NON SI TOGLIE DA SOLO, e finora niente lo
+-- impediva. `pubblicaBozza` non guardava lo stato, e le strade che la chiamano
+-- sono due: il «SI» del titolare e il giro dei 30 secondi. La riga in
+-- `pubblicazione` — l'unica cosa che teneva il giro alla larga — si scrive DOPO
+-- che Google ha risposto: se Google e' lenta e nel frattempo scatta il tick, il
+-- post esce due volte. Google non deduplica, e sul sito il problema non si vede
+-- perche' li' l'azione e' `replace` (riscrivere e' innocuo).
+--
+-- Quindi si reclama la bozza prima di toccare qualcuno:
+--   UPDATE ... SET stato='pubblicando' WHERE id=$1 AND stato='approvata'
+-- Chi non ottiene la riga non pubblica. E' un lucchetto che sopravvive alla
+-- morte del processo, che e' esattamente il caso che un lucchetto in memoria
+-- non copre.
+--
+-- `presa_at` e' l'antidoto al lucchetto eterno: se il processo muore fra la
+-- presa e la fine, la bozza resterebbe 'pubblicando' per sempre e non la
+-- riprenderebbe piu' nessuno. Passati pochi minuti si puo' riclamare.
+ALTER TABLE wesion.bozza
+  ADD COLUMN IF NOT EXISTS presa_at TIMESTAMPTZ;
+
+ALTER TABLE wesion.bozza DROP CONSTRAINT IF EXISTS bozza_stato_check;
+ALTER TABLE wesion.bozza ADD CONSTRAINT bozza_stato_check
+  CHECK (stato IN ('vuota','generata','attesa_approvazione','approvata',
+                   'pubblicando','pubblicata','rifiutata','scaduta'));
+
+-- Il giro cerca anche le prese scadute, non solo le approvate: senza indice
+-- sarebbe l'unica scansione della tabella in tutto il giro.
+CREATE INDEX IF NOT EXISTS idx_bozza_prese ON wesion.bozza (presa_at)
+  WHERE stato = 'pubblicando';

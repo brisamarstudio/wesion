@@ -66,6 +66,7 @@ const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 
   generata: 'accent',
   attesa_approvazione: 'warning',
   approvata: 'accent',
+  pubblicando: 'accent',
   pubblicata: 'success',
   rifiutata: 'neutral',
   scaduta: 'error',

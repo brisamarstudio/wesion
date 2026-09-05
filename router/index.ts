@@ -26,7 +26,7 @@ import { ripristinaMenu, type ConfigSito } from '../src/lib/sito.ts';
 import { riconosci, candidati, eGruppo, type Mittente } from './riconosci.ts';
 import { controllaImpianto } from './impianto.ts';
 import { cercaLead, gestisciLead } from './lead.ts';
-import { pubblicaBozza, giroPubblicazioni, giroVerifiche } from './pubblica.ts';
+import { pubblicaBozza, attendiEsito, giroPubblicazioni, giroVerifiche } from './pubblica.ts';
 
 const PORTA = Number(process.env.ROUTER_PORT || process.env.PORT || 3010);
 const HOST = process.env.ROUTER_HOST || process.env.HOST || '172.17.0.1';
@@ -169,7 +169,22 @@ async function conferma(a: Mittente): Promise<string> {
     [bozza.id, a.telefono]
   );
 
-  const esito = await pubblicaBozza(bozza.id);
+  let esito = await pubblicaBozza(bozza.id);
+
+  /**
+   * La bozza era gia' presa: l'ha presa il giro dei 30 secondi nello stesso
+   * istante. Non si ripubblica — si aspetta lui e si racconta il suo esito, che
+   * e' l'unico vero. Se non fa in tempo, si dice quello che sta succedendo:
+   * mai «non sono riuscito a pubblicare» per una cosa che sta uscendo.
+   */
+  if (esito.saltata) {
+    const finale = await attendiEsito(bozza.id);
+    if (!finale) {
+      await rispondi(a, 'Ricevuto: il menù sta uscendo proprio adesso. Se qualcosa non va te lo dico qui.');
+      return 'in_corso';
+    }
+    esito = finale;
+  }
 
   const righe = esito.destinazioni.map((d) => {
     // "scheda Google", mai "Google Maps": i ristoratori capiscono che il menù

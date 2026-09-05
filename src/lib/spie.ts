@@ -150,7 +150,12 @@ async function bozzeApprovateFerme(): Promise<Spia | null> {
             EXTRACT(EPOCH FROM (now() - b.approvata_at))::int / 60 AS minuti
        FROM wesion.bozza b
        JOIN wesion.azienda a ON a.id = b.azienda_id
-      WHERE b.stato = 'approvata'
+      -- ⚠️ ANCHE 'pubblicando' (05/09/2026): e' la presa che il router mette
+      -- prima di pubblicare, e dura secondi. Se il router muore mentre ce
+      -- l'ha in mano, quella bozza resta li' — e guardando solo 'approvata'
+      -- questa spia non la vedrebbe, cioe' tacerebbe proprio sul caso in cui
+      -- il router e' morto davvero.
+      WHERE b.stato IN ('approvata', 'pubblicando')
         AND b.approvata_at < now() - INTERVAL '10 minutes'
         AND NOT EXISTS (SELECT 1 FROM wesion.pubblicazione p WHERE p.bozza_id = b.id)
         -- ⚠️ ANCHE pubblica_at, COME FA IL ROUTER (01/09/2026). Senza questa

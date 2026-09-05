@@ -155,6 +155,10 @@ export const ETICHETTA_STATO: Record<string, string> = {
   generata: 'Generata',
   attesa_approvazione: 'Da approvare',
   approvata: 'Approvata',
+  // Dura secondi: e' la bozza che il router ha in mano proprio adesso. Si
+  // chiama cosi' e non "approvata" perche' chi la vede ferma da un quarto d'ora
+  // deve capire che qualcosa non e' tornato indietro.
+  pubblicando: 'In pubblicazione',
   pubblicata: 'Pubblicata',
   rifiutata: 'Rifiutata',
   scaduta: 'Scaduta',

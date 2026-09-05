@@ -35,11 +35,26 @@ import { pubblicaArticolo, pubblicaMenu, type ConfigSito } from '../src/lib/sito
  */
 const MAX_TENTATIVI = 3;
 
+/**
+ * Dopo quanti minuti una presa si considera abbandonata.
+ *
+ * Una pubblicazione vera dura secondi: parla con il sito e con Google, tutti e
+ * due con un timeout. Se una bozza e' 'pubblicando' da cinque minuti, non e'
+ * lenta — e' morto il processo che l'aveva presa, e va ripresa da qualcun altro.
+ */
+const MINUTI_PRESA = 5;
+
 export interface EsitoPubblicazione {
   bozzaId: number;
   destinazioni: Array<{ destinazione: string; esito: 'ok' | 'errore'; errore?: string }>;
   /** Vero se almeno una destinazione ha accettato: il contenuto è uscito. */
   uscito: boolean;
+  /**
+   * Vero se non abbiamo pubblicato NOI: la bozza era gia' presa da un'altra
+   * strada (o gia' pubblicata). Non e' un errore, e soprattutto non e' un
+   * fallimento: dirlo al titolare come «non sono riuscito» sarebbe una bugia.
+   */
+  saltata?: boolean;
 }
 
 interface RigaBozza {
@@ -94,6 +109,51 @@ async function segna(
 }
 
 /**
+ * ⚠️ LA PRESA. Nessuno pubblica una bozza senza averla prima reclamata.
+ *
+ * Le strade che pubblicano sono due — il «SI» del titolare (`conferma()`) e il
+ * giro dei 30 secondi — e non si conoscono fra loro. Fino al 05/09/2026
+ * l'unica cosa che le teneva separate era la riga in `pubblicazione`, che pero'
+ * si scrive DOPO che Google ha risposto: nella finestra in mezzo il giro
+ * ripescava la stessa bozza e il post usciva due volte. Su Google un doppione
+ * si toglie a mano dalla scheda.
+ *
+ * `UPDATE ... WHERE stato='approvata' RETURNING id` e' atomico: la riga la
+ * ottiene uno solo, e l'altro se ne va. Il lucchetto sta nel database e non in
+ * memoria apposta — le due strade potrebbero anche essere due processi, e un
+ * processo che muore col lucchetto in mano lo lascia scritto, non lo dissolve.
+ * Per quello c'e' `presa_at`: passati `MINUTI_PRESA` la presa si puo' rubare.
+ */
+async function reclama(bozzaId: number): Promise<boolean> {
+  const righe = await query<{ id: number }>(
+    `UPDATE wesion.bozza
+        SET stato = 'pubblicando', presa_at = now()
+      WHERE id = $1
+        AND (stato = 'approvata'
+             OR (stato = 'pubblicando' AND presa_at < now() - (INTERVAL '1 minute' * $2)))
+      RETURNING id`,
+    [bozzaId, MINUTI_PRESA]
+  );
+  return righe.length > 0;
+}
+
+/**
+ * Le destinazioni che per questa bozza sono GIA' riuscite.
+ *
+ * Serve al ritentativo: se Google e' andata e il sito no, riprovare vuol dire
+ * riprovare il sito — non ripubblicare su Google, che vorrebbe dire il doppione
+ * di cui sopra per un'altra strada.
+ */
+async function destinazioniRiuscite(bozzaId: number): Promise<Set<string>> {
+  const righe = await query<{ destinazione: string }>(
+    `SELECT DISTINCT destinazione FROM wesion.pubblicazione
+      WHERE bozza_id = $1 AND esito = 'ok'`,
+    [bozzaId]
+  );
+  return new Set(righe.map((r) => r.destinazione));
+}
+
+/**
  * Pubblica una bozza su tutte le destinazioni che il cliente ha attive.
  *
  * Ogni destinazione fallisce da sola e viene registrata da sola: il menù va sul
@@ -106,8 +166,29 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
   const bozza = await leggiBozza(bozzaId);
   if (!bozza) throw new Error(`bozza ${bozzaId} inesistente`);
 
+  // Prima di ogni altra cosa, e prima di qualunque chiamata verso il mondo.
+  if (!(await reclama(bozzaId))) {
+    console.log(`[router] bozza ${bozzaId} gia' presa da un'altra strada: non la pubblico`);
+    return { bozzaId, destinazioni: [], uscito: false, saltata: true };
+  }
+
   const servizio = (tipo: string) => bozza.servizi.find((s) => s.tipo === tipo)?.config ?? null;
   const destinazioni: EsitoPubblicazione['destinazioni'] = [];
+
+  /**
+   * Quello che era gia' riuscito non si rifa'.
+   *
+   * `gia()` mette la destinazione fra gli esiti come riuscita — perche' lo e',
+   * il contenuto sta li' — e dice al chiamante di saltarla. Cosi' il conto
+   * finale («manca ancora qualcosa?») guarda tutte le destinazioni del cliente,
+   * non solo quelle toccate in questo giro.
+   */
+  const fatte = await destinazioniRiuscite(bozzaId);
+  const gia = (destinazione: string): boolean => {
+    if (!fatte.has(destinazione)) return false;
+    destinazioni.push({ destinazione, esito: 'ok' });
+    return true;
+  };
 
   /**
    * Lo snapshot PRIMA di toccare qualcosa.
@@ -117,17 +198,22 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
    * Il ripristino vero lo fa il sito, che sa cosa mostrava; questo serve a
    * rispondere in dashboard alla domanda "cosa gli abbiamo mandato quel giorno".
    */
-  await query(
-    `INSERT INTO wesion.snapshot (azienda_id, tipo, contenuto, motivo)
-     VALUES ($1, $2, $3, $4)`,
-    [bozza.azienda_id, bozza.tipo, JSON.stringify(bozza.contenuto), `pubblicazione bozza ${bozzaId}`]
-  );
+  //
+  // Solo al primo tentativo: un ritentativo manda lo stesso contenuto, e una
+  // seconda copia identica non aggiunge niente a "cosa gli abbiamo mandato".
+  if (fatte.size === 0) {
+    await query(
+      `INSERT INTO wesion.snapshot (azienda_id, tipo, contenuto, motivo)
+       VALUES ($1, $2, $3, $4)`,
+      [bozza.azienda_id, bozza.tipo, JSON.stringify(bozza.contenuto), `pubblicazione bozza ${bozzaId}`]
+    );
+  }
 
   const testo = String(bozza.contenuto.summary ?? bozza.contenuto.testo ?? '');
   const foto = (bozza.contenuto.foto ?? null) as string | null;
 
   // ── Il sito, per i menù ────────────────────────────────────────────────────
-  if (bozza.tipo === 'menu') {
+  if (bozza.tipo === 'menu' && !gia('sito')) {
     const config = servizio('menu_del_giorno') as ConfigSito | null;
     if (config?.site_menu_url) {
       try {
@@ -147,7 +233,7 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
   }
 
   // ── La scheda Google ───────────────────────────────────────────────────────
-  if (bozza.tipo === 'menu' || bozza.tipo === 'post_gbp') {
+  if ((bozza.tipo === 'menu' || bozza.tipo === 'post_gbp') && !gia('gbp')) {
     const gbp = servizio('post_gbp') as
       | { gbp_account_id?: string; gbp_location_id?: string; cta_tipo?: string; cta_url?: string }
       | null;
@@ -222,7 +308,7 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
    * altre, e parte da qui solo dopo che qualcuno l'ha approvata. La destinazione
    * 'whatsapp' era gia' prevista nello schema: era la strada segnata.
    */
-  if (bozza.tipo === 'messaggio_lead') {
+  if (bozza.tipo === 'messaggio_lead' && !gia('whatsapp')) {
     const destinatario = String(bozza.contenuto.destinatario ?? '');
     if (!destinatario) {
       const motivo = 'la bozza non dice a che numero mandare il messaggio';
@@ -259,7 +345,7 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
    * bottone. Non e' un vezzo di simmetria — e' il motivo per cui una modifica
    * al percorso di pubblicazione la si prova per primi su di noi.
    */
-  if (bozza.tipo === 'articolo') {
+  if (bozza.tipo === 'articolo' && !gia('blog')) {
     const config = servizio('blog') as ConfigSito | null;
     /**
      * Due modi di essere configurato, uno per mondo: un sito nostro ha
@@ -306,18 +392,27 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
   }
 
   const uscito = destinazioni.some((d) => d.esito === 'ok');
+  const tutte = destinazioni.every((d) => d.esito === 'ok');
 
   /**
-   * Lo stato cambia solo se qualcosa e' davvero uscito.
+   * ⚠️ `pubblicata` VUOL DIRE "ARRIVATA DAPPERTUTTO", non "arrivata da qualche
+   * parte" (corretto il 05/09/2026).
    *
-   * Se non e' uscito niente la bozza resta `approvata`, cosi' il giro la
-   * riprende. Non e' un cavillo: scrivere `pubblicata` su una cosa che non e'
-   * mai arrivata da nessuna parte e' la bugia esatta che le spie esistono per
-   * impedire.
+   * Prima bastava UNA destinazione riuscita perche' la bozza diventasse
+   * `pubblicata`, e il giro escludeva chi aveva un `ok` qualsiasi. Quindi
+   * Google riuscita + sito fallito voleva dire il sito col menu' di ieri per
+   * sempre, e nessuno che riprovasse: il titolare leggeva «PUBBLICAZIONE
+   * PARZIALE» e li' finiva.
+   *
+   * Adesso finche' manca una destinazione la bozza torna `approvata`, che e' il
+   * modo che ha il giro di sapere che c'e' ancora lavoro. Quello che era gia'
+   * riuscito non si rifa' (vedi `gia()`), quindi riprovare non puo' generare
+   * doppioni. Quando anche l'ultima ce la fa, allora `pubblicata`.
    */
-  if (uscito) {
-    await query(`UPDATE wesion.bozza SET stato = 'pubblicata' WHERE id = $1`, [bozzaId]);
-  }
+  await query(`UPDATE wesion.bozza SET stato = $2, presa_at = NULL WHERE id = $1`, [
+    bozzaId,
+    tutte ? 'pubblicata' : 'approvata',
+  ]);
 
   await query(
     `INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio)
@@ -333,6 +428,44 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
 }
 
 /**
+ * Aspetta che finisca chi ha la presa, e dice com'e' andata.
+ *
+ * Serve a un caso solo, raro ma non impossibile: il titolare scrive «SI» e
+ * nello stesso istante il giro dei 30 secondi prende quella bozza. La presa la
+ * ottiene uno dei due, e l'altro — che pero' e' quello che deve RISPONDERE al
+ * titolare — resterebbe senza niente da dirgli.
+ *
+ * Non si ripubblica: si guarda cos'e' successo davvero, leggendo l'ultima riga
+ * per ogni destinazione. Se dopo l'attesa non ha ancora finito si torna `null`,
+ * e chi chiama dira' la verita' («sta uscendo adesso») invece di inventarsi un
+ * esito.
+ */
+export async function attendiEsito(bozzaId: number, secondi = 15): Promise<EsitoPubblicazione | null> {
+  for (let i = 0; i < secondi; i++) {
+    const [riga] = await query<{ stato: string }>(`SELECT stato FROM wesion.bozza WHERE id = $1`, [bozzaId]);
+    if (riga && riga.stato !== 'pubblicando') {
+      const righe = await query<{ destinazione: string; esito: 'ok' | 'errore'; errore: string | null }>(
+        // L'ULTIMA riga per destinazione: una destinazione fallita e poi
+        // riuscita al ritentativo e' riuscita, e va raccontata cosi'.
+        `SELECT DISTINCT ON (destinazione) destinazione, esito, errore
+           FROM wesion.pubblicazione
+          WHERE bozza_id = $1
+          ORDER BY destinazione, eseguita_at DESC`,
+        [bozzaId]
+      );
+      const destinazioni = righe.map((r) => ({
+        destinazione: r.destinazione,
+        esito: r.esito,
+        ...(r.errore ? { errore: r.errore } : {}),
+      }));
+      return { bozzaId, destinazioni, uscito: destinazioni.some((d) => d.esito === 'ok') };
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return null;
+}
+
+/**
  * Il giro: raccoglie le approvazioni che aspettano e le pubblica.
  *
  * E' l'unico modo che la dashboard ha di farci fare qualcosa. Gira spesso e
@@ -342,12 +475,35 @@ export async function giroPubblicazioni(): Promise<EsitoPubblicazione[]> {
   const daFare = await query<{ id: number }>(
     `SELECT b.id
        FROM wesion.bozza b
-      WHERE b.stato = 'approvata'
-        -- Mai riuscita da nessuna parte...
-        AND NOT EXISTS (SELECT 1 FROM wesion.pubblicazione p
-                         WHERE p.bozza_id = b.id AND p.esito = 'ok')
-        -- ...e non ci abbiamo già provato troppe volte.
-        AND (SELECT count(*) FROM wesion.pubblicazione p WHERE p.bozza_id = b.id) < $1
+      WHERE (
+              b.stato = 'approvata'
+              -- Una presa abbandonata: il processo che l'aveva presa e' morto
+              -- fra la presa e la fine. Senza questa riga quella bozza non la
+              -- ripescherebbe piu' nessuno, per sempre.
+              OR (b.stato = 'pubblicando' AND b.presa_at < now() - (INTERVAL '1 minute' * $2))
+            )
+        -- Mai provata, oppure c'è ancora una destinazione che non ce l'ha fatta
+        -- e a cui restano tentativi.
+        --
+        -- ⚠️ Si guarda DESTINAZIONE PER DESTINAZIONE, non la bozza intera
+        -- (05/09/2026). Guardando la bozza, un menù finito su Google ma non sul
+        -- sito risultava "già riuscito" e non veniva più ritentato: il sito
+        -- restava col menù di ieri e nessuno lo sapeva.
+        AND (
+              NOT EXISTS (SELECT 1 FROM wesion.pubblicazione p WHERE p.bozza_id = b.id)
+              OR EXISTS (
+                   SELECT 1
+                     FROM wesion.pubblicazione p
+                    WHERE p.bozza_id = b.id
+                      AND p.esito = 'errore'
+                      AND NOT EXISTS (SELECT 1 FROM wesion.pubblicazione q
+                                       WHERE q.bozza_id = b.id
+                                         AND q.destinazione = p.destinazione
+                                         AND q.esito = 'ok')
+                    GROUP BY p.destinazione
+                   HAVING count(*) < $1
+                 )
+            )
         -- Una bozza scaduta non si pubblica in ritardo: si lascia dov'è.
         AND (b.scade_at IS NULL OR b.scade_at > now())
         -- ...e una programmata non si pubblica in anticipo. Sono due vincoli
@@ -356,7 +512,7 @@ export async function giroPubblicazioni(): Promise<EsitoPubblicazione[]> {
         AND (b.pubblica_at IS NULL OR b.pubblica_at <= now())
       ORDER BY b.approvata_at NULLS FIRST
       LIMIT 20`,
-    [MAX_TENTATIVI]
+    [MAX_TENTATIVI, MINUTI_PRESA]
   );
 
   const esiti: EsitoPubblicazione[] = [];

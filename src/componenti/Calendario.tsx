@@ -65,6 +65,7 @@ const STATO: Record<string, { testo: string; colore: 'neutral' | 'warning' | 'bl
   generata: { testo: 'scritta', colore: 'blue', attende: true },
   attesa_approvazione: { testo: 'da approvare', colore: 'warning', attende: true },
   approvata: { testo: 'approvata', colore: 'blue', attende: false },
+  pubblicando: { testo: 'sta uscendo', colore: 'blue', attende: false },
   pubblicata: { testo: 'uscita', colore: 'green', attende: false },
   rifiutata: { testo: 'rifiutata', colore: 'neutral', attende: false },
   scaduta: { testo: 'scaduta', colore: 'red', attende: false },
