@@ -266,6 +266,30 @@ Il test end-to-end di §0.3 ha lasciato aperte queste. In ordine di quanto mordo
    Fuori da Wesion cambia un file solo: `replace.ts` deve accettare la sezione dalla
    richiesta, con `'pranzo'` come default — così i siti già collegati non si rompono.
 
+7b. **`hasMenu` è solo un link: i piatti non sono in dati strutturati.**
+   In `SITI/trattorialafenice/src/layouts/Layout.astro:142` c'è
+   `"hasMenu": "https://www.trattorialafenice.it/menu"` — una stringa. Diciamo alle
+   macchine **dove** sta il menù, non **cosa** c'è dentro. La versione buona è annidata:
+   `Menu` → `MenuSection` → `MenuItem`, con nome, descrizione e prezzo di ogni piatto.
+
+   **Perché ora ha senso e prima no:** si genera dalle **stesse righe** che il router
+   scrive pubblicando (`menu_items`), quindi ogni foto di Deborah aggiorna insieme la
+   pagina *e* i dati strutturati. Stessa fonte, nessuna possibilità di divergere, e non
+   c'è lavoro ricorrente per nessuno. È il formato che motori e AI consumano davvero, ed
+   è quello che fa la differenza sui piatti a coda lunga («mezzi paccheri alla messinese»)
+   fra essere *leggibili* ed essere *citabili*.
+
+   ⚠️ **Nell'`llms.txt` i piatti NON vanno messi.** `src/pages/llms.txt.ts` è statico,
+   generato al build, mentre il menù cambia ogni giorno: ci finirebbe un elenco che
+   *mente* dal giorno dopo, cioè una seconda lista che diverge da quella vera — la stessa
+   malattia descritta nel playbook. Com'è adesso va bene: dice «qui c'è il menù» e manda
+   alla pagina, che i piatti li ha già in chiaro nell'HTML (verificato il 05/09 leggendo
+   il sito pubblico). E vale la pena ricordarsi che nessun grande fornitore di AI ha mai
+   confermato di leggere `llms.txt`: costa poco e non fa danno, ma la strategia sta nei
+   dati strutturati, che invece li usano tutti da anni.
+
+   Da fare prima su La Fenice, poi come modello per gli altri siti.
+
 ### Poi — deploy
 
 4. ~~Router su Oracle, dashboard su Contabo~~ — **fatto il 01/09/2026**, vedi §14.1.
