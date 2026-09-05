@@ -300,11 +300,45 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
     ]
   );
 
+  /**
+   * ⚠️ SI CHIEDE CONFERMA SOLO DI QUELLO CHE SI FARA' DAVVERO.
+   *
+   * Questo messaggio prometteva sempre «il tuo sito e la tua scheda Google» e
+   * mostrava sempre l'anteprima del post Google, comunque fossero configurati i
+   * servizi del cliente. Con `post_gbp` spento — o mai acceso — il titolare
+   * approvava una cosa e ne usciva un'altra: e' un consenso raccolto su una
+   * frase falsa, e a fine giro `pubblicaBozza` (che i servizi li legge sul
+   * serio, con `AND s.attivo`) su Google non ci andava.
+   *
+   * Le destinazioni si leggono qui dalle stesse righe che decideranno la
+   * pubblicazione, cosi' la domanda e la risposta non possono divergere.
+   * Costa una query per lavagna fotografata.
+   */
+  const attivi = await servizi(a.aziendaId);
+  const suSito = Boolean((attivi['menu_del_giorno'] as ConfigSito | undefined)?.site_menu_url);
+  const suGoogle = Boolean(attivi['post_gbp']);
+
+  const dove = [suSito ? 'sul tuo sito' : null, suGoogle ? 'sulla tua scheda Google' : null]
+    .filter(Boolean)
+    .join(' e ');
+
+  // Nessuna destinazione: farsi dire SI qui vorrebbe dire far approvare un
+  // nulla di fatto, e scoprirlo solo dopo. Meglio dirlo adesso e non creare
+  // l'attesa di una pubblicazione che non puo' avvenire.
+  if (!dove) {
+    await rispondi(
+      a,
+      `Ho letto il menù (${letto.items.length} piatti), ma per ${a.nome} non risulta attiva nessuna destinazione: ` +
+        `né il sito né la scheda Google. Non pubblico niente — ci pensiamo noi a sistemare la configurazione.`
+    );
+    return 'senza_destinazioni';
+  }
+
   await rispondi(
     a,
     `MENÙ DEL GIORNO RILEVATO (${letto.items.length} piatti):\n\n${elencaPiatti(letto.items)}\n\n` +
-      `Se confermi lo pubblico sul tuo sito e sulla tua scheda Google.\n\n` +
-      `Sulla scheda Google uscirà così:\n"${letto.summary}"\n\n` +
+      `Se confermi lo pubblico ${dove}.\n\n` +
+      (suGoogle ? `Sulla scheda Google uscirà così:\n"${letto.summary}"\n\n` : '') +
       `Rispondi SI per pubblicare, NO per annullare. La bozza vale ${MINUTI_VALIDITA} minuti.`
   );
   return 'bozza_creata';
