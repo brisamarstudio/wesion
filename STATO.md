@@ -1,9 +1,10 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 02/09/2026, sera tardi. La giornata è tutta sull'audit
-SEO/GEO/AEO: acceso, tre PR vere su un cliente vero, tre difese nate una per volta
-guardando cosa combinava, e un danno riparato in produzione — §14.2. Dashboard
-ricostruita e `healthy` alle 16:58; tutto committato e pushato (`main` = `master`).*
+*Ultimo aggiornamento: 05/09/2026, sera. **Il TODO 1 è chiuso**: il menù del giorno
+è uscito davvero su un sito di un cliente vero, partendo da una foto su WhatsApp —
+§0.3. Per arrivarci sono venuti fuori tre guasti che il codice non poteva mostrare
+(un firewall mai aperto, la chiave WAHA sbagliata, e il router che si rompeva da solo
+imparando un LID): stanno tutti e tre in §0.3, con il motivo per cui erano invisibili.*
 
 Se apri questo progetto adesso, **leggi solo questo file**.
 
@@ -30,6 +31,49 @@ npm run router   ->  il router WhatsApp, su 172.17.0.1:3010
 npm run cliente  ->  prepara un cliente da riga di comando
 npm run utente   ->  crea un accesso alla dashboard
 ```
+
+## 0.3 Il primo menù del giorno vero (05/09/2026, 17:15)
+
+**Il TODO 1 è chiuso.** Trattoria La Fenice: una foto della lavagna mandata al numero
+bot su WhatsApp, letta dall'OCR, approvata con un «SI», e nove piatti comparsi sulla
+sezione «Pausa Pranzo» di `trattorialafenice.it`. La catena intera, dal telefono alla
+pagina pubblica, per la prima volta.
+
+```
+foto WhatsApp → WAHA → wesion-router → OCR → «SI» del titolare → sito del cliente
+17:14 «Sto leggendo il menù...»   17:15 nove piatti letti   17:15 «MENÙ PUBBLICATO»
+```
+
+**Cosa era rotto, e perché nessuno dei tre si vedeva dal codice.** Sulla carta questa
+catena era «finita» dal 01/09. In realtà non aveva mai portato un solo messaggio:
+
+| Cosa | Perché non si vedeva |
+|---|---|
+| **Il firewall non aveva mai aperto la 3011** | C'era una regola scritta a mano per la 3010 (il router vecchio) e nessuna per la 3011. Tutto il resto cadeva nel `REJECT --icmp-host-prohibited`: WAHA riprovava 15 volte e rinunciava, **nei suoi log, che nessuno guardava**. Dal lato di Wesion non arrivava niente e non c'era niente da vedere: un silenzio, non un errore. |
+| **La chiave WAHA nel `.env` era quella vecchia** | È il **quinto** consumatore dimenticato dalla rotazione del 29/07 — vedi `04-CHIAVI.md`. Il `.env` del router è stato *copiato* da `mywebby-automations`, che però la chiave la legge a runtime da `waha_instances`: la copia ha preso una variabile che lì dentro non serviva più. Effetto: `401` su ogni chiamata, quindi LID non risolto, foto non scaricabile e **risposte non consegnabili**. Tre sintomi diversi, una causa sola. |
+| **Il router si rompeva da solo IMPARANDO il LID** | `imparaLid` scriveva il LID sia in `normalizzato` (giusto: è la chiave con cui si riconosce) sia in `valore` (sbagliato: è l'indirizzo a cui si risponde). Il **primo** messaggio funzionava — il numero era ancora quello risolto al volo — e dal secondo in poi vinceva la riga imparata e ogni risposta falliva. Un bug che si manifesta solo dalla seconda interazione non lo trova nessun test manuale che ne prova una. |
+
+**La lezione, che vale oltre questi tre.** Tutti e tre erano invisibili leggendo il
+codice, e tutti e tre fallivano **in silenzio o nei log di qualcun altro**. Li ha
+trovati solo il fatto di mandare una foto vera da un telefono vero e pretendere di
+vederla comparire su una pagina vera.
+
+**Cosa resta aperto da qui:**
+
+- **`RIPRISTINA` non è mai stato collaudato.** Lo snapshot viene scritto (verificato),
+  ma il ritorno indietro non l'abbiamo visto funzionare. È l'unico anello della catena
+  ancora mai provato, ed è proprio quello che serve quando l'OCR legge male.
+- **Wesion tiene UNA sola `WAHA_API_KEY` nel `.env`**, mentre ogni tenant ha la sua:
+  così com'è parla con un container WAHA alla volta. Per più clienti va fatto come fa
+  il vecchio router — chiave presa per tenant, non dal `.env`. È la toppa di stasera,
+  non la cura.
+- **Il numero bot condiviso `weareqr-bot` non è la strada per i clienti veri.** Su
+  quel numero rispondono anche l'assistente WeMenuQR e il router vecchio: durante il
+  test tre bot rispondevano insieme allo stesso messaggio. Un cliente vero vuole il
+  suo numero, collegato solo a Wesion.
+- **`post_gbp` di La Fenice è stato spento apposta** per il test: sul sito si torna
+  indietro, su Google no (il post va tolto a mano dalla scheda). Riaccenderlo è una
+  riga, ma va fatto con un menù del giorno *di oggi* e un cliente che lo sa.
 
 ## 0.2 La prima pubblicazione vera (01/09/2026, 15:07)
 
@@ -127,10 +171,10 @@ di aggiungerne una a mano. Da lì:
 
 ### Adesso — sblocca tutto il resto
 
-1. **Provare il router con WAHA vero.** E' l'unica cosa mai vista funzionare end-to-end.
-   Serve: copiare le variabili dal `.env` di `mywebby-automations` su Oracle
-   (`WAHA_API_KEY`, `MEDIA_UPLOAD_TOKEN`, i tre `GBP_*`) — **copiarle, non rigenerarle**:
-   rigenerare il refresh token di Google romperebbe il vecchio router mentre gira.
+1. ~~**Provare il router con WAHA vero.**~~ — **fatto il 05/09/2026**, vedi §0.3.
+   Il menù del giorno e' uscito su un sito di un cliente vero, partendo da una foto
+   su WhatsApp. Restava aperto da sempre, ed era l'unica cosa mai vista funzionare
+   end-to-end: adesso non lo e' piu'.
 
 2. **Il primo endpoint blog su un sito vero.** Il contratto e' in `CONTRATTO-SITO.md`, con
    l'endpoint Astro pronto da incollare. **Farlo per primo su mywebby.it**: se sbagliamo,
