@@ -23,7 +23,8 @@ import { query } from '../src/lib/db.ts';
 import { leggiMenu } from '../src/lib/ocr.ts';
 import { mandaTesto, scaricaMedia, caricaPubblico } from '../src/lib/waha.ts';
 import { ripristinaMenu, type ConfigSito } from '../src/lib/sito.ts';
-import { riconosci, candidati, type Mittente } from './riconosci.ts';
+import { riconosci, candidati, eGruppo, type Mittente } from './riconosci.ts';
+import { controllaImpianto } from './impianto.ts';
 import { cercaLead, gestisciLead } from './lead.ts';
 import { pubblicaBozza, giroPubblicazioni, giroVerifiche } from './pubblica.ts';
 
@@ -349,6 +350,20 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
 async function gestisciMessaggio(payload: Record<string, unknown>): Promise<string> {
   if (payload.fromMe) return 'ignorato_mio';
 
+  /**
+   * I gruppi si scartano qui, prima di cercare chi ha scritto.
+   *
+   * UN NUMERO = UN BOT (deciso il 05/09/2026): il numero bot non entra in
+   * nessun gruppo, e se ci finisse un «SI» di chiunque pubblicherebbe davvero —
+   * `candidati()` legge `author`/`participant`, che in un gruppo sono la persona
+   * che ha scritto, non il titolare. Si scarta in silenzio e senza rispondere:
+   * una risposta del bot dentro un gruppo la leggerebbero tutti.
+   */
+  if (eGruppo(payload)) {
+    console.log(`[router] messaggio di gruppo ignorato (${String(payload.from ?? '')})`);
+    return 'ignorato_gruppo';
+  }
+
   const testo = String(payload.body || payload.caption || '').trim();
   const esito = await riconosci(payload);
 
@@ -522,13 +537,41 @@ async function avviaVerifiche(): Promise<void> {
   }
 }
 
+/**
+ * Ogni quanto si guarda l'impianto. Cinque minuti: una chiave che muore non
+ * torna viva da sola, quindi guardarla piu' spesso non anticipa niente, ma
+ * mezz'ora di bot muto su tutti i clienti insieme e' troppa.
+ */
+const MINUTI_IMPIANTO = Number(process.env.MINUTI_IMPIANTO || 5);
+
+let impiantoInCorso = false;
+async function avviaControlloImpianto(): Promise<void> {
+  if (impiantoInCorso) return;
+  impiantoInCorso = true;
+  try {
+    await controllaImpianto();
+  } catch (errore: unknown) {
+    // Non deve mai fermare il router: se il controllo non riesce a scrivere,
+    // il servizio continua a funzionare e la dashboard se ne accorge dal
+    // battito che non arriva piu'.
+    console.error('[router] controllo impianto fallito:', errore instanceof Error ? errore.message : errore);
+  } finally {
+    impiantoInCorso = false;
+  }
+}
+
 server.listen(PORTA, HOST, () => {
   console.log(`[router] Wesion in ascolto su http://${HOST}:${PORTA}`);
   console.log(`[router] giro delle approvazioni ogni ${SECONDI_GIRO}s`);
   console.log(`[router] ricontrollo su Google ogni ${MINUTI_VERIFICA} minuti`);
+  console.log(`[router] controllo dell'impianto ogni ${MINUTI_IMPIANTO} minuti`);
   setInterval(avviaGiro, SECONDI_GIRO * 1000);
   setInterval(avviaVerifiche, MINUTI_VERIFICA * 60_000);
+  setInterval(avviaControlloImpianto, MINUTI_IMPIANTO * 60_000);
   void avviaGiro();
+  // Subito, e non fra cinque minuti: se la chiave WAHA e' morta lo si deve
+  // sapere all'avvio, non al primo titolare che scrive e non riceve risposta.
+  void avviaControlloImpianto();
   // Il primo ricontrollo dopo un minuto e non subito: all'avvio c'e' gia' il
   // giro delle pubblicazioni che parla con Google, e partire insieme vorrebbe
   // dire due raffiche di chiamate nello stesso istante per niente.

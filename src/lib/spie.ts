@@ -599,6 +599,151 @@ async function generatoreRaggiungibile(): Promise<Spia | null> {
   }
 }
 
+/**
+ * Il token di Google vale ancora?
+ *
+ * ⚠️ QUESTO CONTROLLO PUO' STARE QUI, QUELLO DI WAHA NO — e la differenza non e'
+ * arbitraria. La dashboard ha `GBP_CLIENT_ID/SECRET/REFRESH_TOKEN` (l'eccezione
+ * spiegata in `docker-compose.dashboard.yml`), quindi puo' provarli davvero.
+ * `WAHA_*` invece su Contabo non esiste apposta e WAHA ascolta sul loopback di
+ * Oracle: quel controllo lo fa il router e lo scrive in tabella, vedi
+ * `router/impianto.ts` e `SPIE_DEL_ROUTER` piu' sotto.
+ *
+ * Un refresh token di Google non scade da solo, ma muore se la password
+ * dell'account cambia, se l'accesso viene revocato, o se l'app resta in
+ * "testing" — e quando muore non lo dice nessuno: i post smettono di uscire e
+ * basta. Si prova chiedendo un access token, che e' la stessa cosa che farebbe
+ * una pubblicazione vera, senza pubblicare niente.
+ */
+async function tokenGoogleValido(): Promise<Spia | null> {
+  const { GBP_CLIENT_ID, GBP_CLIENT_SECRET, GBP_REFRESH_TOKEN } = process.env;
+
+  // Se non sono configurate non e' un guasto: e' una macchina che non pubblica
+  // su Google, e dirle che le manca una chiave sarebbe rumore.
+  if (!GBP_CLIENT_ID || !GBP_CLIENT_SECRET || !GBP_REFRESH_TOKEN) return null;
+
+  try {
+    const risposta = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GBP_CLIENT_ID,
+        client_secret: GBP_CLIENT_SECRET,
+        refresh_token: GBP_REFRESH_TOKEN,
+        grant_type: 'refresh_token',
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (risposta.ok) return null;
+
+    const testo = (await risposta.text()).slice(0, 200);
+    return {
+      chiave: 'token-google',
+      famiglia: 'impianto',
+      colore: 'rossa',
+      titolo: 'Il token di Google non vale più',
+      dettaglio:
+        'Google rifiuta il refresh token: nessun post può uscire su nessuna scheda, e la ' +
+        'scelta delle schede in «Servizi» smette di funzionare. Va rifatto il consenso OAuth. ' +
+        `Risposta di Google: ${testo}`,
+      quanti: 0,
+      esempi: [],
+      dal: null,
+    };
+  } catch (errore: unknown) {
+    const motivo = errore instanceof Error ? errore.message : String(errore);
+    return {
+      chiave: 'token-google-irraggiungibile',
+      famiglia: 'impianto',
+      colore: 'gialla',
+      titolo: 'Non riusciamo a verificare il token di Google',
+      dettaglio:
+        `L'endpoint OAuth di Google non risponde (${motivo}). Non vuol dire che il token sia ` +
+        'morto: vuol dire che adesso non lo sappiamo.',
+      quanti: 0,
+      esempi: [],
+      dal: null,
+    };
+  }
+}
+
+/**
+ * Le spie che NON si calcolano qui: le scrive il router in `wesion.spia`, e
+ * questa e' l'unica cosa che la dashboard deve sapere di loro.
+ *
+ * Servono due accortezze, tutte e due gia' costate altrove:
+ *  - `registra()` non deve spegnerle (non sono sue, non sa se sono ancora vere);
+ *  - se il router smette di scriverle, il silenzio va letto come guasto e non
+ *    come "tutto bene" — la lezione del battito settimanale del watchdog.
+ */
+const SPIE_DEL_ROUTER = ['chiave-waha'] as const;
+
+/** Oltre questo, il battito del router e' da considerarsi fermo. */
+const MINUTI_BATTITO_ROUTER = 20;
+
+/**
+ * Legge dalla tabella le spie scritte dal router e le trasforma in Spia.
+ *
+ * Il battito che manca e' esso stesso una spia: un router fermo non scrive
+ * "sono rotto", non scrive proprio niente, e da lontano non si distingue da un
+ * router che sta bene.
+ */
+async function spieDelRouter(): Promise<Spia[]> {
+  const righe = await query<{
+    chiave: string;
+    stato: string;
+    messaggio: string | null;
+    dal: string | null;
+    minuti: number | null;
+  }>(
+    `SELECT chiave, stato, messaggio, dal,
+            EXTRACT(EPOCH FROM (now() - vista_at)) / 60 AS minuti
+       FROM wesion.spia
+      WHERE chiave = ANY($1)`,
+    [[...SPIE_DEL_ROUTER]]
+  );
+
+  // Mai scritta nemmeno una volta: il router non ha ancora girato con questo
+  // controllo dentro. Si tace, o al primo deploy si accenderebbe una rossa che
+  // non racconta un guasto ma un aggiornamento.
+  if (righe.length === 0) return [];
+
+  const fuori: Spia[] = [];
+  for (const r of righe) {
+    const fermo = r.minuti !== null && Number(r.minuti) > MINUTI_BATTITO_ROUTER;
+    if (fermo) {
+      fuori.push({
+        chiave: `${r.chiave}-senza-battito`,
+        famiglia: 'impianto',
+        colore: 'rossa',
+        titolo: 'Il router non sta più rispondendo',
+        dettaglio:
+          `Da ${Math.round(Number(r.minuti))} minuti il router non aggiorna il suo controllo ` +
+          "dell'impianto. Non sappiamo se il bot funziona: nessuna foto verrebbe letta e " +
+          'nessun «SI» pubblicato, e non ce ne accorgeremmo in nessun altro modo.',
+        quanti: 0,
+        esempi: [],
+        dal: r.dal,
+      });
+      continue;
+    }
+    if (r.stato === 'accesa') {
+      fuori.push({
+        chiave: r.chiave,
+        famiglia: 'impianto',
+        colore: 'rossa',
+        titolo: 'La chiave di WhatsApp non funziona',
+        dettaglio: r.messaggio ?? 'Il router segnala un problema con WAHA.',
+        quanti: 0,
+        esempi: [],
+        dal: r.dal,
+      });
+    }
+  }
+  return fuori;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CONTROLLI: Array<[string, Spia['famiglia'], Controllo]> = [
@@ -615,6 +760,7 @@ const CONTROLLI: Array<[string, Spia['famiglia'], Controllo]> = [
   ['testi-a-rischio', 'silenzio', testiARischio],
   ['messaggi-orfani', 'silenzio', messaggiOrfani],
   ['generatore', 'impianto', generatoreRaggiungibile],
+  ['token-google', 'impianto', tokenGoogleValido],
 ];
 
 /**
@@ -627,19 +773,30 @@ const CONTROLLI: Array<[string, Spia['famiglia'], Controllo]> = [
  * dice anche che per tre giorni nessuno ha guardato.
  */
 async function registra(accese: Spia[]): Promise<Map<string, string | null>> {
-  const chiaviAccese = accese.map((s) => s.chiave);
+  // Le spie del router si leggono, non si riscrivono: il loro messaggio lo
+  // conosce solo chi ha fatto il controllo. Riscriverle da qui vorrebbe dire
+  // sostituire un guasto raccontato con la nostra parafrasi.
+  const proprie = accese.filter((s) => !SPIE_DEL_ROUTER.some((c) => s.chiave.startsWith(c)));
+  const chiaviAccese = proprie.map((s) => s.chiave);
 
   // Prima si spegne quello che non e' piu' acceso: una spia che smette di
   // suonare deve perdere il suo `dal`, o al prossimo guasto direbbe una data
   // vecchia di settimane.
+  //
+  // ⚠️ Ma si spegne solo ROBA PROPRIA. Le spie scritte dal router (vedi
+  // `SPIE_DEL_ROUTER`) non sono calcolate qui: non comparendo fra le `accese`
+  // di questo giro verrebbero spente a ogni apertura della pagina, cioe' la
+  // dashboard cancellerebbe un guasto vero senza sapere niente di lui.
   await query(
     `UPDATE wesion.spia SET stato = 'ok', dal = NULL, vista_at = now()
-      WHERE stato <> 'ok' AND NOT (chiave = ANY($1))`,
-    [chiaviAccese]
+      WHERE stato <> 'ok'
+        AND NOT (chiave = ANY($1))
+        AND NOT (chiave = ANY($2))`,
+    [chiaviAccese, [...SPIE_DEL_ROUTER]]
   );
 
   const dal = new Map<string, string | null>();
-  for (const s of accese) {
+  for (const s of proprie) {
     const [riga] = await query<{ dal: string | null }>(
       `INSERT INTO wesion.spia (chiave, famiglia, stato, messaggio, dal, vista_at)
        VALUES ($1, $2, 'accesa', $3, now(), now())
@@ -669,6 +826,15 @@ export async function leggiSpie(): Promise<Spia[]> {
   const esiti = await Promise.all(CONTROLLI.map(([c, f, fn]) => esegui(c, f, fn)));
   const accese = esiti.filter((s): s is Spia => s !== null);
 
+  // Le spie che il router ha scritto in tabella: la dashboard non puo'
+  // calcolarle (non ha ne' la chiave WAHA ne' la rete per usarla) ma deve
+  // mostrarle, o quel guasto non si vedrebbe da nessuna parte.
+  try {
+    accese.push(...(await spieDelRouter()));
+  } catch (errore: unknown) {
+    console.error('Spie del router non lette:', errore instanceof Error ? errore.message : errore);
+  }
+
   // La registrazione non deve poter spegnere il pannello: se scrivere in
   // tabella fallisce, le spie si mostrano lo stesso, solo senza il "da quando".
   let dal = new Map<string, string | null>();
@@ -679,7 +845,10 @@ export async function leggiSpie(): Promise<Spia[]> {
   }
 
   return accese
-    .map((s) => ({ ...s, dal: dal.get(s.chiave) ?? null }))
+    // `?? s.dal`: le spie del router portano gia' il loro "da quando" letto
+    // dalla tabella, e `registra()` non le conosce. Senza questo ripiego
+    // perderebbero la data e direbbero "accesa adesso" a ogni apertura.
+    .map((s) => ({ ...s, dal: dal.get(s.chiave) ?? s.dal ?? null }))
     .sort((a, b) => {
       if (a.colore !== b.colore) return a.colore === 'rossa' ? -1 : 1;
       return b.quanti - a.quanti;

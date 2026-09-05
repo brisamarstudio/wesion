@@ -20,6 +20,19 @@
  * diventa uno sconosciuto. '+' davanti vuol dire che e' gia' internazionale;
  * '00' e' il prefisso di uscita; un numero che inizia per 0 o 3 senza prefisso
  * e' italiano.
+ *
+ * ⚠️ PERCHE' SI GUARDA LA LUNGHEZZA E NON IL PREFISSO '39'.
+ * Fino al 05/09/2026 la regola era «se non comincia gia' per 39, anteponilo».
+ * Ma un cellulare italiano il cui numero NAZIONALE inizia per 39 — 391, 392,
+ * 393... sono prefissi Wind veri — comincia per 39 pur non avendo il prefisso
+ * internazionale: `3912345678` restava tale, mentre da WhatsApp lo stesso
+ * numero arriva come `393912345678`. Le due forme non coincidevano mai e quel
+ * titolare non veniva riconosciuto MAI, senza un errore da nessuna parte.
+ *
+ * La lunghezza invece non e' ambigua: un cellulare nazionale ha 9-10 cifre, con
+ * il 39 davanti ne ha 11-12. E un numero che inizia per 0 e' sempre nazionale,
+ * perche' nessuna forma internazionale comincia per 0 una volta tolti '+' e
+ * '00' — quindi li' il prefisso si mette e basta.
  */
 export function normalizzaTelefono(grezzo: string | null | undefined): string | null {
   const s = String(grezzo || '').trim();
@@ -27,7 +40,11 @@ export function normalizzaTelefono(grezzo: string | null | undefined): string | 
   if (!cifre) return null;
   if (s.startsWith('+')) return cifre;
   if (cifre.startsWith('00')) return cifre.slice(2);
-  if (!cifre.startsWith('39') && /^[03]/.test(cifre)) cifre = '39' + cifre;
+  // Fisso nazionale: comincia per 0, e nessun internazionale lo fa.
+  if (cifre.startsWith('0')) return '39' + cifre;
+  // Cellulare nazionale: comincia per 3 ed e' lungo 9-10. Con il 39 davanti
+  // sarebbe 11-12, quindi non c'e' modo di confonderli.
+  if (/^3/.test(cifre) && cifre.length >= 9 && cifre.length <= 10) return '39' + cifre;
   return cifre;
 }
 

@@ -27,7 +27,7 @@ export interface Mittente {
 export interface EsitoRiconoscimento {
   mittente: Mittente | null;
   /** Perché non è stato riconosciuto: serve al log e alla risposta. */
-  motivo: 'trovato' | 'sconosciuto' | 'non_titolare';
+  motivo: 'trovato' | 'sconosciuto' | 'non_titolare' | 'gruppo';
   /** Il migliore identificativo che abbiamo, anche quando non si sa di chi è. */
   identificativo: string;
   /** Il nome dell'azienda quando il contatto c'è ma non è del titolare. */
@@ -41,6 +41,27 @@ export interface EsitoRiconoscimento {
  * in `from`, in `author` o in `participant`: provarli tutti costa una query e
  * risparmia un cliente muto.
  */
+/**
+ * L'evento arriva da una chat di gruppo.
+ *
+ * UN NUMERO = UN BOT, i gruppi non si usano mai (deciso il 05/09/2026). Non e'
+ * una preferenza: in un gruppo `author`/`participant` dicono chi ha scritto
+ * dentro il gruppo, e `candidati()` li legge come se fossero il mittente. Senza
+ * questo controllo, un «SI» scritto da CHIUNQUE in un gruppo dove sta il numero
+ * bot pubblicherebbe davvero sul sito del cliente.
+ *
+ * Si guarda `from` — e' la CHAT, cioe' dove il messaggio e' stato scritto — e
+ * non `author`, che e' la persona: in un gruppo il `from` finisce sempre per
+ * `@g.us`.
+ */
+export function eGruppo(payload: Record<string, unknown>): boolean {
+  const dati = (payload._data ?? {}) as Record<string, unknown>;
+  return [payload.from, dati.from]
+    .filter(Boolean)
+    .map(String)
+    .some((v) => v.endsWith('@g.us'));
+}
+
 export function candidati(payload: Record<string, unknown>): string[] {
   const dati = (payload._data ?? {}) as Record<string, unknown>;
   const grezzi = [payload.from, payload.author, payload.participant, dati.from]
@@ -137,6 +158,13 @@ async function imparaLid(
  * tabella c'e'.
  */
 export async function riconosci(payload: Record<string, unknown>): Promise<EsitoRiconoscimento> {
+  // Seconda rete: chi scarta i gruppi e' il router, prima ancora di arrivare
+  // qui (vedi `eGruppo`). Il controllo si ripete perche' il giorno che qualcuno
+  // chiamera' `riconosci` da un'altra strada, il buco non si riapra in silenzio.
+  if (eGruppo(payload)) {
+    return { mittente: null, motivo: 'gruppo', identificativo: String(payload.from ?? '') };
+  }
+
   const identificativi = candidati(payload);
 
   const diretto = await cerca(identificativi);
