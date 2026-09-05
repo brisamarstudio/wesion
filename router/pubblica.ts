@@ -217,7 +217,13 @@ export async function pubblicaBozza(bozzaId: number): Promise<EsitoPubblicazione
     const config = servizio('menu_del_giorno') as ConfigSito | null;
     if (config?.site_menu_url) {
       try {
-        const esito = await pubblicaMenu(config, (bozza.contenuto.items as unknown[]) ?? []);
+        /**
+         * La sezione la porta la bozza: e' quella dichiarata al titolare nella
+         * conferma. Assente = cliente con un menu' solo, e il sito scrive dove
+         * ha sempre scritto (vedi `MENU_CATEGORY_TYPE` nel `replace.ts` suo).
+         */
+        const sezione = (bozza.contenuto.sezione ?? null) as string | null;
+        const esito = await pubblicaMenu(config, (bozza.contenuto.items as unknown[]) ?? [], sezione);
         await segna(bozzaId, 'sito', 'ok', { risposta: esito, url: config.site_menu_page ?? null });
         destinazioni.push({ destinazione: 'sito', esito: 'ok' });
       } catch (errore: unknown) {

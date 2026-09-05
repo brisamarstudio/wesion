@@ -202,6 +202,40 @@ bloccano: segnalano. Decidi tu.
 
 ---
 
+## 📸 Il menù del giorno su WhatsApp — *quello che fa il titolare*
+
+**A cosa serve:** il titolare fotografa la lavagna, la manda al numero del bot, legge
+cosa abbiamo capito e risponde **SI**. Da lì il menù esce sul sito (e sulla scheda
+Google, se gliel'abbiamo attivata). Non c'è niente da imparare: fotografa e manda, come
+già fa con chiunque.
+
+I comandi sono tre: **SI** pubblica, **NO** annulla, **RIPRISTINA** rimette quello di
+prima. La bozza scade dopo 15 minuti — un «SI» che arriva domani mattina non deve
+pubblicare il menù di ieri.
+
+### Se il cliente ha più di un menù
+
+Molti ne hanno più d'uno: La Fenice ha il fisso del giorno, il venerdì a cena, il sabato
+a cena e la domenica a pranzo. **Vanno configurati nella scheda cliente, in «Servizi» →
+`menu_del_giorno` → `menu_sezioni`**, e gli `slug` devono essere identici a quelli delle
+categorie sul sito (`{"action":"sections"}` sull'endpoint del menù te li dice).
+
+Come funziona poi, da solo:
+
+1. il modello legge l'**intestazione della foto** («Sabato a Cena») e capisce da sé in
+   quale menù va;
+2. il bot **lo dichiara nella conferma** — «lo pubblico nella sezione *Sabato a Cena*» —
+   così una sezione sbagliata si ferma prima di uscire;
+3. **solo se non ha capito**, chiede: «In quale menù lo metto? 1 … 2 …», e il titolare
+   risponde col numero.
+
+> ⚠️ **Se le sezioni non sono configurate, tutto finisce nella sezione di default del
+> sito** (per La Fenice era la Pausa Pranzo). Con l'aggravante che pubblicare è un
+> `replace`: il menù del sabato messo nel pranzo **cancella** quello del pranzo. È il
+> primo controllo da fare prima di dire a un cliente «da oggi manda al bot».
+
+---
+
 ## 🚨 Spie — *cosa è rotto*
 
 **A cosa serve:** qui non si clicca, si legge. Cosa non funziona, cosa è muto,

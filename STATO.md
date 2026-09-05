@@ -188,11 +188,11 @@ Il test end-to-end di §0.3 ha lasciato aperte queste. In ordine di quanto mordo
 *oggi*, non di gravità teorica. I primi due riguardano solo Google, che per La Fenice
 è spenta apposta: **sono la condizione per riaccenderla**.
 
-> **Stato la sera del 05/09/2026: 1b, 3b, 4b e 5b sono chiusi** (commit `e576444` e
-> quello successivo). Restano **2b** — un numero titolare su due aziende, che per ora
-> è una regola operativa e non un vincolo — e le **sezioni del menù (6b)**, che è la
-> cosa da fare prima di dire a Deborah di mandare al bot. Il testo dei chiusi resta
-> qui sotto: serve a non ricascarci, e a spiegare perché il codice è fatto così.
+> **Stato la sera del 05/09/2026: 1b, 3b, 4b, 5b e 6b sono chiusi.** Resta **2b** — un
+> numero titolare su due aziende — che per ora è una regola operativa e non un vincolo.
+> **Niente di tutto questo è ancora in produzione**: il router va deployato su Oracle
+> (§14.1) e il sito di La Fenice pubblicato su Cloudflare. Il testo dei chiusi resta qui
+> sotto: serve a non ricascarci, e a spiegare perché il codice è fatto così.
 
 1b. ~~⚠️ **I due che bloccano la riaccensione di `post_gbp`.**~~ — **fatti il
    05/09/2026, sera.** `post_gbp` di La Fenice si può riaccendere: manca solo
@@ -292,9 +292,38 @@ Il test end-to-end di §0.3 ha lasciato aperte queste. In ordine di quanto mordo
    Brace Mia, sullo stesso identico punto. Da fare per primo: è poco codice e chiude un
    buco già costato una volta.
 
-### Adesso — le sezioni del menù (deciso il 05/09, non ancora scritto)
+### Le sezioni del menù — **scritte il 05/09/2026, sera**
 
-6b. **Un cliente ha più menù, il contratto ne prevede uno solo.** `replace.ts` del sito ha
+6b. ~~**Un cliente ha più menù, il contratto ne prevede uno solo.**~~ — **fatto**, in due
+   repo. Com'è venuto:
+
+   - **Sito** (`SITI/trattorialafenice/src/pages/api/menu/replace.ts`): la richiesta può
+     portare `section`, lo slug della categoria. Manca = si scrive dove si è sempre
+     scritto, così i siti già collegati non si rompono. Uno slug che non esiste è un
+     `400` con dentro l'elenco di quelli buoni — mai un ripiego su una categoria
+     «vicina», che vorrebbe dire distruggerne due. C'è anche `{"action":"sections"}`,
+     sola lettura: le sezioni le sa il sito, e chiedergliele evita una lista scritta a
+     mano da qualche parte che diverge il giorno che il cliente ne aggiunge una.
+     ⚠️ **Committato ma NON ancora pubblicato su Cloudflare.**
+   - **Sezioni per cliente**: `servizio.config.menu_sezioni` di `menu_del_giorno`,
+     `[{slug, titolo, quando}]`. Per La Fenice sono già scritte, con gli slug veri letti
+     dal suo database. Vuoto = cliente con un menù solo, e non cambia niente.
+   - **L'OCR sceglie da sé**: al modello si passano le sezioni di quel cliente e si
+     chiede anche `section`, che legge dall'intestazione della foto. **Provato il 05/09
+     su tre menù**: «SABATO A CENA» → `sabato-a-cena`, «MENU DEL GIORNO» →
+     `menu-fisso-del-giorno`, un menù senza intestazione → `null`. Uno slug che il
+     modello si inventa vale quanto `null`: si accetta solo quello che esiste davvero.
+   - **Il bot la dichiara** nella conferma («lo pubblico nella sezione «Sabato a Cena»»)
+     e la ripete nel resoconto finale. **Solo se non ha capito** chiede: «In quale menù
+     lo metto? 1 … 2 …», e si risponde col numero (o col titolo). Un «SI» dato prima di
+     aver scelto non pubblica: chiede di nuovo, perché scegliere noi la sezione vorrebbe
+     dire sovrascrivere il menù vero di quella sezione.
+
+   **Da fare prima di dire a Deborah «manda al bot»:** pubblicare il sito su Cloudflare,
+   deployare il router, e provarne uno vero. Prima di allora vale ancora quello che c'è
+   scritto qui sotto.
+
+   *Com'era, per memoria:* `replace.ts` del sito aveva
    `const MENU_CATEGORY_TYPE = 'pranzo'` **fisso**: qualunque foto il router legga finisce
    nella *Pausa Pranzo*. Ma La Fenice ha quattro sezioni (pausa pranzo, venerdì cena,
    sabato cena, domenica pranzo) e manda le foto di tutte; altri clienti ne hanno una sola

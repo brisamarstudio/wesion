@@ -18,6 +18,13 @@ export interface PiattoLetto {
 export interface MenuLetto {
   summary: string;
   items: PiattoLetto[];
+  /**
+   * In quale sezione va, se il modello ha saputo dirlo: lo slug di una delle
+   * sezioni che gli abbiamo passato, oppure `null`. `null` non e' un fallimento
+   * ed e' importante che resti possibile: e' il caso in cui si CHIEDE, che e'
+   * meglio di un'ipotesi che pubblica la cena dentro al pranzo.
+   */
+  sezione: string | null;
   /** Quale modello l'ha letto: finisce in `bozza.modello` e serve fra sei mesi. */
   modello: string;
 }
@@ -26,11 +33,43 @@ export interface RichiestaMenu {
   nomeLocale: string;
   testo?: string;
   immagineDataUrl?: string | null;
+  /**
+   * Le sezioni di QUESTO cliente. Vuoto = cliente con un menu' solo: al modello
+   * non si chiede niente, e non c'e' niente da sbagliare.
+   */
+  sezioni?: Array<{ slug: string; titolo: string; quando?: string }>;
 }
 
 export async function leggiMenu(richiesta: RichiestaMenu): Promise<MenuLetto> {
   const chiave = process.env.OPENROUTER_API_KEY;
   if (!chiave) throw new Error('OPENROUTER_API_KEY mancante');
+
+  /**
+   * ⚠️ LA SEZIONE LA DICE GIÀ LA FOTO, e il modello la sta già leggendo.
+   *
+   * Il titolare non deve imparare niente: continua a fotografare e mandare come
+   * fa già. Sulla lavagna c'è scritto «Sabato a Cena», «Domenica a Pranzo» — è
+   * l'intestazione, la prima riga in grande. Si chiede al modello di scegliere
+   * fra le sezioni DI QUESTO CLIENTE, non di inventarne una.
+   *
+   * E gli si dice esplicitamente di lasciare `null` quando non è sicuro: è
+   * l'unico modo perché il ramo «allora chiedo» funzioni davvero, invece di
+   * essere codice morto sotto un modello che indovina sempre qualcosa.
+   */
+  const sezioni = richiesta.sezioni ?? [];
+  const bloccoSezioni = sezioni.length
+    ? [
+        "",
+        "Questo locale ha piu' menu diversi. Devi anche dire IN QUALE va questo:",
+        ...sezioni.map((s) => `- "${s.slug}" = ${s.titolo}${s.quando ? ` (${s.quando})` : ''}`),
+        "",
+        "Guarda l'INTESTAZIONE del menu (il titolo scritto in alto: \"Sabato a Cena\",",
+        '"Domenica a Pranzo", "Menu del giorno"...) e scegli lo slug corrispondente.',
+        "Se l'intestazione non c'e' o non corrisponde a nessuna, metti null: NON tirare a",
+        "indovinare, chiedere e' meglio che pubblicare nel posto sbagliato.",
+        'Aggiungi al JSON il campo "section" con lo slug scelto, oppure null.',
+      ].join('\n')
+    : '';
 
   const prompt = `
 Sei l'assistente di ${richiesta.nomeLocale}.
@@ -54,6 +93,7 @@ Rispondi SOLO con un oggetto JSON valido, senza blocchi di codice:
 }
 
 Se nell'immagine non c'è assolutamente un menù leggibile, restituisci {"summary": "", "items": []}.
+${bloccoSezioni}
 `.trim();
 
   /**
@@ -64,7 +104,7 @@ Se nell'immagine non c'è assolutamente un menù leggibile, restituisci {"summar
   if (!richiesta.immagineDataUrl && richiesta.testo) {
     const t = richiesta.testo.trim();
     if (t.length < 35 && !/\d+/.test(t) && /^(rileva|leggi|scansiona|ecco|analizza|foto)/i.test(t)) {
-      return { summary: '', items: [], modello: MODELLO };
+      return { summary: '', items: [], sezione: null, modello: MODELLO };
     }
   }
 
@@ -116,13 +156,26 @@ Se nell'immagine non c'è assolutamente un menù leggibile, restituisci {"summar
 
   try {
     const letto = JSON.parse(String(grezzo).replace(/```json/g, '').replace(/```/g, '').trim());
+    /**
+     * Si accetta solo uno slug che esiste DAVVERO fra i suoi.
+     *
+     * Un modello che si inventa un nome plausibile («cena-sabato» invece di
+     * «sabato-a-cena») manderebbe la richiesta a una sezione inesistente: il
+     * sito risponderebbe 400 dopo che il titolare ha gia' detto SI. Uno slug
+     * che non conosciamo vale quanto nessuno slug — si chiede.
+     */
+    const proposta = letto.section == null ? null : String(letto.section).trim();
+    const sezione = proposta && sezioni.some((s) => s.slug === proposta) ? proposta : null;
+    if (proposta && !sezione) console.warn(`[ocr] sezione inventata dal modello: "${proposta}"`);
+
     return {
       summary: String(letto.summary || '').trim(),
       items: Array.isArray(letto.items) ? letto.items : [],
+      sezione,
       modello: MODELLO,
     };
   } catch {
     console.error('[ocr] risposta non JSON:', String(grezzo).slice(0, 300));
-    return { summary: '', items: [], modello: MODELLO };
+    return { summary: '', items: [], sezione: null, modello: MODELLO };
   }
 }

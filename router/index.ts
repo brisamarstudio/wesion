@@ -22,7 +22,7 @@ import http from 'node:http';
 import { query } from '../src/lib/db.ts';
 import { leggiMenu } from '../src/lib/ocr.ts';
 import { mandaTesto, scaricaMedia, caricaPubblico } from '../src/lib/waha.ts';
-import { ripristinaMenu, type ConfigSito } from '../src/lib/sito.ts';
+import { ripristinaMenu, type ConfigSito, type SezioneMenu } from '../src/lib/sito.ts';
 import { riconosci, candidati, eGruppo, type Mittente } from './riconosci.ts';
 import { controllaImpianto } from './impianto.ts';
 import { cercaLead, gestisciLead } from './lead.ts';
@@ -99,6 +99,43 @@ async function servizi(aziendaId: number): Promise<Record<string, Record<string,
   return Object.fromEntries(righe.map((r) => [r.tipo, r.config]));
 }
 
+/**
+ * Le sezioni di menù di questo cliente, se ne ha più di una.
+ *
+ * ⚠️ ⚠️ IL CONTRATTO NE PREVEDEVA UNA SOLA, E PER MESI E' BASTATA (fino al
+ * 05/09/2026). Poi il primo cliente vero: La Fenice ha quattro menù — fisso
+ * del giorno, venerdì a cena, sabato a cena, domenica a pranzo — e li fotografa
+ * tutti. Senza sezione, un «Sabato a Cena» finiva nella Pausa Pranzo E
+ * cancellava quello di mezzogiorno: una foto giusta, due menù sbagliati.
+ *
+ * Chi ne ha una sola (un'hamburgeria, una pizzeria) non ha niente configurato
+ * qui e non vede cambiare niente.
+ */
+function sezioniDi(attivi: Record<string, Record<string, unknown>>): SezioneMenu[] {
+  const config = attivi['menu_del_giorno'] as ConfigSito | undefined;
+  const sezioni = config?.menu_sezioni;
+  return Array.isArray(sezioni) ? sezioni.filter((s) => s?.slug && s?.titolo) : [];
+}
+
+/** Come si chiama una sezione parlando col titolare: il titolo, mai lo slug. */
+function titoloSezione(sezioni: SezioneMenu[], slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  return sezioni.find((s) => s.slug === slug)?.titolo ?? null;
+}
+
+/**
+ * La domanda numerata: si fa SOLO quando il modello non ha saputo dire da sé
+ * in quale menù va (vedi `leggiMenu`). Numerata e non «scrivi quale», perché
+ * rispondere «2» non si sbaglia e non si scrive male.
+ */
+function domandaSezione(sezioni: SezioneMenu[]): string {
+  return (
+    'In quale menù lo metto?\n' +
+    sezioni.map((s, i) => `${i + 1} ${s.titolo}`).join('\n') +
+    '\n\nRispondi col numero.'
+  );
+}
+
 function elencaPiatti(piatti: Array<{ name: string; price?: string }>): string {
   return piatti
     .map((p) => `- ${p.name}${p.price ? ` (${String(p.price).trim()})` : ''}`)
@@ -155,6 +192,21 @@ async function conferma(a: Mittente): Promise<string> {
   }
 
   /**
+   * ⚠️ UN «SI» NON BASTA SE NON SAPPIAMO DOVE.
+   *
+   * Il titolare puo' rispondere SI alla domanda «in quale menu' lo metto?» —
+   * succedera', e' la risposta piu' naturale del mondo a un bot. Pubblicare
+   * allora vorrebbe dire scegliere noi una sezione a caso: e la sezione
+   * sbagliata non e' un errore innocuo, sovrascrive ANCHE il menu' vero di
+   * quella sezione (il sito fa `replace`).
+   */
+  const sezioniBozza = (bozza.contenuto.sezioni ?? []) as SezioneMenu[];
+  if (Array.isArray(sezioniBozza) && sezioniBozza.length > 1 && !bozza.contenuto.sezione) {
+    await rispondi(a, `Prima devo sapere in quale menù va.\n\n${domandaSezione(sezioniBozza)}`);
+    return 'sezione_mancante';
+  }
+
+  /**
    * L'approvazione si scrive PRIMA di pubblicare.
    *
    * Se il processo muore fra le due cose, resta una riga `approvata` che il
@@ -193,12 +245,17 @@ async function conferma(a: Mittente): Promise<string> {
     return `${nome}: ${d.esito === 'ok' ? 'aggiornato' : 'NON aggiornato'}`;
   });
 
+  // Il nome del menù nel resoconto: «Sito: aggiornato» su un locale con quattro
+  // sezioni non dice abbastanza per accorgersi di uno sbaglio prima del cliente.
+  const titolo = titoloSezione(sezioniBozza, bozza.contenuto.sezione as string | null);
+
   const tutteOk = esito.destinazioni.every((d) => d.esito === 'ok');
   const sitoOk = esito.destinazioni.some((d) => d.destinazione === 'sito' && d.esito === 'ok');
 
   await rispondi(
     a,
     `${tutteOk ? 'MENÙ PUBBLICATO' : esito.uscito ? 'PUBBLICAZIONE PARZIALE' : 'NON SONO RIUSCITO A PUBBLICARE'}\n\n` +
+      (titolo ? `Menù: ${titolo}\n` : '') +
       righe.join('\n') +
       (sitoOk ? '\n\nSe qualcosa non va, rispondi RIPRISTINA.' : '') +
       (esito.uscito ? '' : '\n\nCe ne stiamo occupando noi, non serve che rifaccia niente.')
@@ -268,9 +325,20 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
     }
   }
 
+  /**
+   * I servizi si leggono QUI, prima di leggere la foto, e non piu' alla fine.
+   *
+   * Servono due volte: per sapere in quali menu' puo' finire questa foto (le
+   * sezioni le passiamo al modello, che l'intestazione la sta gia' leggendo) e
+   * per chiedere conferma solo di quello che si fara' davvero. Le stesse righe
+   * per tutte e due le cose, cosi' la domanda e la risposta non divergono.
+   */
+  const attivi = await servizi(a.aziendaId);
+  const sezioni = sezioniDi(attivi);
+
   let letto;
   try {
-    letto = await leggiMenu({ nomeLocale: a.nome, testo, immagineDataUrl });
+    letto = await leggiMenu({ nomeLocale: a.nome, testo, immagineDataUrl, sezioni });
   } catch (errore: unknown) {
     console.error('[router] ocr:', errore instanceof Error ? errore.message : errore);
     await rispondi(a, 'Non sono riuscito a leggere il menù (il servizio non risponde). Riprova fra poco.');
@@ -310,29 +378,59 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
      VALUES ($1, 'menu', 'foto_whatsapp', $2, 'attesa_approvazione', $3, now() + ($4 || ' minutes')::interval)`,
     [
       a.aziendaId,
-      JSON.stringify({ summary: letto.summary, items: letto.items, foto, testo_originale: testo }),
+      // `sezioni` dentro la bozza e non solo `sezione`: se il titolare
+      // risponde «2» fra dieci minuti, quel 2 deve valere sulla lista che ha
+      // letto lui, non su una che nel frattempo abbiamo cambiato in config.
+      JSON.stringify({
+        summary: letto.summary,
+        items: letto.items,
+        foto,
+        testo_originale: testo,
+        sezione: letto.sezione,
+        sezioni,
+      }),
       letto.modello,
       String(MINUTI_VALIDITA),
     ]
   );
 
-  /**
-   * ⚠️ SI CHIEDE CONFERMA SOLO DI QUELLO CHE SI FARA' DAVVERO.
-   *
-   * Questo messaggio prometteva sempre «il tuo sito e la tua scheda Google» e
-   * mostrava sempre l'anteprima del post Google, comunque fossero configurati i
-   * servizi del cliente. Con `post_gbp` spento — o mai acceso — il titolare
-   * approvava una cosa e ne usciva un'altra: e' un consenso raccolto su una
-   * frase falsa, e a fine giro `pubblicaBozza` (che i servizi li legge sul
-   * serio, con `AND s.attivo`) su Google non ci andava.
-   *
-   * Le destinazioni si leggono qui dalle stesse righe che decideranno la
-   * pubblicazione, cosi' la domanda e la risposta non possono divergere.
-   * Costa una query per lavagna fotografata.
-   */
-  const attivi = await servizi(a.aziendaId);
-  const suSito = Boolean((attivi['menu_del_giorno'] as ConfigSito | undefined)?.site_menu_url);
-  const suGoogle = Boolean(attivi['post_gbp']);
+  return chiediConferma(a, {
+    piatti: letto.items,
+    summary: letto.summary,
+    sezione: letto.sezione,
+    sezioni,
+    attivi,
+  });
+}
+
+/**
+ * L'ultimo messaggio prima del SI: cosa ho letto, dove finisce, cosa rispondere.
+ *
+ * ⚠️ SI CHIEDE CONFERMA SOLO DI QUELLO CHE SI FARA' DAVVERO.
+ *
+ * Questo messaggio prometteva sempre «il tuo sito e la tua scheda Google» e
+ * mostrava sempre l'anteprima del post Google, comunque fossero configurati i
+ * servizi del cliente. Con `post_gbp` spento — o mai acceso — il titolare
+ * approvava una cosa e ne usciva un'altra: e' un consenso raccolto su una frase
+ * falsa, e a fine giro `pubblicaBozza` (che i servizi li legge sul serio, con
+ * `AND s.attivo`) su Google non ci andava.
+ *
+ * Dal 05/09/2026 vale anche per la SEZIONE: dire «lo pubblico» senza dire in
+ * quale dei quattro menu' e' la stessa promessa a meta'. E se non lo sappiamo,
+ * non si chiede SI — si chiede quale.
+ */
+async function chiediConferma(
+  a: Mittente,
+  dati: {
+    piatti: Array<{ name: string; price?: string }>;
+    summary: string;
+    sezione: string | null;
+    sezioni: SezioneMenu[];
+    attivi: Record<string, Record<string, unknown>>;
+  }
+): Promise<string> {
+  const suSito = Boolean((dati.attivi['menu_del_giorno'] as ConfigSito | undefined)?.site_menu_url);
+  const suGoogle = Boolean(dati.attivi['post_gbp']);
 
   const dove = [suSito ? 'sul tuo sito' : null, suGoogle ? 'sulla tua scheda Google' : null]
     .filter(Boolean)
@@ -344,20 +442,85 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
   if (!dove) {
     await rispondi(
       a,
-      `Ho letto il menù (${letto.items.length} piatti), ma per ${a.nome} non risulta attiva nessuna destinazione: ` +
+      `Ho letto il menù (${dati.piatti.length} piatti), ma per ${a.nome} non risulta attiva nessuna destinazione: ` +
         `né il sito né la scheda Google. Non pubblico niente — ci pensiamo noi a sistemare la configurazione.`
     );
     return 'senza_destinazioni';
   }
 
+  const titolo = titoloSezione(dati.sezioni, dati.sezione);
+
+  /**
+   * Il modello non ha saputo dire in quale menu' va, e questo cliente ne ha
+   * piu' d'uno: si chiede. E' il quarto passo del disegno del 05/09 — prima si
+   * prova a capirlo da soli dall'intestazione della foto, e solo se non si
+   * capisce si disturba il titolare.
+   */
+  if (!titolo && dati.sezioni.length > 1) {
+    await rispondi(
+      a,
+      `MENÙ RILEVATO (${dati.piatti.length} piatti):\n\n${elencaPiatti(dati.piatti)}\n\n` +
+        domandaSezione(dati.sezioni)
+    );
+    return 'sezione_da_scegliere';
+  }
+
   await rispondi(
     a,
-    `MENÙ DEL GIORNO RILEVATO (${letto.items.length} piatti):\n\n${elencaPiatti(letto.items)}\n\n` +
-      `Se confermi lo pubblico ${dove}.\n\n` +
-      (suGoogle ? `Sulla scheda Google uscirà così:\n"${letto.summary}"\n\n` : '') +
+    `MENÙ DEL GIORNO RILEVATO (${dati.piatti.length} piatti):\n\n${elencaPiatti(dati.piatti)}\n\n` +
+      `Se confermi lo pubblico ${dove}${titolo ? `, nella sezione «${titolo}»` : ''}.\n\n` +
+      (suGoogle ? `Sulla scheda Google uscirà così:\n"${dati.summary}"\n\n` : '') +
       `Rispondi SI per pubblicare, NO per annullare. La bozza vale ${MINUTI_VALIDITA} minuti.`
   );
   return 'bozza_creata';
+}
+
+/**
+ * La risposta alla domanda «in quale menù lo metto?».
+ *
+ * Torna `null` quando il messaggio non e' una scelta: allora e' un menu' nuovo,
+ * o chiacchiera, e se ne occupa chi viene dopo nel dispatch. Si accetta il
+ * numero, ma anche il titolo scritto a mano («sabato»): il numero e' la strada
+ * che non si sbaglia, non un obbligo.
+ */
+async function scegliSezione(a: Mittente, testo: string): Promise<string | null> {
+  const bozza = await menuInAttesa(a.aziendaId);
+  if (!bozza || bozza.scaduta) return null;
+
+  // La sezione c'e' gia': un «2» adesso non e' una scelta, e cambiare
+  // destinazione a una bozza gia' dichiarata al titolare sarebbe peggio.
+  if (bozza.contenuto.sezione) return null;
+
+  const sezioni = (bozza.contenuto.sezioni ?? []) as SezioneMenu[];
+  if (!Array.isArray(sezioni) || sezioni.length < 2) return null;
+
+  const pulito = testo.trim().toLowerCase();
+  const numero = /^[1-9]$/.test(pulito) ? Number(pulito) : 0;
+  const scelta =
+    (numero >= 1 && numero <= sezioni.length ? sezioni[numero - 1] : null) ??
+    sezioni.find((s) => s.titolo.toLowerCase() === pulito) ??
+    // Ultimo tentativo, solo se non e' ambiguo: «sabato» quando c'e' un solo
+    // sabato. Con due sezioni che contengono la parola non si sceglie a caso.
+    (sezioni.filter((s) => pulito.length >= 4 && s.titolo.toLowerCase().includes(pulito)).length === 1
+      ? sezioni.find((s) => s.titolo.toLowerCase().includes(pulito))
+      : null);
+
+  if (!scelta) return null;
+
+  await query(
+    `UPDATE wesion.bozza
+        SET contenuto = jsonb_set(contenuto, '{sezione}', to_jsonb($2::text))
+      WHERE id = $1`,
+    [bozza.id, scelta.slug]
+  );
+
+  return chiediConferma(a, {
+    piatti: (bozza.contenuto.items as Array<{ name: string; price?: string }>) ?? [],
+    summary: String(bozza.contenuto.summary ?? ''),
+    sezione: scelta.slug,
+    sezioni,
+    attivi: await servizi(a.aziendaId),
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -432,6 +595,19 @@ async function gestisciMessaggio(payload: Record<string, unknown>): Promise<stri
   if (ANNULLA.test(testo)) return annulla(a);
 
   const conFoto = Boolean(payload.hasMedia || urlMedia(payload));
+
+  /**
+   * «2» — la risposta alla domanda su quale menù.
+   *
+   * Sta qui, prima della chiacchiera: senza, un «2» finirebbe nel ramo del
+   * messaggio corto e si sentirebbe rispondere «mandami la foto della lavagna»
+   * dopo che gliel'aveva appena mandata. Torna `null` quando non e' una scelta,
+   * e allora prosegue il dispatch come prima.
+   */
+  if (!conFoto && testo.length <= 30) {
+    const scelta = await scegliSezione(a, testo);
+    if (scelta) return scelta;
+  }
 
   // Un messaggio corto senza foto è chiacchiera, non un menù: inutile spendere
   // una chiamata all'AI per farsi restituire un'anteprima su niente.

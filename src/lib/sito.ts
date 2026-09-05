@@ -15,10 +15,35 @@
  * Nessun import relativo, apposta: vedi la nota in cima a `waha.ts`.
  */
 
+/**
+ * Una sezione del menu' di quel cliente.
+ *
+ * `slug` e' la chiave con cui il sito la ritrova (`menu_categories.slug`), e si
+ * usa quella e non il titolo perche' il titolo lo si cambia dal pannello un
+ * martedi' qualsiasi. `titolo` e' quello che legge il titolare su WhatsApp, ed
+ * e' anche quello su cui il modello riconosce l'intestazione della foto.
+ */
+export interface SezioneMenu {
+  slug: string;
+  titolo: string;
+  /** Quando vale, a parole: «venerdì sera», «domenica a pranzo». Aiuta il modello. */
+  quando?: string;
+}
+
 export interface ConfigSito {
   site_menu_url?: string;
   site_secret?: string;
   site_menu_page?: string;
+  /**
+   * ⚠️ LE SEZIONI SONO PER CLIENTE, E QUASI NESSUNO NE HA UNA SOLA.
+   *
+   * La Fenice ha quattro menù (fisso del giorno, venerdì cena, sabato cena,
+   * domenica pranzo) e li fotografa tutti; un'hamburgeria ne ha uno e basta.
+   * Finché questa lista è vuota il comportamento è quello di sempre — il sito
+   * scrive nella sua sezione di default — e i clienti già configurati non vanno
+   * ritoccati.
+   */
+  menu_sezioni?: SezioneMenu[];
   /** Il blog: un endpoint diverso, con un segreto diverso. Vedi sotto. */
   site_blog_url?: string;
   site_blog_secret?: string;
@@ -65,9 +90,41 @@ async function chiama(
   return JSON.parse(testo || '{}');
 }
 
-/** Sostituisce il menù pubblicato sul sito. */
-export async function pubblicaMenu(config: ConfigSito, piatti: unknown[]): Promise<Record<string, unknown>> {
-  return chiama(config.site_menu_url, 'x-menu-secret', config.site_secret, { action: 'replace', items: piatti });
+/**
+ * Sostituisce il menù pubblicato sul sito.
+ *
+ * `sezione` (lo slug) si manda SOLO se c'è: un sito aggiornato la usa, uno
+ * vecchio la ignora e scrive dove ha sempre scritto. È il modo di cambiare un
+ * contratto che è già in produzione su siti che nessuno ridistribuirà nello
+ * stesso momento in cui si aggiorna il router.
+ */
+export async function pubblicaMenu(
+  config: ConfigSito,
+  piatti: unknown[],
+  sezione?: string | null
+): Promise<Record<string, unknown>> {
+  return chiama(config.site_menu_url, 'x-menu-secret', config.site_secret, {
+    action: 'replace',
+    items: piatti,
+    ...(sezione ? { section: sezione } : {}),
+  });
+}
+
+/**
+ * Chiede al sito quali sezioni ha davvero.
+ *
+ * Serve a configurare un cliente senza andare a leggergli il database: le
+ * sezioni le sa lui, e una lista scritta a mano da qualche parte diverge il
+ * giorno che il cliente ne aggiunge una. Sola lettura, stesso segreto.
+ */
+export async function leggiSezioniSito(config: ConfigSito): Promise<SezioneMenu[]> {
+  const esito = await chiama(config.site_menu_url, 'x-menu-secret', config.site_secret, {
+    action: 'sections',
+  });
+  const righe = Array.isArray(esito.sections) ? (esito.sections as Array<Record<string, unknown>>) : [];
+  return righe
+    .map((r) => ({ slug: String(r.slug ?? ''), titolo: String(r.title ?? r.slug ?? '') }))
+    .filter((r) => r.slug);
 }
 
 export interface ArticoloDaPubblicare {

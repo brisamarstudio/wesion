@@ -66,6 +66,56 @@ in consolle sei settimane dopo, quando nessuno ricorda più niente.
 
 ---
 
+## Il menù — cosa arriva
+
+```http
+POST /api/menu/replace
+Content-Type: application/json
+x-menu-secret: <il segreto di questo cliente>
+
+{
+  "action": "replace",
+  "section": "sabato-a-cena",
+  "items": [
+    { "name": "Paella alla Valenciana", "price": "Incluso", "description": "riso, frutti di mare, crostacei" }
+  ]
+}
+```
+
+Le altre due azioni: `{"action":"restore"}` rimette il menù precedente (è quello che fa
+`RIPRISTINA` su WhatsApp), e `{"action":"sections"}` — sola lettura — restituisce le
+sezioni che il sito ha davvero, e serve a configurare un cliente senza andargli a leggere
+il database.
+
+### `section`: quale menù, quando il cliente ne ha più d'uno
+
+⚠️ **Era il bug del 05/09/2026, e vale la pena capirlo prima di scrivere l'endpoint.**
+Il contratto prevedeva una destinazione sola, quindi il sito aveva la sua categoria
+scritta fissa nel codice (`const MENU_CATEGORY_TYPE = 'pranzo'`). Ma un cliente vero ne
+ha quattro — La Fenice: menù fisso del giorno, venerdì a cena, sabato a cena, domenica a
+pranzo — e le fotografa tutte. Un «Sabato a Cena» finiva nella Pausa Pranzo **e
+cancellava quello di mezzogiorno**, perché l'azione è `replace`: una foto giusta, due
+menù sbagliati.
+
+Tre cose, in ordine:
+
+1. **`section` è lo slug della categoria, non il titolo.** Il titolo lo si cambia dal
+   pannello un martedì qualsiasi («Sabato a Cena» → «Sabato sera di pesce») e da quel
+   momento il bot scriverebbe nel posto sbagliato senza che nessuno abbia toccato niente.
+2. **Se `section` manca, si scrive dove si è sempre scritto.** I siti già collegati non
+   la mandano e non vanno ridistribuiti nello stesso momento in cui si aggiorna il router.
+3. **Uno slug che non esiste è un `400`, non un ripiego.** Mai scegliere una categoria
+   «vicina»: scrivere il menù della cena dentro il pranzo distrugge tutti e due. Nel
+   messaggio d'errore metti l'elenco degli slug validi — chi lo legge sta configurando un
+   cliente, e la domanda dopo sarebbe comunque «e allora quali sono?».
+
+Le sezioni **stanno anche in Wesion**, in `servizio.config.menu_sezioni` del servizio
+`menu_del_giorno` (`[{slug, titolo, quando}]`): servono al modello per capire da solo, e
+al bot per chiedere al titolare se non ha capito. Devono combaciare con gli slug del sito.
+Lista vuota = cliente con un menù solo, e non cambia niente per nessuno.
+
+---
+
 ## ⚠️ Le tre regole che il sito DEVE rispettare
 
 ### 1. Lo slug decide chi pubblica, non chi riceve
