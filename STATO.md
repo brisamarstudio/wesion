@@ -182,6 +182,90 @@ di aggiungerne una a mano. Da lì:
 
 3. **Configurare un cliente vero** dalla sua scheda (`/aziende/[id]`), non in SQL.
 
+### Adesso — trovati il 05/09/2026, dopo il primo test vero
+
+Il test end-to-end di §0.3 ha lasciato aperte queste. In ordine di quanto mordono
+*oggi*, non di gravità teorica. I primi due riguardano solo Google, che per La Fenice
+è spenta apposta: **sono la condizione per riaccenderla**.
+
+1b. ⚠️ **I due che bloccano la riaccensione di `post_gbp`.**
+
+   - **Doppio post su Google.** `pubblicaBozza` (`router/pubblica.ts:105-207`) non
+     controlla lo stato della bozza e non c'è nessun lucchetto fra le due strade che la
+     chiamano: `conferma()` (`index.ts:171`) e il giro dei 30s (`index.ts:482`). La riga
+     in `pubblicazione` — quella che impedisce al giro di ripescarla — si scrive **dopo**
+     il ritorno della chiamata a Google: se Google è lenta e nel frattempo scatta il tick,
+     esce due volte. Stesso esito se il processo muore fra `pubblicaPost` e `segna`.
+     Google non deduplica. Sul sito non succede: lì l'azione è `replace`, quindi
+     riscrivere è innocuo. **Correzione**: reclamare la bozza con un
+     `UPDATE ... SET stato='pubblicando' WHERE id=$1 AND stato='approvata' RETURNING id`
+     prima di chiamare le destinazioni.
+   - **Pubblicazione parziale mai ritentata.** `uscito = destinazioni.some(esito==='ok')`
+     (`pubblica.ts:308`): basta **una** destinazione riuscita perché la bozza diventi
+     `pubblicata`, e il giro esclude chi ha già un `ok` qualsiasi (`pubblica.ts:347`).
+     Quindi Google riuscita + sito fallito = **il sito resta col menù di ieri per sempre**,
+     e nessuno riprova. Il titolare legge «PUBBLICAZIONE PARZIALE» ma *non* si sente dire
+     «ce ne occupiamo noi» (quella frase esce solo a fallimento totale) — ed è giusto così,
+     perché nessuno se ne sta occupando. **Correzione**: il giro deve guardare «manca un
+     `ok` per *quella* destinazione», non per la bozza intera.
+
+2b. **Un numero titolare su due aziende → sceglie sempre la prima, in silenzio.**
+   `UNIQUE(azienda_id, tipo, normalizzato)` (`db/schema.sql:66`) impedisce i doppioni
+   dentro un'azienda, non fra aziende diverse. `cerca()` fa `ORDER BY e_titolare DESC,
+   c.id LIMIT 1` (`riconosci.ts:61-81`): con lo stesso numero titolare su due clienti,
+   foto e «SI» del secondo locale pubblicano **sul primo**, senza un errore da nessuna
+   parte. Scenario realissimo: un ristoratore con due locali. Vale anche per noi, se si
+   registra lo stesso numero su due clienti per provare. **Regola operativa intanto: un
+   numero, un cliente.**
+
+3b. **I messaggi di gruppo passano come comandi privati.** `candidati()`
+   (`riconosci.ts:44-58`) legge anche `author` e `participant` — che nei gruppi dicono
+   *chi ha scritto dentro il gruppo* — e non c'è nessun controllo su `@g.us`. Se il numero
+   bot finisse in un gruppo col titolare, un «SI» scritto lì pubblicherebbe davvero.
+   **Decisione presa il 05/09: un numero = un bot, i gruppi non si usano mai.** Quindi si
+   scarta ogni evento con `from` che finisce in `@g.us`, prima di cercare il mittente.
+
+4b. **`normalizzaTelefono` è ambiguo sui locali che iniziano per «39».**
+   `src/lib/normalizza.ts:24-32` decide se anteporre il prefisso guardando se la stringa
+   comincia già per `39`: un cellulare il cui numero *nazionale* inizia per 39, scritto
+   senza `+`, non viene mai completato — e da WhatsApp arriva invece sempre col prefisso.
+   Le due forme non coincidono mai e il titolare **non viene mai riconosciuto, in
+   silenzio**. Il modulo della dashboard non mostra il normalizzato calcolato (la CLI sì:
+   `db/configura-cliente.ts:161`), quindi non c'è modo di accorgersene compilando.
+
+5b. **Le Spie non controllano `WAHA_API_KEY` né il refresh token di Google.**
+   `src/lib/spie.ts` verifica solo `OPENROUTER_API_KEY` (righe 564-600). Se la chiave WAHA
+   venisse ruotata di nuovo — è già successo il 29/07 — **si ripeterebbe identico il
+   guasto a tre sintomi di §0.3, e lo scoprirebbe il cliente**. È la lezione dell'incidente
+   Brace Mia, sullo stesso identico punto. Da fare per primo: è poco codice e chiude un
+   buco già costato una volta.
+
+### Adesso — le sezioni del menù (deciso il 05/09, non ancora scritto)
+
+6b. **Un cliente ha più menù, il contratto ne prevede uno solo.** `replace.ts` del sito ha
+   `const MENU_CATEGORY_TYPE = 'pranzo'` **fisso**: qualunque foto il router legga finisce
+   nella *Pausa Pranzo*. Ma La Fenice ha quattro sezioni (pausa pranzo, venerdì cena,
+   sabato cena, domenica pranzo) e manda le foto di tutte; altri clienti ne hanno una sola
+   (hamburger, pizze, alla carta). Se Deborah manda «Sabato a Cena», i piatti della cena
+   atterrano nel menù del pranzo.
+
+   **Il disegno deciso** — il principio è che il ristoratore non deve imparare niente:
+   continua a fotografare e mandare come fa già, solo a un numero diverso. Le scelte a
+   valle (quale sezione, se anche su Google, per il ranking) sono nostre e a lui non
+   interessano.
+
+   1. le **sezioni sono per cliente**, nella config del servizio `menu_del_giorno`;
+   2. l'**OCR restituisce anche la sezione**, scegliendo fra quelle di quel cliente: il
+      titolo sta già scritto nella foto («Sabato a Cena», «Domenica a Pranzo»), e il
+      modello lo sta già leggendo;
+   3. il bot **la dichiara nella conferma** («lo pubblico nella sezione Sabato a Cena»),
+      così una sezione sbagliata si ferma prima di uscire — la rete di sicurezza è quella
+      che c'è già;
+   4. **solo se non capisce**, chiede.
+
+   Fuori da Wesion cambia un file solo: `replace.ts` deve accettare la sezione dalla
+   richiesta, con `'pranzo'` come default — così i siti già collegati non si rompono.
+
 ### Poi — deploy
 
 4. ~~Router su Oracle, dashboard su Contabo~~ — **fatto il 01/09/2026**, vedi §14.1.
