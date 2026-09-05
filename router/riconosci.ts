@@ -88,15 +88,37 @@ async function cerca(identificativi: string[]) {
  * sempre — una chiamata di rete a ogni messaggio, che fallisce quando WAHA e'
  * occupato — si scrive il LID fra i suoi contatti. Dalla seconda volta e' una
  * riga in tabella come tutte le altre.
+ *
+ * ⚠️ I DUE CAMPI FANNO MESTIERI DIVERSI, E VANNO TENUTI SEPARATI.
+ * `normalizzato` e' la chiave con cui si RICONOSCE chi scrive: li' va il LID,
+ * perche' e' quello che arriva nel payload. `valore` e' l'indirizzo a cui si
+ * RISPONDE: li' va il numero vero, perche' un LID non e' un numero e WhatsApp
+ * lo rifiuta (`no LID found for <lid>@s.whatsapp.net`, HTTP 500).
+ *
+ * Scritti tutti e due col LID — com'era fino al 05/09/2026 — il router si
+ * rompeva da solo IMPARANDO: il primo messaggio riceveva risposta (il numero
+ * era ancora quello risolto al volo), dal secondo in poi vinceva la riga
+ * imparata e ogni risposta falliva. Il titolare vedeva un bot muto, i log
+ * dicevano "risposta NON consegnata", e la bozza restava in attesa per sempre.
+ * Visto dal vivo su Trattoria La Fenice, primo test end-to-end.
  */
-async function imparaLid(aziendaId: number, lid: string, eTitolare: boolean): Promise<void> {
+async function imparaLid(
+  aziendaId: number,
+  lid: string,
+  numero: string,
+  eTitolare: boolean
+): Promise<void> {
   const pulito = String(lid).split('@')[0];
   if (!pulito) return;
+  // Senza numero non si impara niente: una riga che riconosce ma non sa
+  // rispondere e' peggio di nessuna riga, perche' scavalca la risoluzione al
+  // volo — che invece funzionerebbe.
+  if (!numero) return;
   await query(
     `INSERT INTO wesion.contatto (azienda_id, tipo, valore, normalizzato, e_titolare, note)
-     VALUES ($1, 'lid', $2, $2, $3, 'imparato dal router alla prima ricezione')
+     VALUES ($1, 'lid', $2, $3, $4, 'imparato dal router alla prima ricezione')
      ON CONFLICT (azienda_id, tipo, normalizzato) DO NOTHING`,
-    [aziendaId, pulito, eTitolare]
+    [aziendaId, numero, pulito, eTitolare]
   );
 }
 
@@ -150,7 +172,7 @@ export async function riconosci(payload: Record<string, unknown>): Promise<Esito
       const normalizzato = normalizzaTelefono(numero);
       const perLid = await cerca([numero, normalizzato ?? numero].filter(Boolean) as string[]);
       if (perLid) {
-        await imparaLid(perLid.azienda_id, grezzo, perLid.e_titolare);
+        await imparaLid(perLid.azienda_id, grezzo, normalizzato ?? numero, perLid.e_titolare);
         console.log(`[router] LID ${grezzo} risolto in ${numero} e imparato`);
 
         if (!perLid.e_titolare) {
