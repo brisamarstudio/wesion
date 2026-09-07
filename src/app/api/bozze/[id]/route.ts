@@ -14,6 +14,7 @@
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { istanteRoma } from '@/lib/quando';
 
 /**
  * Finche' non c'e' la pagina di login (tabella `utente` gia' pronta, pagina no)
@@ -38,6 +39,8 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
     testo?: string;
     /** Il bottone scelto per QUESTA bozza, che vince su quello del cliente. */
     cta?: { tipo?: string; url?: string } | null;
+    /** Quando deve uscire, come lo scrive una persona: «2026-09-10T10:00». */
+    pubblica_at?: string | null;
   };
 
   /**
@@ -71,6 +74,34 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
                                ELSE contenuto || jsonb_build_object('cta', $2::jsonb) END
         WHERE id = $1 AND stato = ANY($3)`,
       [idBozza, corpo.cta ? JSON.stringify(corpo.cta) : null, DECIDIBILI]
+    );
+  }
+
+  /**
+   * Spostare la data.
+   *
+   * ⚠️ Serviva e non c'era: una bozza nasceva con la sua data e quella restava.
+   * Per farla uscire un giorno diverso bisognava cancellarla e rifarla — cioe'
+   * buttare via il testo gia' scritto e gia' letto per spostare un'ora.
+   *
+   * Il fuso lo mette `istanteRoma`: chi scrive «il 10 alle 10» intende le dieci
+   * del mattino a Broni, e una data costruita senza fuso esce alle due di notte.
+   *
+   * `null` toglie la programmazione: la bozza esce al primo giro utile del
+   * router dopo l'approvazione. E' diverso da «non specificato», che qui vuol
+   * dire «non toccare quello che c'e'».
+   */
+  if (corpo.pubblica_at !== undefined) {
+    const quando = corpo.pubblica_at === null ? null : istanteRoma(corpo.pubblica_at);
+    if (corpo.pubblica_at !== null && !quando) {
+      return NextResponse.json(
+        { errore: 'la data non si legge: serve il formato 2026-09-10T10:00' },
+        { status: 400 }
+      );
+    }
+    await query(
+      `UPDATE wesion.bozza SET pubblica_at = $2 WHERE id = $1 AND stato = ANY($3)`,
+      [idBozza, quando, DECIDIBILI]
     );
   }
 

@@ -98,3 +98,48 @@ export function giornoRoma(v: string | Date | null | undefined): string {
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
 }
+
+/**
+ * Da «2026-09-10T10:00» (quello che scrive una persona) all'istante vero.
+ *
+ * ⚠️ IL FUSO NON È UN DETTAGLIO. Chi scrive «esce il 10 settembre alle 10» sta
+ * dicendo le dieci del mattino a Broni. Costruendo la data senza fuso diventa
+ * mezzanotte UTC, cioè le due di notte da noi in estate: il post esce mentre
+ * dormono tutti, e nessuno capisce perché.
+ *
+ * Era già scritto e già risolto in `api/aziende/[id]/post`, con la stessa
+ * funzione copiata dentro. Adesso che serve in due posti sta qui: due copie di
+ * una regola sul fuso sono due copie che prima o poi divergono di un'ora.
+ */
+export function istanteRoma(locale: string): Date | null {
+  const pulito = locale.trim();
+  if (!pulito) return null;
+  // `2026-09-10T10:00` oppure `2026-09-10T10:00:00`
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(pulito)) return null;
+  const conSecondi = pulito.length === 16 ? `${pulito}:00` : pulito;
+  const mese = Number(conSecondi.slice(5, 7));
+  // L'ora legale italiana, senza portarsi dietro una libreria per due mesi.
+  const estivo = mese >= 4 && mese <= 10;
+  const d = new Date(`${conSecondi}${estivo ? '+02:00' : '+01:00'}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * L'inverso: da un istante al testo che va dentro un `datetime-local`.
+ *
+ * Deve dare l'ora ITALIANA, non quella del browser di chi guarda: la data che
+ * si legge e quella che si scrive devono essere la stessa cosa, o si sposta un
+ * post di un'ora ogni volta che lo si apre e si salva.
+ */
+export function perCampoLocale(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pezzi = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
+  // 'sv-SE' dà «2026-09-10 10:00»: manca solo la T.
+  return pezzi.replace(' ', 'T');
+}

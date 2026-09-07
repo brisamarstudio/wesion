@@ -41,15 +41,28 @@ function lunedi(d: Date): Date {
 export default async function PaginaCalendario({
   searchParams,
 }: {
-  searchParams: Promise<{ da?: string }>;
+  searchParams: Promise<{ da?: string; cliente?: string }>;
 }) {
   const p = await searchParams;
   const inizio = p.da ? lunedi(new Date(p.da)) : lunedi(new Date());
+  /**
+   * Il filtro per cliente.
+   *
+   * ⚠️ La vista nasce per «cosa esce stamattina», su tutti. Ma la seconda
+   * domanda vera e' «cosa ha in programma QUESTO cliente» — quella che si fa
+   * al telefono col titolare, o prima di aggiungere un post. Senza filtro
+   * bisognava leggere sette giorni di tutti e cercare il suo nome a occhio.
+   *
+   * Vuoto = tutti, che resta il comportamento di partenza: qui il default
+   * giusto e' l'opposto di quello delle bozze, perche' li' si DECIDE (un
+   * cliente per volta) e qui si GUARDA (l'agenda intera).
+   */
+  const cliente = p.cliente && /^\d+$/.test(p.cliente) ? Number(p.cliente) : null;
   const fine = new Date(inizio);
   fine.setDate(fine.getDate() + 7);
 
   // Le due insieme: la settimana e i rimasti indietro non si parlano.
-  const [voci, indietro] = await Promise.all([
+  const [voci, indietro, clienti] = await Promise.all([
     query<VoceCalendario>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at, b.scade_at,
             a.id AS azienda_id, a.nome AS azienda,
@@ -72,8 +85,9 @@ export default async function PaginaCalendario({
       -- menu del giorno, che vale quindici minuti).
       WHERE COALESCE(b.pubblica_at, b.scade_at) >= $1
         AND COALESCE(b.pubblica_at, b.scade_at) <  $2
+        AND ($3::bigint IS NULL OR b.azienda_id = $3)
       ORDER BY COALESCE(b.pubblica_at, b.scade_at), a.nome`,
-      [inizio.toISOString(), fine.toISOString()]
+      [inizio.toISOString(), fine.toISOString(), cliente]
     ),
 
   /**
@@ -97,6 +111,10 @@ export default async function PaginaCalendario({
                          WHERE x.bozza_id = b.id AND x.esito = 'ok')
       ORDER BY COALESCE(b.pubblica_at, b.approvata_at)
       LIMIT 20`
+    ),
+    query<{ id: string; nome: string }>(
+      `SELECT a.id::text, a.nome FROM wesion.azienda a
+        WHERE a.stato = 'cliente' ORDER BY a.nome`
     ),
   ]);
 
@@ -124,6 +142,8 @@ export default async function PaginaCalendario({
         indietro={indietro}
         inizio={inizio.toISOString()}
         oggi={giornoRoma(new Date())}
+        clienti={clienti}
+        cliente={cliente ? String(cliente) : ''}
       />
     </Telaio>
   );

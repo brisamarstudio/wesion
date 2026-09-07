@@ -54,7 +54,7 @@ import {
   type Bozza,
 } from '@/lib/bozze';
 import { controllaBozza } from '@/lib/controlloTesto';
-import { quandoBreve, scadenza } from '@/lib/quando';
+import { quandoBreve, scadenza, perCampoLocale } from '@/lib/quando';
 import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
@@ -263,6 +263,29 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
     const risposta = await fetch(`/api/bozze/${selezionata.id}/scrivi`, { method: 'POST' });
     const esito = await risposta.json().catch(() => ({}));
     setInScrittura(false);
+    if (!risposta.ok) {
+      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      return;
+    }
+    router.refresh();
+  }
+
+  /**
+   * Spostare la data di uscita.
+   *
+   * ⚠️ Prima non si poteva: una bozza nasceva con la sua data e per farla
+   * uscire un altro giorno bisognava cancellarla e rifarla — cioe' buttare via
+   * un testo gia' scritto, gia' letto e gia' corretto per spostare un'ora.
+   */
+  async function cambiaQuando(valore: string) {
+    if (!selezionata) return;
+    setErrore(null);
+    const risposta = await fetch(`/api/bozze/${selezionata.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ azione: 'nessuna', pubblica_at: valore || null }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
     if (!risposta.ok) {
       setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
       return;
@@ -867,11 +890,46 @@ Premi «Scrivi il testo» per generarlo.`}
                   </MetadataListItem>
                 ) : null}
                 <MetadataListItem label="Creata">{quandoBreve(selezionata.creata_at)}</MetadataListItem>
-                {/* Il piano programma: qui la data che conta è quando ESCE,
-                    non entro quando si decide. Sono due colonne diverse. */}
-                {selezionata.pubblica_at ? (
-                  <MetadataListItem label="Esce il">{quandoBreve(selezionata.pubblica_at)}</MetadataListItem>
-                ) : null}
+                {/* ── QUANDO ESCE, E SI PUO’ SPOSTARE ──────────────────────
+                    Il piano programma: la data che conta e’ quando ESCE, non
+                    entro quando si decide. Sono due colonne diverse.
+
+                    Prima era di sola lettura, e mostrata solo se una data
+                    c’era gia’: per spostare un post di un giorno bisognava
+                    cancellarlo e rifarlo — buttare via un testo gia’ scritto,
+                    letto e corretto per cambiare un’ora. E una bozza senza
+                    data non si poteva programmare affatto.
+
+                    ⚠️ Un <input> nativo, come il <div> della barra dei bottoni
+                    e per lo stesso motivo: Astryx non ha NESSUN componente per
+                    scegliere una data — c’e’ solo `Timestamp`, di sola
+                    lettura, e `TextInput` accetta type text, password ed email.
+                    `datetime-local` da’ il calendario del sistema operativo,
+                    gia’ in italiano, senza librerie.
+
+                    Il fuso lo raddrizza `istanteRoma` sul server: qui l’ora e’
+                    SEMPRE quella italiana, sia letta sia scritta, o un post si
+                    sposterebbe di un’ora ogni volta che lo si apre e salva. */}
+                <MetadataListItem label="Esce il">
+                  {DECIDIBILI.has(selezionata.stato) ? (
+                    <input
+                      type="datetime-local"
+                      aria-label="Quando esce"
+                      defaultValue={perCampoLocale(selezionata.pubblica_at)}
+                      onChange={(e) => void cambiaQuando(e.currentTarget.value)}
+                      style={{
+                        background: 'var(--color-background-surface)',
+                        color: 'var(--color-text-primary)',
+                        border: '1px solid var(--color-border-default)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: 'var(--spacing-1) var(--spacing-2)',
+                        font: 'inherit',
+                      }}
+                    />
+                  ) : (
+                    selezionata.pubblica_at ? quandoBreve(selezionata.pubblica_at) : 'al primo giro utile'
+                  )}
+                </MetadataListItem>
                 {scade ? <MetadataListItem label="Scadenza">{scade.testo}</MetadataListItem> : null}
                 {selezionata.approvata_at ? (
                   <MetadataListItem label="Approvata">

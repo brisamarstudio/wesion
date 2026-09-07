@@ -23,6 +23,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Button } from '@astryxdesign/core/Button';
+import { Selector } from '@astryxdesign/core/Selector';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { Divider } from '@astryxdesign/core/Divider';
 import { giornoRoma } from '@/lib/quando';
@@ -87,11 +88,15 @@ export function Calendario({
   giorni,
   indietro,
   inizio,
+  clienti,
+  cliente,
   oggi,
 }: {
   giorni: GiornoCalendario[];
   indietro: VoceCalendario[];
   inizio: string;
+  clienti: Array<{ id: string; nome: string }>;
+  cliente: string;
   oggi: string;
 }) {
   const router = useRouter();
@@ -100,7 +105,10 @@ export function Calendario({
   function settimana(scarto: number) {
     const d = new Date(inizio);
     d.setDate(d.getDate() + scarto * 7);
-    avvia(() => router.push(`/calendario?da=${d.toISOString().slice(0, 10)}`));
+    // ⚠️ Il filtro si porta dietro: cambiare settimana non deve azzerare il
+    // cliente scelto, o si riparte da capo a ogni freccia.
+    const coda = cliente ? `&cliente=${cliente}` : '';
+    avvia(() => router.push(`/calendario?da=${d.toISOString().slice(0, 10)}${coda}`));
   }
 
   const tutte = giorni.flatMap((g) => g.voci);
@@ -121,6 +129,26 @@ export function Calendario({
                 : `${tutte.length} in settimana · ${uscite} già uscite`}
             </Text>
             <HStack gap={2} align="center">
+              {clienti.length > 1 ? (
+                <Selector
+                  label="Cliente"
+                  isLabelHidden
+                  size="sm"
+                  value={cliente}
+                  hasSearch={clienti.length > 8}
+                  onChange={(v) => {
+                    const scelto = String(v);
+                    const da = inizio.slice(0, 10);
+                    avvia(() =>
+                      router.push(`/calendario?da=${da}${scelto ? `&cliente=${scelto}` : ''}`)
+                    );
+                  }}
+                  options={[
+                    { value: '', label: `Tutti i clienti (${clienti.length})` },
+                    ...clienti.map((c) => ({ value: c.id, label: c.nome })),
+                  ]}
+                />
+              ) : null}
               <Button label="Settimana prima" size="sm" variant="ghost" isLoading={inCorso} onClick={() => settimana(-1)} />
               <Button label="Oggi" size="sm" variant="ghost" onClick={() => avvia(() => router.push('/calendario'))} />
               <Button label="Settimana dopo" size="sm" variant="ghost" onClick={() => settimana(1)} />
