@@ -666,12 +666,39 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                 </VStack>
               ) : null}
 
+              {/* ── IL COMPITO NON E' IL POST (07/09/2026) ───────────────────
+                  Uno slot ancora da generare mostrava il suo COMPITO («Cosa
+                  deve fare», «Si regge su») dentro il campo «Testo», sotto la
+                  riga «Il testo non è ancora stato scritto». Chi apriva la
+                  bozza leggeva quella roba come il post — e la reazione giusta
+                  era «ma è scritto da cani»: come post lo è, perche' non e' un
+                  post.
+
+                  Adesso il compito sta fuori dal campo, in un riquadro suo, e
+                  il campo del testo resta VUOTO finche' il testo non c'e'
+                  davvero. Un contenitore che si chiama «Testo» deve contenere
+                  il testo o niente. */}
+              {selezionata.stato === 'vuota' ? (
+                <Banner
+                  status="info"
+                  title="Questo slot non ha ancora un testo"
+                  description={`${testoOriginale}
+
+Premi «Scrivi il testo» per generarlo.`}
+                />
+              ) : null}
+
               {/* Il testo e' modificabile finche' la bozza e' decidibile. Dopo
                   resta leggibile ma fermo: correggere un post gia' pubblicato
                   qui non lo cambierebbe su Google, direbbe solo una bugia. */}
               <TextArea
                 label="Testo"
-                value={testoCorrente}
+                value={selezionata.stato === 'vuota' && !modificato ? '' : testoCorrente}
+                placeholder={
+                  selezionata.stato === 'vuota'
+                    ? 'Ancora niente: il testo lo scrive «Scrivi il testo», oppure lo scrivi tu qui.'
+                    : undefined
+                }
                 rows={18}
                 isDisabled={!DECIDIBILI.has(selezionata.stato)}
                 disabledMessage="Questa bozza è già stata decisa: il testo non si tocca più."
