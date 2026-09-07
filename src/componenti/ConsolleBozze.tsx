@@ -132,6 +132,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const [apertoModaleNuovo, setApertoModaleNuovo] = useState(false);
   /** La conferma della cancellazione: un bottone che ha solo il sì non è una decisione. */
   const [daCancellare, setDaCancellare] = useState(false);
+  const [inScrittura, setInScrittura] = useState(false);
 
   useEffect(() => {
     if (searchParams?.get('nuovo') === '1') {
@@ -246,6 +247,29 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
    * passata. Senza questo, l'unico modo di ripulire era lasciare in archivio
    * decine di righe rifiutate che nascondono le decisioni vere.
    */
+  /**
+   * Scrivere il testo di QUESTA bozza.
+   *
+   * La rotta c'era dal principio, ma non la chiamava nessuno: l'unica strada
+   * era «Scrivi i testi mancanti» nella scheda del cliente, che le fa tutte
+   * insieme. Ma qui si guarda una bozza per volta — e uno slot che si vuole
+   * riempire adesso non deve obbligare a spendere una generazione anche per
+   * gli altri sei che magari si vogliono ancora cambiare.
+   */
+  async function scrivi() {
+    if (!selezionata) return;
+    setErrore(null);
+    setInScrittura(true);
+    const risposta = await fetch(`/api/bozze/${selezionata.id}/scrivi`, { method: 'POST' });
+    const esito = await risposta.json().catch(() => ({}));
+    setInScrittura(false);
+    if (!risposta.ok) {
+      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      return;
+    }
+    router.refresh();
+  }
+
   async function cancella() {
     if (!selezionata) return;
     setErrore(null);
@@ -541,6 +565,14 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                   />
                   <Button label="Rifiuta" variant="secondary" clickAction={() => decidi('rifiuta')} />
                   <Button label="Cancella" variant="ghost" clickAction={() => setDaCancellare(true)} />
+                  {selezionata.stato === 'vuota' ? (
+                    <Button
+                      label="Scrivi il testo"
+                      variant="primary"
+                      isLoading={inScrittura}
+                      clickAction={scrivi}
+                    />
+                  ) : null}
                   {modificato ? <Badge variant="warning" label="testo modificato" /> : null}
                 </HStack>
               ) : (
