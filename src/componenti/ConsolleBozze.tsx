@@ -545,8 +545,39 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                 )
               ) : null}
 
+              {/* ── E RESTANO IN CIMA ANCHE SCORRENDO (07/09/2026) ──────────
+                  Il 31/08 i bottoni furono portati sopra il testo, e per un
+                  post di quattro righe bastava. Ma su un articolo di seicento
+                  parole si scende a leggere e i bottoni scorrono via: si finisce
+                  di leggere, si e' deciso, e si deve risalire per dirlo.
+
+                  `sticky` invece di spostarli ancora: la decisione si prende
+                  DAVANTI a quello che si sta approvando, e una barra fissa
+                  tiene tutti e due sullo schermo insieme. Le linguette, che
+                  erano l'altra strada, avrebbero nascosto il testo proprio nel
+                  momento in cui si preme il bottone.
+
+                  ⚠️ UN <div>, CONTRO LA REGOLA, E IL MOTIVO. AGENTS.md dice
+                  «niente div: i componenti fanno tutto il layout». Ma nessuno
+                  di questi espone la POSIZIONE: `HStack` accetta solo `xstyle`
+                  (StyleX), e qui il compilatore StyleX non c'e' — passargli
+                  `style` non da' errore, lo butta via in silenzio, che e' il
+                  peggiore dei due esiti. Stessa scelta gia' fatta in
+                  `ModaleNuovoPost` e `ModuloIngresso`.
+
+                  Lo sfondo NON e' facoltativo: senza, il testo scorre sotto i
+                  bottoni e si legge attraverso. */}
               {DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
-                <HStack gap={2} align="center" wrap="wrap">
+                <div
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 2,
+                    background: 'var(--color-background-surface)',
+                    paddingBlock: 'var(--spacing-2)',
+                  }}
+                >
+                  <HStack gap={2} align="center" wrap="wrap">
                   {/* Spento quando la destinazione non c'e': approvare
                       scriverebbe "approvata" e basta, e mezz'ora dopo il router
                       registrerebbe un errore. Il perche' non sta in un tooltip
@@ -574,7 +605,8 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                     />
                   ) : null}
                   {modificato ? <Badge variant="warning" label="testo modificato" /> : null}
-                </HStack>
+                  </HStack>
+                </div>
               ) : (
                 /* Già decisa: al posto dei bottoni si dice cosa sta succedendo,
                    perché è la domanda che uno si fa appena approva. */
