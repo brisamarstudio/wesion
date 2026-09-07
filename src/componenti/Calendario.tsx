@@ -154,6 +154,22 @@ export function Calendario({
               <Button label="Settimana prima" size="sm" variant="ghost" isLoading={inCorso} onClick={() => settimana(-1)} />
               <Button label="Oggi" size="sm" variant="ghost" onClick={() => avvia(() => router.push('/calendario'))} />
               <Button label="Settimana dopo" size="sm" variant="ghost" onClick={() => settimana(1)} />
+              {/* L'altra domanda: non «cosa faccio stamattina» ma «il mese e'
+                  coperto?». Due viste, non una con dentro un interruttore. */}
+              <Button
+                label="Vista mese"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const d = new Date(inizio);
+                  avvia(() =>
+                    router.push(
+                      `/calendario?vista=mese&anno=${d.getFullYear()}&mese=${d.getMonth() + 1}` +
+                        (cliente ? `&cliente=${cliente}` : '')
+                    )
+                  );
+                }}
+              />
             </HStack>
           </HStack>
         </LayoutHeader>
@@ -260,7 +276,7 @@ export function Calendario({
                                     height={40}
                                     style={{
                                       objectFit: 'cover',
-                                      borderRadius: 'var(--radius-sm)',
+                                      borderRadius: 'var(--radius-inner)',
                                       display: 'block',
                                     }}
                                   />

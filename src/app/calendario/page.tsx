@@ -23,6 +23,7 @@
 import { query } from '@/lib/db';
 import { Telaio } from '@/componenti/Telaio';
 import { Calendario, type GiornoCalendario, type VoceCalendario } from '@/componenti/Calendario';
+import { CalendarioMese } from '@/componenti/CalendarioMese';
 import { giornoRoma } from '@/lib/quando';
 
 export const dynamic = 'force-dynamic';
@@ -41,10 +42,39 @@ function lunedi(d: Date): Date {
 export default async function PaginaCalendario({
   searchParams,
 }: {
-  searchParams: Promise<{ da?: string; cliente?: string }>;
+  searchParams: Promise<{
+    da?: string;
+    cliente?: string;
+    vista?: string;
+    anno?: string;
+    mese?: string;
+  }>;
 }) {
   const p = await searchParams;
-  const inizio = p.da ? lunedi(new Date(p.da)) : lunedi(new Date());
+  /**
+   * Due viste, due domande.
+   *
+   * La settimana risponde a «cosa faccio stamattina»: poche righe, testo
+   * leggibile, quello che aspetta una persona in cima. Il mese risponde a «e'
+   * coperto?»: tanti giorni insieme, poco per cella, e i buchi che si vedono
+   * solo perche' stanno accanto ai pieni.
+   *
+   * ⚠️ La richiesta era «una paginazione, che con tanti post non si capisce
+   * niente». Ma paginare un calendario spezza il mese in pezzi che non
+   * corrispondono a niente — nessuno pensa «la seconda pagina di settembre».
+   * Il problema non era il numero di righe: era leggere un elenco dove serve
+   * una griglia.
+   */
+  const mensile = p.vista === 'mese';
+  const oggiRoma = new Date();
+  const anno = p.anno && /^\d{4}$/.test(p.anno) ? Number(p.anno) : oggiRoma.getFullYear();
+  const mese = p.mese && /^\d{1,2}$/.test(p.mese) ? Number(p.mese) : oggiRoma.getMonth() + 1;
+
+  const inizio = mensile
+    ? new Date(anno, mese - 1, 1)
+    : p.da
+      ? lunedi(new Date(p.da))
+      : lunedi(new Date());
   /**
    * Il filtro per cliente.
    *
@@ -59,7 +89,8 @@ export default async function PaginaCalendario({
    */
   const cliente = p.cliente && /^\d+$/.test(p.cliente) ? Number(p.cliente) : null;
   const fine = new Date(inizio);
-  fine.setDate(fine.getDate() + 7);
+  if (mensile) fine.setMonth(fine.getMonth() + 1);
+  else fine.setDate(fine.getDate() + 7);
 
   // Le due insieme: la settimana e i rimasti indietro non si parlano.
   const [voci, indietro, clienti] = await Promise.all([
@@ -121,6 +152,41 @@ export default async function PaginaCalendario({
         WHERE a.stato = 'cliente' ORDER BY a.nome`
     ),
   ]);
+
+  if (mensile) {
+    /**
+     * Le caselle della griglia: i vuoti prima del 1 servono ad allineare il
+     * mese ai giorni della settimana in cima. Senza, tutto slitta di qualche
+     * colonna e un martedi' si legge come un venerdi'.
+     */
+    const primo = new Date(anno, mese - 1, 1);
+    const quantiGiorni = new Date(anno, mese, 0).getDate();
+    const scarto = (primo.getDay() + 6) % 7; // lunedi' = 0
+    const celle: Array<{ data: string | null; voci: VoceCalendario[] }> = [];
+    for (let i = 0; i < scarto; i++) celle.push({ data: null, voci: [] });
+    for (let g = 1; g <= quantiGiorni; g++) {
+      const d = new Date(anno, mese - 1, g);
+      const chiave = giornoRoma(d);
+      celle.push({
+        data: d.toISOString(),
+        voci: voci.filter((v) => giornoRoma(v.pubblica_at ?? v.scade_at) === chiave),
+      });
+    }
+    while (celle.length % 7 !== 0) celle.push({ data: null, voci: [] });
+
+    return (
+      <Telaio attiva="/calendario">
+        <CalendarioMese
+          celle={celle}
+          anno={anno}
+          mese={mese}
+          oggi={giornoRoma(new Date())}
+          clienti={clienti}
+          cliente={cliente ? String(cliente) : ''}
+        />
+      </Telaio>
+    );
+  }
 
   // Tutti e sette i giorni, anche quelli vuoti: un giorno senza niente è
   // un'informazione, non uno spazio da togliere.
