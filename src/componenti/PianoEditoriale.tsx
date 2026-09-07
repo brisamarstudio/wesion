@@ -134,7 +134,17 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
   const [quantita, setQuantita] = useState<string>('');
 
   const [anteprima, setAnteprima] = useState<Anteprima | null>(null);
-  const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
+  /**
+   * `vaiABozze`: il piano CREA e poi lascia lì. Il messaggio diceva «i testi si
+   * scrivono dalla consolle» senza portarci — chi ha appena creato dieci slot
+   * deve indovinare da solo che la consolle è la voce «Bozze» del menù. Il
+   * banner porta la strada con sé.
+   */
+  const [messaggio, setMessaggio] = useState<{
+    tipo: 'success' | 'error' | 'info';
+    testo: string;
+    vaiABozze?: boolean;
+  } | null>(null);
 
   const cliente = clienti.find((c) => String(c.id) === clienteId) ?? null;
 
@@ -168,7 +178,8 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
       tipo: 'success',
       testo:
         `Create ${esito.creati} bozze vuote${esito.rimossi ? ` (${esito.rimossi} slot vecchi sostituiti)` : ''}. ` +
-        'I testi non ci sono ancora: si scrivono dalla scheda del cliente, o una per una dalla consolle.',
+        'I testi non ci sono ancora: si scrivono una per una dalle bozze.',
+      vaiABozze: esito.creati > 0,
     });
     router.refresh();
   }
@@ -250,6 +261,16 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                     title={messaggio.testo}
                     isDismissable
                     onDismiss={() => setMessaggio(null)}
+                    endContent={
+                      messaggio.vaiABozze ? (
+                        <Button
+                          label="Vai alle bozze"
+                          variant="primary"
+                          size="sm"
+                          clickAction={() => router.push('/bozze')}
+                        />
+                      ) : undefined
+                    }
                   />
                 ) : null}
 
