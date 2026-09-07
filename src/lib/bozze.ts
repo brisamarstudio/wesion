@@ -37,6 +37,22 @@ export interface Bozza {
   fatto_chiave: string | null;
   fatto_valore: string | null;
   /**
+   * Il bottone di serie del cliente (`servizio.post_gbp.config.cta_*`).
+   *
+   * Serve alla consolle per due cose: scrivere COSA vuol dire «Quello del
+   * cliente» invece di lasciarlo indovinare, e riempire l'indirizzo quando si
+   * sceglie un bottone diverso — che nove volte su dieci punta allo stesso
+   * posto.
+   *
+   * ⚠️ Sono gli UNICI due campi della config che escono da questa query, ed e'
+   * voluto: vedi la nota sulle destinazioni qui sotto. Un tipo di bottone e un
+   * indirizzo pubblico non sono segreti; il segreto del blog e le chiavi di
+   * Google, che stanno nella stessa colonna, non devono mai arrivare al
+   * browser.
+   */
+  cta_tipo_cliente: string | null;
+  cta_url_cliente: string | null;
+  /**
    * I fatti verificati dell'azienda.
    *
    * Servono alla consolle per ricalcolare gli avvisi mentre si corregge senza
@@ -275,6 +291,12 @@ export const SQL_BOZZE = `
     a.citta AS citta,
     f.chiave AS fatto_chiave,
     f.valore AS fatto_valore,
+    -- Il bottone di serie del cliente: DUE CAMPI SCELTI A MANO, non la config.
+    -- Vedi poco sotto il perche la config intera non esce da questa query.
+    (SELECT s.config->>'cta_tipo' FROM wesion.servizio s
+      WHERE s.azienda_id = a.id AND s.tipo = 'post_gbp') AS cta_tipo_cliente,
+    (SELECT s.config->>'cta_url'  FROM wesion.servizio s
+      WHERE s.azienda_id = a.id AND s.tipo = 'post_gbp') AS cta_url_cliente,
     COALESCE((
       SELECT array_agg(x.valore)
         FROM wesion.fatto x

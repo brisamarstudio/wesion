@@ -55,7 +55,7 @@ import {
 } from '@/lib/bozze';
 import { controllaBozza } from '@/lib/controlloTesto';
 import { quandoBreve, scadenza } from '@/lib/quando';
-import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
+import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
@@ -779,12 +779,30 @@ Premi «Scrivi il testo» per generarlo.`}
                       <Selector
                         label="Bottone sotto il post"
                         value={(selezionata.contenuto.cta as { tipo?: string } | undefined)?.tipo ?? ''}
-                        onChange={(v) =>
-                          void cambiaCta(
-                            String(v),
-                            (selezionata.contenuto.cta as { url?: string } | undefined)?.url ?? ''
-                          )
+                        /* Cosa vuol dire «Quello del cliente», scritto invece che
+                           lasciato indovinare: e' il valore configurato in
+                           Servizi, e da qui non si vedeva. */
+                        description={
+                          selezionata.cta_tipo_cliente
+                            ? `Di serie: ${
+                                AZIONI_BOTTONE[selezionata.cta_tipo_cliente as AzioneBottone] ??
+                                selezionata.cta_tipo_cliente
+                              }${selezionata.cta_url_cliente ? ` → ${selezionata.cta_url_cliente}` : ''}`
+                            : 'Questo cliente non ha un bottone di serie.'
                         }
+                        onChange={(v) => {
+                          /* ⚠️ SCEGLIENDO UN BOTTONE, L'INDIRIZZO SI EREDITA
+                             (07/09/2026). Prima il campo «Dove porta» nasceva
+                             VUOTO anche quando il cliente un indirizzo ce
+                             l'aveva gia'. Ma tutti i bottoni tranne CALL lo
+                             pretendono: approvare cosi' avrebbe mandato al
+                             router un bottone senza destinazione. E riscrivere
+                             a mano un indirizzo che il sistema conosce e' il
+                             modo migliore per digitarlo sbagliato. */
+                          const tipo = String(v);
+                          const attuale = (selezionata.contenuto.cta as { url?: string } | undefined)?.url;
+                          void cambiaCta(tipo, attuale || selezionata.cta_url_cliente || '');
+                        }}
                         options={[
                           { value: '', label: 'Quello del cliente' },
                           ...Object.entries(AZIONI_BOTTONE).map(([value, label]) => ({ value, label })),
@@ -796,6 +814,17 @@ Premi «Scrivi il testo» per generarlo.`}
                           <TextInput
                             label="Dove porta"
                             value={cta.url ?? ''}
+                            /* Vuoto non e' «va bene lo stesso»: senza indirizzo
+                               questo bottone non puo' uscire. */
+                            status={
+                              cta.url?.trim()
+                                ? undefined
+                                : {
+                                    type: 'error',
+                                    message:
+                                      'Senza indirizzo questo bottone non può uscire: mettilo, o torna a «Quello del cliente».',
+                                  }
+                            }
                             onChange={(v) => void cambiaCta(cta.tipo!, v)}
                           />
                         ) : null;
