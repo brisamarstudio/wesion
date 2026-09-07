@@ -68,6 +68,9 @@ export default async function PaginaCalendario({
             a.id AS azienda_id, a.nome AS azienda,
             b.contenuto->>'titolo' AS titolo,
             b.contenuto->>'testo'  AS testo,
+            -- La copertina: su un post di Google l'immagine e' meta' del
+            -- messaggio, e da qui non si vedeva chi ce l'ha e chi no.
+            b.contenuto->>'foto'   AS foto,
             EXISTS (SELECT 1 FROM wesion.pubblicazione x
                      WHERE x.bozza_id = b.id AND x.esito = 'ok')     AS uscita,
             EXISTS (SELECT 1 FROM wesion.pubblicazione x
@@ -102,6 +105,7 @@ export default async function PaginaCalendario({
             a.id AS azienda_id, a.nome AS azienda,
             b.contenuto->>'titolo' AS titolo,
             b.contenuto->>'testo'  AS testo,
+            b.contenuto->>'foto'   AS foto,
             false AS uscita, false AS fallita, 0 AS quanti_avvisi
        FROM wesion.bozza b
        JOIN wesion.azienda a ON a.id = b.azienda_id

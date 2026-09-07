@@ -38,6 +38,8 @@ export interface VoceCalendario {
   azienda: string;
   titolo: string | null;
   testo: string | null;
+  /** La copertina, se c'e'. Su un post di Google e' meta' del messaggio. */
+  foto: string | null;
   uscita: boolean;
   fallita: boolean;
   quanti_avvisi: number | null;
@@ -219,7 +221,18 @@ export function Calendario({
                       {g.voci.length > 0 ? (
                         <Badge variant="neutral" label={String(g.voci.length)} />
                       ) : (
-                        <Text type="supporting">niente</Text>
+                        <>
+                          <Text type="supporting">niente</Text>
+                          {/* Un giorno vuoto e' il posto dove viene voglia di
+                              aggiungere qualcosa: prima bisognava andarselo a
+                              cercare in un'altra pagina e ridigitare la data. */}
+                          <Button
+                            label="Aggiungi"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => router.push(`/bozze?nuovo=1&giorno=${giornoRoma(g.data)}`)}
+                          />
+                        </>
                       )}
                     </HStack>
 
@@ -232,7 +245,27 @@ export function Calendario({
                               key={v.id}
                               label={v.azienda}
                               description={etichetta(v)}
-                              onClick={() => router.push(`/aziende/${v.azienda_id}`)}
+                              /* ⚠️ ALLA BOZZA, non alla scheda dell'azienda.
+                                 Portava li', e vedevi «da approvare» per poi
+                                 finire in un posto dove quella bozza non c'e':
+                                 un pianificatore da cui non si puo' agire e'
+                                 un rapporto. */
+                              onClick={() => router.push(`/bozze?bozza=${v.id}`)}
+                              startContent={
+                                v.foto ? (
+                                  <img
+                                    src={v.foto}
+                                    alt=""
+                                    width={40}
+                                    height={40}
+                                    style={{
+                                      objectFit: 'cover',
+                                      borderRadius: 'var(--radius-sm)',
+                                      display: 'block',
+                                    }}
+                                  />
+                                ) : undefined
+                              }
                               endContent={
                                 <HStack gap={3} align="center">
                                   <Text type="supporting">{TIPO[v.tipo] ?? v.tipo}</Text>

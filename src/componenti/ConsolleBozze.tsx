@@ -55,6 +55,7 @@ import {
 } from '@/lib/bozze';
 import { controllaBozza } from '@/lib/controlloTesto';
 import { quandoBreve, scadenza, perCampoLocale } from '@/lib/quando';
+import { DateTimeInput, type ISODateTimeString } from '@astryxdesign/core/DateTimeInput';
 import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
@@ -139,6 +140,27 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
       setApertoModaleNuovo(true);
     }
   }, [searchParams]);
+
+  /**
+   * Arrivare qui gia' su UNA bozza: `/bozze?bozza=84`.
+   *
+   * ⚠️ Serve al calendario. Prima una riga del calendario portava alla scheda
+   * dell'AZIENDA: vedevi «da approvare» e finivi in un posto dove quella bozza
+   * non c'era. Un pianificatore da cui non si puo' agire e' un rapporto.
+   *
+   * Sceglie anche il cliente e il filtro giusti, perche' altrimenti la riga
+   * sarebbe nascosta da un filtro che non hai messo tu: «Tutte» copre anche le
+   * gia' decise, che dal calendario si aprono per rileggerle.
+   */
+  useEffect(() => {
+    const chiesta = Number(searchParams?.get('bozza'));
+    if (!Number.isFinite(chiesta) || chiesta <= 0) return;
+    const b = bozze.find((x) => x.id === chiesta);
+    if (!b) return;
+    setCliente(String(b.azienda_id));
+    setFiltro('tutte');
+    setSelezionataId(chiesta);
+  }, [searchParams, bozze]);
 
   const filtrate = useMemo(() => {
     const q = cerca.trim().toLowerCase();
@@ -900,31 +922,21 @@ Premi «Scrivi il testo» per generarlo.`}
                     letto e corretto per cambiare un’ora. E una bozza senza
                     data non si poteva programmare affatto.
 
-                    ⚠️ Un <input> nativo, come il <div> della barra dei bottoni
-                    e per lo stesso motivo: Astryx non ha NESSUN componente per
-                    scegliere una data — c’e’ solo `Timestamp`, di sola
-                    lettura, e `TextInput` accetta type text, password ed email.
-                    `datetime-local` da’ il calendario del sistema operativo,
-                    gia’ in italiano, senza librerie.
-
                     Il fuso lo raddrizza `istanteRoma` sul server: qui l’ora e’
                     SEMPRE quella italiana, sia letta sia scritta, o un post si
                     sposterebbe di un’ora ogni volta che lo si apre e salva. */}
                 <MetadataListItem label="Esce il">
                   {DECIDIBILI.has(selezionata.stato) ? (
-                    <input
-                      type="datetime-local"
-                      aria-label="Quando esce"
-                      defaultValue={perCampoLocale(selezionata.pubblica_at)}
-                      onChange={(e) => void cambiaQuando(e.currentTarget.value)}
-                      style={{
-                        background: 'var(--color-background-surface)',
-                        color: 'var(--color-text-primary)',
-                        border: '1px solid var(--color-border-default)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: 'var(--spacing-1) var(--spacing-2)',
-                        font: 'inherit',
-                      }}
+                    <DateTimeInput
+                      label="Quando esce"
+                      isLabelHidden
+                      hourFormat="24h"
+                      timeIncrement={15}
+                      value={
+                        (perCampoLocale(selezionata.pubblica_at) || undefined) as
+                          ISODateTimeString | undefined
+                      }
+                      onChange={(v) => void cambiaQuando(v ?? '')}
                     />
                   ) : (
                     selezionata.pubblica_at ? quandoBreve(selezionata.pubblica_at) : 'al primo giro utile'
@@ -978,6 +990,7 @@ Premi «Scrivi il testo» per generarlo.`}
 
     <ModaleNuovoPost
       aperto={apertoModaleNuovo}
+      giornoPreselezionato={searchParams?.get('giorno') ?? null}
       onChiudi={() => setApertoModaleNuovo(false)}
       onCreato={() => router.refresh()}
     />

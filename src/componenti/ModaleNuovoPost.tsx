@@ -29,6 +29,15 @@ type DataISO = `${number}${number}${number}${number}-${number}${number}-${number
 export interface ModaleNuovoPostProps {
   aperto: boolean;
   aziendaIdPreselezionata?: number | null;
+  /**
+   * Il giorno gia' scelto altrove, come `2026-09-09`.
+   *
+   * ⚠️ Arriva dal calendario: cliccando «Aggiungi» su un giorno vuoto, quel
+   * giorno e' gia' una decisione presa — ridigitarlo e' lavoro doppio, e
+   * digitarlo diverso da quello che si e' cliccato e' un post nel giorno
+   * sbagliato. L'ora la mette a 10:00, come il piano del mese.
+   */
+  giornoPreselezionato?: string | null;
   aziendeDisponibili?: Array<{ id: number; nome: string }>;
   onChiudi: () => void;
   onCreato?: () => void;
@@ -37,6 +46,7 @@ export interface ModaleNuovoPostProps {
 export function ModaleNuovoPost({
   aperto,
   aziendaIdPreselezionata,
+  giornoPreselezionato,
   aziendeDisponibili: clientiProp,
   onChiudi,
   onCreato,
@@ -64,6 +74,9 @@ export function ModaleNuovoPost({
     if (!aperto) return;
     if (aziendaIdPreselezionata) {
       setAziendaId(String(aziendaIdPreselezionata));
+    }
+    if (giornoPreselezionato && /^\d{4}-\d{2}-\d{2}$/.test(giornoPreselezionato)) {
+      setQuando(`${giornoPreselezionato}T10:00`);
     }
     if (!clientiProp || clientiProp.length === 0) {
       fetch('/api/aziende')
@@ -102,7 +115,7 @@ export function ModaleNuovoPost({
     } else if (!aziendaId && clientiProp.length === 1) {
       setAziendaId(String(clientiProp[0].id));
     }
-  }, [aperto, aziendaIdPreselezionata, clientiProp, aziendaId]);
+  }, [aperto, aziendaIdPreselezionata, giornoPreselezionato, clientiProp, aziendaId]);
 
   if (!aperto) return null;
 
