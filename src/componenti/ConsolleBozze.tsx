@@ -113,7 +113,15 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   // L'ora arriva dopo il montaggio: prima non si sa, e va bene cosi'.
   const adesso = useAdesso();
   const [filtro, setFiltro] = useState('da_decidere');
-  const [cliente, setCliente] = useState('tutti');
+  /**
+   * Si parte SENZA cliente scelto, non da «tutti».
+   *
+   * L'elenco unico di tre clienti mescolati e' illeggibile proprio quando
+   * serve: si decide un cliente per volta, guardando le sue date di fila. Con
+   * «tutti» di serie, la prima cosa che vedi e' la coda di qualcun altro.
+   * «Tutti i clienti» resta come scelta, non come punto di partenza.
+   */
+  const [cliente, setCliente] = useState('');
   const [cerca, setCerca] = useState('');
   const [selezionataId, setSelezionataId] = useState<number | null>(null);
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
@@ -134,6 +142,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   const filtrate = useMemo(() => {
     const q = cerca.trim().toLowerCase();
     return bozze.filter((b) => {
+      if (!cliente) return false;
       if (cliente !== 'tutti' && String(b.azienda_id) !== cliente) return false;
       if (filtro === 'da_decidere' && !DECIDIBILI.has(b.stato)) return false;
       if (filtro === 'attenzione' && !b.avvisi.some((a) => a.gravita === 'grave')) return false;
@@ -341,6 +350,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                   size="sm"
                   hasSearch={clienti.length > 8}
                   options={[
+                    { value: '', label: 'Scegli un cliente…' },
                     { value: 'tutti', label: `Tutti i clienti (${clienti.length})` },
                     ...clienti.map((c) => ({ value: c.id, label: c.nome })),
                   ]}
@@ -357,7 +367,12 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
               />
             </VStack>
 
-            {filtrate.length === 0 ? (
+            {!cliente && clienti.length > 1 ? (
+              <EmptyState
+                title="Scegli un cliente"
+                description="Le bozze si decidono un cliente per volta: le date hanno senso in fila, e la coda di uno non c’entra con quella di un altro."
+              />
+            ) : filtrate.length === 0 ? (
               <EmptyState
                 title={filtro === 'da_decidere' ? 'Nessuna bozza da decidere' : 'Nessuna bozza'}
                 description={

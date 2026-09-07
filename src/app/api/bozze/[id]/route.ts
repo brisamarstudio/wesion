@@ -89,6 +89,40 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
     return NextResponse.json({ salvato: true });
   }
 
+  /**
+   * ⚠️ NON SI APPROVA UNA BOZZA SENZA TESTO.
+   *
+   * Uno slot del piano nasce `vuota`: la consolle gli mostra il COMPITO
+   * («cosa deve fare», «si regge su») perche' serve a rivedere il piano, ma
+   * quello non e' il post — il post non esiste ancora. Il bottone «Approva»
+   * pero' c'era lo stesso, e approvandolo il router legge
+   * `contenuto.summary ?? contenuto.testo` e trova la stringa vuota: prova a
+   * pubblicare il niente, Google rifiuta, e resta una pubblicazione fallita
+   * per una cosa che non poteva riuscire.
+   *
+   * La guardia sta QUI e non solo sul bottone: una regola che vale solo dove
+   * l'operatore guarda non e' una regola — stessa ragione del middleware.
+   * Rifiutare invece si puo': dire «questo slot non mi piace» prima di
+   * spenderci una generazione e' esattamente il senso del piano.
+   */
+  if (corpo.azione === 'approva') {
+    const [q] = await query<{ testo: string | null }>(
+      `SELECT COALESCE(contenuto->>'summary', contenuto->>'testo') AS testo
+         FROM wesion.bozza WHERE id = $1`,
+      [idBozza]
+    );
+    if (!q) return NextResponse.json({ errore: 'questa bozza non c’è' }, { status: 404 });
+    if (!q.testo?.trim()) {
+      return NextResponse.json(
+        {
+          errore:
+            'Questa bozza non ha ancora un testo: quello che leggi è il compito, non il post. Premi «Scrivi» prima di approvarla.',
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   const nuovoStato = corpo.azione === 'approva' ? 'approvata' : 'rifiutata';
 
   /**
