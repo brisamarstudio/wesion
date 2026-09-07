@@ -57,6 +57,7 @@ import { controllaBozza } from '@/lib/controlloTesto';
 import { quandoBreve, scadenza } from '@/lib/quando';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
 import { Plus } from 'lucide-react';
 
@@ -121,6 +122,8 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   /** Vero mentre la foto sale: il media server ci mette qualche secondo. */
   const [caricando, setCaricando] = useState(false);
   const [apertoModaleNuovo, setApertoModaleNuovo] = useState(false);
+  /** La conferma della cancellazione: un bottone che ha solo il sì non è una decisione. */
+  const [daCancellare, setDaCancellare] = useState(false);
 
   useEffect(() => {
     if (searchParams?.get('nuovo') === '1') {
@@ -223,6 +226,29 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ azione: 'nessuna', cta }),
     }).catch(() => undefined);
+    router.refresh();
+  }
+
+  /**
+   * Cancellare non e' rifiutare.
+   *
+   * «Rifiuta» e' una decisione che resta scritta; «Cancella» toglie una bozza
+   * che non doveva esistere — uno slot nato da un piano rifatto, una data gia'
+   * passata. Senza questo, l'unico modo di ripulire era lasciare in archivio
+   * decine di righe rifiutate che nascondono le decisioni vere.
+   */
+  async function cancella() {
+    if (!selezionata) return;
+    setErrore(null);
+    const risposta = await fetch(`/api/bozze/${selezionata.id}`, { method: 'DELETE' });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      router.refresh();
+      return;
+    }
+    setDaCancellare(false);
+    setSelezionataId(null);
     router.refresh();
   }
 
@@ -499,6 +525,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                     }
                   />
                   <Button label="Rifiuta" variant="secondary" clickAction={() => decidi('rifiuta')} />
+                  <Button label="Cancella" variant="ghost" clickAction={() => setDaCancellare(true)} />
                   {modificato ? <Badge variant="warning" label="testo modificato" /> : null}
                 </HStack>
               ) : (
@@ -744,6 +771,18 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
         </LayoutPanel>
       }
     />
+    {daCancellare && selezionata ? (
+      <AlertDialog
+        isOpen
+        onOpenChange={(aperto) => (aperto ? null : setDaCancellare(false))}
+        title="Cancellare questa bozza?"
+        description="Sparisce del tutto, e non è la stessa cosa di «Rifiuta»: quella resta in archivio come decisione presa. Cancellare serve alle bozze che non dovevano esistere. Non si torna indietro."
+        actionLabel="Cancella"
+        cancelLabel="Lascia stare"
+        onAction={cancella}
+      />
+    ) : null}
+
     <ModaleNuovoPost
       aperto={apertoModaleNuovo}
       onChiudi={() => setApertoModaleNuovo(false)}

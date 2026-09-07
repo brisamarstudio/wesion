@@ -148,3 +148,64 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
 
   return NextResponse.json({ id: aggiornata.id, stato: aggiornata.stato });
 }
+
+/**
+ * Buttarne via una.
+ *
+ * ⚠️ NON E' «rifiuta». Rifiutare vuol dire «ho guardato questa cosa e ho detto
+ * no»: resta in archivio ed e' una decisione che qualcuno vorra' rileggere.
+ * Cancellare vuol dire «questa non doveva proprio esistere» — uno slot nato
+ * male, un piano rifatto tre volte, una data gia' passata. Tenerle tutte in
+ * archivio non e' memoria, e' rumore che nasconde le decisioni vere.
+ *
+ * ⚠️ DA `pubblicata` E `pubblicando` NON SI CANCELLA. La prima ha una riga in
+ * `pubblicazione` che punta qui e una cosa vera uscita nel mondo: sparire la
+ * bozza lascerebbe uno storico che dice «e' uscito qualcosa» senza poter piu'
+ * dire cosa. La seconda e' in mano al router proprio adesso.
+ */
+const CANCELLABILI = ['vuota', 'generata', 'attesa_approvazione', 'approvata', 'rifiutata', 'scaduta'];
+
+export async function DELETE(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
+  const { id } = await contesto.params;
+  const idBozza = Number(id);
+  if (!Number.isFinite(idBozza)) {
+    return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  }
+
+  /**
+   * L'evento nasce dallo stesso giro della cancellazione, come per la
+   * decisione: se la riga sparisce, la traccia del fatto che e' sparita resta.
+   * Ci si mette dentro il titolo, perche' dopo non c'e' piu' modo di saperlo.
+   */
+  const [tolta] = await query<{ id: number; stato: string }>(
+    `WITH via AS (
+       DELETE FROM wesion.bozza
+        WHERE id = $1 AND stato = ANY($2)
+       RETURNING id, stato, azienda_id, tipo, contenuto
+     ), tracciata AS (
+       INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio)
+       SELECT azienda_id, 'bozza_cancellata', $3,
+              jsonb_build_object('bozza_id', id, 'tipo', tipo,
+                                 'titolo', contenuto->>'titolo', 'stato_era', stato)
+         FROM via
+     )
+     SELECT id, stato FROM via`,
+    [idBozza, CANCELLABILI, OPERATORE]
+  );
+
+  if (!tolta) {
+    const [c] = await query<{ stato: string }>(`SELECT stato FROM wesion.bozza WHERE id = $1`, [idBozza]);
+    if (!c) return NextResponse.json({ errore: 'questa bozza non c’è già più' }, { status: 404 });
+    return NextResponse.json(
+      {
+        errore:
+          c.stato === 'pubblicata'
+            ? 'È già uscita: cancellarla lascerebbe uno storico che non sa più dire cosa è uscito. Il post si toglie dalla scheda Google.'
+            : 'Il router la sta pubblicando proprio adesso: aspetta che finisca.',
+      },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json({ cancellata: tolta.id });
+}
