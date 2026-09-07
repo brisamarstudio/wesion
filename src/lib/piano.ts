@@ -174,7 +174,20 @@ export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoP
       origine: 'pilastro',
       titolo: pilastro.nome,
       angolo: pilastro.angolo,
-      ...materiaPerPilastro(materia, pilastro, Math.floor(i / pilastri.length)),
+      /**
+       * ⚠️ `i` e non `Math.floor(i / pilastri.length)`.
+       *
+       * Ruotando per GIRO COMPLETO di pilastri, chi pubblica poco non ruota
+       * mai: con 6 pilastri e 4 post al mese il giro non si chiude, `giro`
+       * resta 0 e ogni pilastro pesca sempre `voci[0]`. Visto su M Hotel Don
+       * Carlo (07/09/2026): tre post su quattro nati dallo stesso fatto —
+       * «Camere e suite» — mentre in `offerta` ce n'erano cinque, e Day Use,
+       * ristorante, sala meeting e area camper non uscivano mai.
+       *
+       * Con `i` il fatto cambia a ogni slot. Chi fa molti post continua a
+       * ruotare come prima; chi ne fa pochi smette di ripetersi.
+       */
+      ...materiaPerPilastro(materia, pilastro, i),
     });
   }
 

@@ -1,10 +1,13 @@
 # Dove siamo arrivati — Wesion
 
-*Ultimo aggiornamento: 05/09/2026, sera. **Il TODO 1 è chiuso**: il menù del giorno
-è uscito davvero su un sito di un cliente vero, partendo da una foto su WhatsApp —
-§0.3. Per arrivarci sono venuti fuori tre guasti che il codice non poteva mostrare
-(un firewall mai aperto, la chiave WAHA sbagliata, e il router che si rompeva da solo
-imparando un LID): stanno tutti e tre in §0.3, con il motivo per cui erano invisibili.*
+*Ultimo aggiornamento: 07/09/2026. **Il terzo cliente è dentro** — M Hotel Don Carlo,
+il primo che non è un ristorante — e configurarlo ha fatto uscire due difetti che
+nessuno poteva vedere con i due clienti di prima: la rotazione dei fatti nel piano
+funzionava solo per chi pubblica tanto, e la scheda in dashboard spegne i fatti che
+non stanno nelle sue quattro chiavi. Tutti e due in §0.4.*
+
+*Prima: il menù del giorno è uscito davvero su un sito vero partendo da una foto su
+WhatsApp — §0.3, con i tre guasti invisibili che c'erano voluti per arrivarci.*
 
 Se apri questo progetto adesso, **leggi solo questo file**.
 
@@ -31,6 +34,89 @@ npm run router   ->  il router WhatsApp, su 172.17.0.1:3010
 npm run cliente  ->  prepara un cliente da riga di comando
 npm run utente   ->  crea un accesso alla dashboard
 ```
+
+## 0.4 Il terzo cliente, e i due difetti che ha scoperto (07/09/2026)
+
+**M Hotel Don Carlo** (Broni, PV) è il primo cliente che non è un ristorante: hotel,
+motel con formula Day Use, ristorante *interno*, sala meeting e area sosta camper.
+Entrarci ha fatto emergere due cose che La Fenice e MyWebby non potevano mostrare —
+non perché siano fortunate, ma perché sono **simili fra loro**.
+
+### 1. La rotazione dei fatti funzionava solo per chi pubblica tanto
+
+In `piano.ts` il fatto da agganciare a un pilastro ruotava così:
+
+```ts
+materiaPerPilastro(materia, pilastro, Math.floor(i / pilastri.length))
+```
+
+Cioè il fatto cambia **una volta per giro completo di pilastri**. Con 6 pilastri e 4
+post al mese il giro non si chiude mai, `giro` resta `0`, e ogni pilastro pesca sempre
+`voci[0]`. Anteprima di settembre per Don Carlo: **tre post su quattro nati dallo
+stesso fatto** — «Camere e suite» — mentre in `offerta` ce n'erano cinque, e Day Use,
+ristorante, sala meeting e area camper non uscivano **mai**.
+
+Corretto passando `i`: il fatto cambia a ogni slot. Chi fa molti post ruota come prima,
+chi ne fa pochi smette di ripetersi.
+
+⚠️ **Perché non si era mai visto.** La Fenice e MyWebby pubblicano abbastanza da
+chiudere più giri in un mese, quindi per loro la rotazione funzionava. Il difetto
+colpiva solo il cliente che pubblica poco — cioè **ogni cliente nuovo**, che è il
+momento peggiore per fare quattro post identici.
+
+### 2. La scheda in dashboard spegne i fatti che non conosce
+
+`SchedaCliente.tsx` conosce quattro chiavi: `cosa_fa`, `offerta`, `materiali`,
+`punti_forza`. Il salvataggio manda **l'elenco completo** e quello che non c'è viene
+spento (`scheda.ts`, il `DELETE`/`attivo = false`).
+
+Configurando Don Carlo i fatti erano stati scritti con chiavi descrittive
+(`sala_meeting`, `area_camper`, `motel_day_use`…). Effetto: il pannello diceva
+«solo 0 fatti» mentre la linguetta contava 8, e **premere «Salva la scheda» li avrebbe
+spenti tutti** — senza errori, senza conferme.
+
+Non è un bug del salvataggio: è il salvataggio che fa quello che dichiara. È una
+**trappola per chi scrive fatti fuori dalla dashboard**, cioè per chi configura un
+cliente da uno script. Chi lo fa deve usare le quattro chiavi, non inventarne.
+
+### 3. Cose imparate sulle schede Google che non sono ristoranti
+
+- **Gli hotel non hanno il campo descrizione.** `leggiProfiloGoogle` torna
+  `descrizione: ""` e non è un errore: Google lo toglie al settore alberghiero. Ma
+  `analizzaVoce.ts` chiama la descrizione «la fonte migliore per la voce» — quindi
+  **su un hotel quella fonte non esiste**, e restano recensioni, sito e incollato.
+- **Gli hotel non hanno `regularHours`.** Al loro posto ci sono i `moreHoursTypes`
+  (Colazione, Pranzo, Cena, Accesso), che dipendono dalle categorie della scheda.
+- **`leggiRecensioni` non segue il `nextPageToken`**: vede al massimo le 50 più
+  recenti. Su Don Carlo sono 50 su 230 dichiarate, 30 con testo. Per capire com'è il
+  posto *oggi* va bene, ma è una scelta, non una lettura completa.
+- **Nessun settore fra i cinque descrive l'ospitalità.** Don Carlo sta su
+  `locale` + `servizi`: `ristorazione` tirava dentro «Un piatto e come nasce» e «Un
+  ingrediente», che su un hotel con **cucina riservata agli ospiti** sono i post da
+  non fare — invitano a cena gente che non si può servire.
+
+### 4. Il fatto che il sito è Laravel, scritto in anagrafica
+
+`mhoteldoncarlo.com` è Laravel + Blade: 122 rotte, 42 controller, con Stripe, carte
+salvate, check-in espresso e PDF firmati. **L'audit SEO/GEO non è applicabile**: cerca
+i generatori in `src/pages`, `src/routes`, `src/app`, `app`, `pages`, e le rotte di
+Laravel stanno in `routes/web.php`. È la stessa cecità che il 02/09 ha mandato online
+il `llms.txt` monco della Fenice (§CONTRATTO-SITO). Sta scritto nelle note
+dell'azienda, non solo qui.
+
+### Cosa resta aperto da qui
+
+- **`creaAzienda` non è raggiungibile da riga di comando.** `db/configura-cliente.ts`
+  sa solo *modificare* un'azienda che c'è già, e `anagrafica.ts` importa `./db` senza
+  estensione, quindi Node non lo carica. Aggiungere un cliente da script obbliga a
+  riscrivere a mano la logica di `creaAzienda` (slug libero, dedup sul Place ID,
+  evento). Se aggiungere clienti a mano diventa abitudine, quella funzione va messa
+  dove la vede anche Node.
+- **Il piano non sa che un cliente ha già un piano editoriale altrove.** Don Carlo ha
+  due post a settimana su Facebook, scritti a mano dall'agenzia. Su Google non è un
+  doppione — sono superfici che non si incontrano — ma Wesion non ha modo di sapere
+  cosa è già stato detto, e il rischio è che l'agenzia scriva due volte la stessa cosa
+  in due posti.
 
 ## 0.3 Il primo menù del giorno vero (05/09/2026, 17:15)
 
