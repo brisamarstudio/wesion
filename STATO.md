@@ -965,7 +965,25 @@ mai rigenerate, o il router vecchio si romperebbe mentre serve sei numeri veri.
    tutto il file prima di guardare quale servizio gli hai chiesto, quindi su Contabo
    pretendeva `ROUTER_SECRET`. Ora sono due file, uno per server.
 
-### Come si fa un deploy della dashboard (passo-passo, per non reinventarlo ogni volta)
+### Come si fa un deploy della dashboard
+
+```
+npm run deploy
+```
+
+Push, `git pull` sul server, build, e la verifica che il container sia **healthy** e
+che `/entra` risponda 200. Le credenziali le legge dal `.env` (`CONTABO_HOST`,
+`CONTABO_USER`, `CONTABO_PASS`) — non stanno piu' nel sorgente di un altro progetto.
+
+⚠️ **Il controllo che vale piu' di tutti:** lo script si ferma se il commit arrivato
+sul server non e' lo stesso che hai in mano. Ricostruire quando il push non e' andato
+vuol dire compilare il codice di ieri e passare il pomeriggio a chiedersi perche' la
+modifica non si vede — successo il 07/09/2026, ed e' il motivo per cui lo script esiste.
+
+`--secco` non pusha (usa quello che c'e' gia' su GitHub), `--forza` ricostruisce anche
+se il server era gia' aggiornato (serve dopo aver cambiato il `.env` del server).
+
+#### A mano, se lo script non parte (passo-passo, per non reinventarlo ogni volta)
 
 Non è on-the-fly: Astryx è solo la libreria di componenti React usata scrivendo il
 codice, il container gira da `node server.js` (l'output **standalone** di `next build`,
