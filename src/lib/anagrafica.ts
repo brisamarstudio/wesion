@@ -189,7 +189,7 @@ export async function leggiAnagrafica(aziendaId: number): Promise<Anagrafica | n
 }
 
 export interface EsitoCreazione {
-  id: number;
+  id: number | string;
   slug: string;
   /** Vero quando il Place ID era gia' in tabella: non e' un errore, e' un ritrovamento. */
   giaEsisteva: boolean;

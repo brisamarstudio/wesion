@@ -66,8 +66,8 @@ export async function POST() {
       if (esito.giaEsisteva) {
         giaEsistevano++;
         await query(
-          `UPDATE wesion.azienda SET stato = 'cliente', aggiornata_at = now() WHERE id = $1`,
-          [esito.id]
+          `UPDATE wesion.azienda SET stato = 'cliente', aggiornata_at = now() WHERE id = $1::bigint`,
+          [String(esito.id)]
         );
       } else {
         importati++;
@@ -75,12 +75,12 @@ export async function POST() {
 
       await query(
         `INSERT INTO wesion.servizio (azienda_id, tipo, attivo, config)
-         VALUES ($1, 'post_gbp', true, $2::jsonb)
+         VALUES ($1::bigint, 'post_gbp', true, $2::jsonb)
          ON CONFLICT (azienda_id, tipo) DO UPDATE
            SET attivo = true,
                config = wesion.servizio.config || EXCLUDED.config`,
         [
-          esito.id,
+          String(esito.id),
           JSON.stringify({
             gbp_account_id: s.accountId,
             gbp_location_id: s.locationId,
