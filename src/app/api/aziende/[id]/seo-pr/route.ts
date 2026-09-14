@@ -18,7 +18,7 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { leggiPR, applicaPR, chiudiPR } from '@/lib/seo-git';
 
-async function urlDellaPR(aziendaId: number): Promise<string | null> {
+async function urlDellaPR(aziendaId: string | number): Promise<string | null> {
   const [sito] = await query<{ ultima_pr_url: string | null }>(
     `SELECT ultima_pr_url FROM wesion.sito WHERE azienda_id = $1`,
     [aziendaId]
