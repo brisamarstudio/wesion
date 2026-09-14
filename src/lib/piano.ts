@@ -35,7 +35,7 @@ export interface SlotPiano {
   /** Da quale fonte viene. */
   fonte: string;
   /** La riga di `fatto`, quando ce n'è una: finisce in `bozza.fatto_id`. */
-  fattoId: number | null;
+  fattoId: string | number | null;
 }
 
 export interface EsitoPiano {
@@ -211,7 +211,7 @@ export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoP
  * Si mettono in fila tutte le fonti buone e si scorre: due ricorrenze vicine
  * non si reggono mai sulla stessa cosa finche' c'e' materia.
  */
-function materiaPerRicorrenza(m: Materia, giro: number): { fatto: string; fonte: string; fattoId: number | null } {
+function materiaPerRicorrenza(m: Materia, giro: number): { fatto: string; fonte: string; fattoId: string | number | null } {
   const disponibili: Array<{ fonte: string; voce: { id: string | number | null; valore: string } }> = [];
   for (const fonte of ['offerta', 'punti_forza', 'materiali', 'apprezzato'] as const) {
     for (const voce of daFonte(m, fonte)) disponibili.push({ fonte, voce });
@@ -228,7 +228,7 @@ function materiaPerPilastro(
   m: Materia,
   p: Pilastro,
   giro: number
-): { fatto: string; fonte: string; fattoId: number | null } {
+): { fatto: string; fonte: string; fattoId: string | number | null } {
   const voci = daFonte(m, p.fonte);
   const scelta = voci[giro % voci.length] ?? voci[0];
   return { fatto: scelta?.valore ?? '', fonte: p.fonte, fattoId: scelta?.id ?? null };
