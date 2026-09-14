@@ -22,7 +22,7 @@ import { costruisciPiano, postPerMese, salvaPiano } from '@/lib/piano';
  * piano o guardando quello che aveva gia' costruito ieri — che sono due
  * situazioni opposte con lo stesso schermo davanti.
  */
-async function giaProgrammati(aziendaId: number, anno: number, mese: number) {
+async function giaProgrammati(aziendaId: string | number, anno: number, mese: number) {
   const inizio = new Date(anno, mese - 1, 1).toISOString();
   const fine = new Date(anno, mese, 1).toISOString();
   return query<{
