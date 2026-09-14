@@ -53,7 +53,7 @@ import { ModuloAzienda, AZIENDA_VUOTA, type AziendaModulo } from './ModuloAziend
 import { soloData } from '@/lib/quando';
 
 export interface Azienda {
-  id: number;
+  id: string | number;
   slug: string;
   nome: string;
   categoria: string | null;
@@ -211,7 +211,7 @@ interface Vista {
 interface Opzioni {
   categorie: Array<{ valore: string; quanti: number }>;
   citte: Array<{ valore: string; quanti: number }>;
-  campagne: Array<{ id: number; nome: string; quanti: number }>;
+  campagne: Array<{ id: string | number; nome: string; quanti: number }>;
 }
 
 export function ElencoAziende({
@@ -265,7 +265,7 @@ export function ElencoAziende({
   /** La domanda prima di cancellare le spuntate: null = nessuna in corso. */
   const [confermaBlocco, setConfermaBlocco] = useState(false);
 
-  function spunta(id: number, dentro: boolean) {
+  function spunta(id: string | number, dentro: boolean) {
     setSpuntate((s) => {
       const nuovo = new Set(s);
       if (dentro) nuovo.add(id);
@@ -347,7 +347,7 @@ export function ElencoAziende({
    * chiede al server prima di aprire, invece di far comparire un modulo mezzo
    * vuoto che al salvataggio cancellerebbe quello che non aveva caricato.
    */
-  async function apriModifica(id: number) {
+  async function apriModifica(id: string | number) {
     const r = await fetch(`/api/aziende/${id}`);
     if (!r.ok) {
       setMessaggio({ tipo: 'error', testo: 'Non sono riuscito a leggere la scheda anagrafica.' });
@@ -376,7 +376,7 @@ export function ElencoAziende({
     });
   }
 
-  async function elimina(id: number, nome: string) {
+  async function elimina(id: string | number, nome: string) {
     const r = await fetch(`/api/aziende/${id}`, { method: 'DELETE' });
     const esito = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -444,7 +444,7 @@ export function ElencoAziende({
     else gruppi.push({ titolo: chiave, righe: [a] });
   }
 
-  async function cambiaStato(id: number, nuovo: string, canale?: string) {
+  async function cambiaStato(id: string | number, nuovo: string, canale?: string) {
     setMessaggio(null);
     const r = await fetch(`/api/aziende/${id}/stato`, {
       method: 'PATCH',
@@ -459,7 +459,7 @@ export function ElencoAziende({
     router.refresh();
   }
 
-  async function analizza(id: number) {
+  async function analizza(id: string | number) {
     setMessaggio(null);
     const r = await fetch(`/api/aziende/${id}/audit`, { method: 'POST' });
     const e = await r.json().catch(() => ({}));
@@ -473,7 +473,7 @@ export function ElencoAziende({
    * non solo legge una pagina), quindi ha un suo stato di caricamento: non è
    * `analisiInCorso`, quello è del giro sull'hook.
    */
-  async function analizzaSeo(id: number) {
+  async function analizzaSeo(id: string | number) {
     setMessaggio(null);
     setSeoInCorso(true);
     setEsitoSeo(null);

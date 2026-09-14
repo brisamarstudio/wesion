@@ -37,7 +37,7 @@ import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { giornoRoma } from '@/lib/quando';
 
 export interface ClientePiano {
-  id: number;
+  id: string | number;
   nome: string;
   /** Quanti fatti attivi ha: sotto una certa soglia il piano esce generico. */
   fatti: number;
@@ -56,7 +56,7 @@ interface Slot {
 
 /** Uno slot GIA' in tabella, con lo stato in cui si trova adesso. */
 interface Programmato {
-  id: number;
+  id: string | number;
   stato: string;
   pubblica_at: string;
   titolo: string | null;

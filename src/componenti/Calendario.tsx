@@ -29,12 +29,12 @@ import { Divider } from '@astryxdesign/core/Divider';
 import { giornoRoma } from '@/lib/quando';
 
 export interface VoceCalendario {
-  id: number;
+  id: string | number;
   tipo: string;
   stato: string;
   pubblica_at: string | null;
   scade_at: string | null;
-  azienda_id: number;
+  azienda_id: string | number;
   azienda: string;
   titolo: string | null;
   testo: string | null;

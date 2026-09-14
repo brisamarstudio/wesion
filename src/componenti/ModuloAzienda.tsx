@@ -42,7 +42,7 @@ export interface ContattoModulo {
 }
 
 export interface AziendaModulo {
-  id?: number;
+  id?: string | number;
   nome: string;
   categoria: string;
   citta: string;
@@ -105,7 +105,7 @@ export function ModuloAzienda({
   /** Null = ne stiamo creando una nuova. */
   azienda: AziendaModulo | null;
   onChiudi: () => void;
-  onSalvata: (id: number, giaEsisteva: boolean) => void;
+  onSalvata: (id: string | number, giaEsisteva: boolean) => void;
 }) {
   const [dati, setDati] = useState<AziendaModulo>(azienda ?? AZIENDA_VUOTA);
   const [errore, setErrore] = useState<string | null>(null);

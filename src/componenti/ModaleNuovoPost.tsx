@@ -28,7 +28,7 @@ type DataISO = `${number}${number}${number}${number}-${number}${number}-${number
 
 export interface ModaleNuovoPostProps {
   aperto: boolean;
-  aziendaIdPreselezionata?: number | null;
+  aziendaIdPreselezionata?: string | number | null;
   /**
    * Il giorno gia' scelto altrove, come `2026-09-09`.
    *
@@ -38,7 +38,7 @@ export interface ModaleNuovoPostProps {
    * sbagliato. L'ora la mette a 10:00, come il piano del mese.
    */
   giornoPreselezionato?: string | null;
-  aziendeDisponibili?: Array<{ id: number; nome: string }>;
+  aziendeDisponibili?: Array<{ id: string | number; nome: string }>;
   onChiudi: () => void;
   onCreato?: () => void;
 }
@@ -51,7 +51,7 @@ export function ModaleNuovoPost({
   onChiudi,
   onCreato,
 }: ModaleNuovoPostProps) {
-  const [clienti, setClienti] = useState<Array<{ id: number; nome: string }>>(clientiProp || []);
+  const [clienti, setClienti] = useState<Array<{ id: string | number; nome: string }>>(clientiProp || []);
   const [aziendaId, setAziendaId] = useState<string>(
     aziendaIdPreselezionata ? String(aziendaIdPreselezionata) : ''
   );

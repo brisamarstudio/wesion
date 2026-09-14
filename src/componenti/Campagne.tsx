@@ -36,7 +36,7 @@ import { Trash2 } from 'lucide-react';
 import { quandoBreve } from '@/lib/quando';
 
 export interface CampagnaRiga {
-  id: number;
+  id: string | number;
   nome: string;
   categoria: string;
   citta: string[];
@@ -118,7 +118,7 @@ export function Campagne({ campagne }: { campagne: CampagnaRiga[] }) {
     router.refresh();
   }
 
-  async function raccogli(id: number) {
+  async function raccogli(id: string | number) {
     setMessaggio({ tipo: 'info', testo: 'Raccolgo i risultati…' });
     const risposta = await fetch(`/api/campagne/${id}/raccogli`, { method: 'POST' });
     const esito = await risposta.json().catch(() => ({}));
