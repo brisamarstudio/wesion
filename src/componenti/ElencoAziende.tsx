@@ -239,7 +239,7 @@ export function ElencoAziende({
   const router = useRouter();
   const [inCorso, avvia] = useTransition();
   const [cerca, setCerca] = useState(vista.q);
-  const [selezionataId, setSelezionataId] = useState<number | null>(null);
+  const [selezionataId, setSelezionataId] = useState<string | number | null>(null);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
   const [copiato, setCopiato] = useState(false);
   /** Il giro dell'audit dura minuti: il bottone deve dire che sta lavorando. */
