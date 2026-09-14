@@ -124,9 +124,9 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
    */
   const [cliente, setCliente] = useState('');
   const [cerca, setCerca] = useState('');
-  const [selezionataId, setSelezionataId] = useState<number | null>(null);
+  const [selezionataId, setSelezionataId] = useState<string | number | null>(null);
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
-  const [correzioni, setCorrezioni] = useState<Record<number, string>>({});
+  const [correzioni, setCorrezioni] = useState<Record<string | number, string>>({});
   const [errore, setErrore] = useState<string | null>(null);
   /** Vero mentre la foto sale: il media server ci mette qualche secondo. */
   const [caricando, setCaricando] = useState(false);
