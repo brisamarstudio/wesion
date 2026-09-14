@@ -26,6 +26,8 @@ import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
 import { query } from '@/lib/db';
 import { soloData } from '@/lib/quando';
 
+import { BottoneImportaGBP } from '@/componenti/BottoneImportaGBP';
+
 export const dynamic = 'force-dynamic';
 
 interface Cliente {
@@ -59,13 +61,16 @@ export default async function PaginaClienti() {
       <Layout
         header={
           <LayoutHeader hasDivider>
-            <VStack gap={1}>
-              <Heading level={1}>Clienti</Heading>
-              <Text type="supporting" color="secondary">
-                Chi è già dentro — non chi va ancora chiamato. Per il discorso di apertura
-                e il punteggio di urgenza, quello sta in «Aziende».
-              </Text>
-            </VStack>
+            <HStack justify="between" align="center">
+              <VStack gap={1}>
+                <Heading level={1}>Clienti</Heading>
+                <Text type="supporting" color="secondary">
+                  Chi è già dentro — non chi va ancora chiamato. Per il discorso di apertura
+                  e il punteggio di urgenza, quello sta in «Aziende».
+                </Text>
+              </VStack>
+              <BottoneImportaGBP />
+            </HStack>
           </LayoutHeader>
         }
         content={
