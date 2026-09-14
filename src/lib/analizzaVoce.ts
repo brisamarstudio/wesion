@@ -51,7 +51,7 @@ export interface Materiale {
 }
 
 /** Raccoglie tutto, dicendo cosa non è riuscito a leggere invece di tacere. */
-export async function raccogliMateriale(aziendaId: number, incollato = ''): Promise<Materiale> {
+export async function raccogliMateriale(aziendaId: string | number, incollato = ''): Promise<Materiale> {
   const m: Materiale = {
     descrizioneGoogle: '',
     categoria: '',
@@ -316,7 +316,7 @@ export interface EsitoAnalisi {
  * risposta dell'altra — ed è l'unico punto di tutto il progetto dove il
  * parallelo è sicuro: sono tre chiamate per un cliente solo, non 270.
  */
-export async function analizzaVoce(aziendaId: number, incollato = ''): Promise<EsitoAnalisi> {
+export async function analizzaVoce(aziendaId: string | number, incollato = ''): Promise<EsitoAnalisi> {
   const m = await raccogliMateriale(aziendaId, incollato);
 
   const [voce, apprezzato, fatti] = await Promise.all([

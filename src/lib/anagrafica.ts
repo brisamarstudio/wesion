@@ -52,7 +52,7 @@ export interface DatiAzienda {
 }
 
 export interface Anagrafica {
-  id: number;
+  id: string | number;
   nome: string;
   slug: string;
   categoria: string | null;
@@ -65,7 +65,7 @@ export interface Anagrafica {
   stato: string;
   fonte: string;
   note: string | null;
-  contatti: Array<{ id: number; tipo: string; valore: string; normalizzato: string | null; e_titolare: boolean }>;
+  contatti: Array<{ id: string | number; tipo: string; valore: string; normalizzato: string | null; e_titolare: boolean }>;
   sito_repo_url: string | null;
   sito_gsc_proprieta: string | null;
 }
@@ -136,7 +136,7 @@ export async function salvaContatti(aziendaId: string | number, contatti: Contat
  * property, che magari va cercata la prima volta guardando Search Console.
  */
 export async function salvaSito(
-  aziendaId: number,
+  aziendaId: string | number,
   repoUrl: string | null | undefined,
   gscProprieta: string | null | undefined
 ): Promise<void> {
@@ -189,7 +189,7 @@ export async function leggiAnagrafica(aziendaId: string | number): Promise<Anagr
 }
 
 export interface EsitoCreazione {
-  id: number | string;
+  id: string | number | string;
   slug: string;
   /** Vero quando il Place ID era gia' in tabella: non e' un errore, e' un ritrovamento. */
   giaEsisteva: boolean;
@@ -213,7 +213,7 @@ export async function creaAzienda(d: DatiAzienda): Promise<EsitoCreazione> {
   const placeId = String(d.place_id ?? '').trim() || null;
 
   if (placeId) {
-    const [esistente] = await query<{ id: number; slug: string }>(
+    const [esistente] = await query<{ id: string | number; slug: string }>(
       `SELECT id, slug FROM wesion.azienda WHERE place_id = $1`,
       [placeId]
     );
@@ -224,7 +224,7 @@ export async function creaAzienda(d: DatiAzienda): Promise<EsitoCreazione> {
   const indirizzo = String(d.indirizzo ?? '').trim() || null;
   const slug = await slugLibero(nome, citta);
 
-  const [creata] = await query<{ id: number }>(
+  const [creata] = await query<{ id: string | number }>(
     `INSERT INTO wesion.azienda
        (slug, nome, categoria, citta, provincia, indirizzo, cap, maps_url, place_id, stato, campagna_id, fonte, note)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'manuale',$12)

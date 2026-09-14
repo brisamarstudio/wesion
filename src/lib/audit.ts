@@ -213,7 +213,7 @@ function perche(errore: unknown, url: string): string {
  * `ON CONFLICT DO NOTHING` come fa lo scraper: se il numero c'è già, quello
  * scritto da un umano vince e non viene ritoccato.
  */
-async function raccogliRecapiti(aziendaId: number, html: string, url: string | null): Promise<number> {
+async function raccogliRecapiti(aziendaId: string | number, html: string, url: string | null): Promise<number> {
   if (!html || !url) return 0;
 
   const recapiti = estraiRecapiti(html);
@@ -256,7 +256,7 @@ async function raccogliRecapiti(aziendaId: number, html: string, url: string | n
   let scritti = 0;
   for (const r of righe) {
     if (!r.normalizzato) continue;
-    const esito = await query<{ id: number }>(
+    const esito = await query<{ id: string | number }>(
       `INSERT INTO wesion.contatto (azienda_id, tipo, valore, normalizzato, note, verificato_at)
        VALUES ($1, $2, $3, $4, 'trovato sul sito', now())
        ON CONFLICT (azienda_id, tipo, normalizzato) DO NOTHING
@@ -413,7 +413,7 @@ ${alBuio}
  * modelli diversi non sono confrontabili fra loro, e fra sei mesi "questo lead
  * fa 90" senza sapere chi l'ha detto non vuol dire niente.
  */
-export async function analizzaAzienda(aziendaId: number): Promise<EsitoAudit> {
+export async function analizzaAzienda(aziendaId: string | number): Promise<EsitoAudit> {
   const [azienda] = await query<DatiAzienda>(
     `SELECT a.nome, a.categoria, a.citta,
             (SELECT c.valore FROM wesion.contatto c

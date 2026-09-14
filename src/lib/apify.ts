@@ -44,7 +44,7 @@ export interface AvvioCampagna {
  * senza, un run avviato e mai raccolto e' denaro speso di cui non resta traccia
  * da nessuna parte.
  */
-export async function avviaCampagna(dati: AvvioCampagna): Promise<{ campagnaId: number; runId: string }> {
+export async function avviaCampagna(dati: AvvioCampagna): Promise<{ campagnaId: string | number; runId: string }> {
   const risposta = await fetch(`${BASE}/acts/${ATTORE}/runs?token=${chiave()}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -69,7 +69,7 @@ export async function avviaCampagna(dati: AvvioCampagna): Promise<{ campagnaId: 
   const runId = dato.id;
   if (!runId) throw new Error('Apify non ha restituito un id di run.');
 
-  const [campagna] = await query<{ id: number }>(
+  const [campagna] = await query<{ id: string | number }>(
     `INSERT INTO wesion.campagna (nome, categoria, citta, apify_run_id)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (nome) DO UPDATE SET apify_run_id = EXCLUDED.apify_run_id
@@ -142,7 +142,7 @@ export interface EsitoImportazione {
  * perche' l'inserimento va in conflitto sul Place ID. Serve piu' spesso di
  * quanto sembri — la prima raccolta parte mentre il run e' ancora a meta'.
  */
-export async function raccogliCampagna(campagnaId: number): Promise<EsitoImportazione> {
+export async function raccogliCampagna(campagnaId: string | number): Promise<EsitoImportazione> {
   const [campagna] = await query<{ apify_run_id: string | null; citta: string[] }>(
     `SELECT apify_run_id, citta FROM wesion.campagna WHERE id = $1`,
     [campagnaId]
@@ -181,7 +181,7 @@ export async function raccogliCampagna(campagnaId: number): Promise<EsitoImporta
     const mapsUrl = primo(grezzo, 'googleMapsUrl', 'url', 'placeUrl', 'mapsUrl');
     const { lat, lon } = coordinate(grezzo);
 
-    const [azienda] = await query<{ id: number }>(
+    const [azienda] = await query<{ id: string | number }>(
       `INSERT INTO wesion.azienda
          (slug, nome, place_id, categoria, indirizzo, cap, citta, provincia, regione,
           paese, lat, lon, maps_url, campagna_id, fonte, raw_json)

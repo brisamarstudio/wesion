@@ -30,8 +30,8 @@ import { DIVIETI_BASE, REGOLE_CRITICHE, SISTEMA_COPYWRITER } from './regolePost'
 import { vocePerPrompt } from './voce';
 
 interface BozzaDaScrivere {
-  id: number;
-  azienda_id: number;
+  id: string | number;
+  azienda_id: string | number;
   azienda: string;
   citta: string | null;
   tipo: string;
@@ -47,7 +47,7 @@ interface BozzaDaScrivere {
  * non raggruppa niente, e le etichette non si possono riordinare a posteriori
  * senza cambiare gli URL che le usano.
  */
-async function categorieBlog(aziendaId: number): Promise<string[]> {
+async function categorieBlog(aziendaId: string | number): Promise<string[]> {
   const [riga] = await query<{ categorie: string | null }>(
     `SELECT config->>'categorie' AS categorie
        FROM wesion.servizio WHERE azienda_id = $1 AND tipo = 'blog'`,
@@ -134,7 +134,7 @@ export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
 }
 
 export interface EsitoScrittura {
-  bozzaId: number;
+  bozzaId: string | number;
   testo: string;
   modello: string;
   ms: number;
@@ -148,7 +148,7 @@ export interface EsitoScrittura {
  * testo che qualcuno ha già corretto a mano è il modo migliore per fargli
  * buttare via mezz'ora senza accorgersene.
  */
-export async function scriviBozza(bozzaId: number): Promise<EsitoScrittura> {
+export async function scriviBozza(bozzaId: string | number): Promise<EsitoScrittura> {
   const [bozza] = await query<BozzaDaScrivere>(
     `SELECT b.id, b.azienda_id, b.tipo, b.stato, b.contenuto, a.nome AS azienda, a.citta
        FROM wesion.bozza b JOIN wesion.azienda a ON a.id = b.azienda_id
@@ -250,8 +250,8 @@ export async function scriviBozza(bozzaId: number): Promise<EsitoScrittura> {
  * gratuito e ritrovarsi metà mese generato e metà no, senza sapere quale metà.
  * In serie ci mette mezzo minuto e non lascia buchi.
  */
-export async function scriviTutte(aziendaId: number, massimo = 20): Promise<EsitoScrittura[]> {
-  const vuote = await query<{ id: number }>(
+export async function scriviTutte(aziendaId: string | number, massimo = 20): Promise<EsitoScrittura[]> {
+  const vuote = await query<{ id: string | number }>(
     `SELECT id FROM wesion.bozza
       WHERE azienda_id = $1 AND stato = 'vuota'
       ORDER BY pubblica_at NULLS LAST, id

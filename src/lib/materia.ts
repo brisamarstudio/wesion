@@ -27,7 +27,7 @@ import type { TagAttivita } from './ricorrenze';
 /** Un valore utilizzabile, con l'id della riga da cui viene (se ne ha una). */
 export interface VoceFatto {
   /** Nullo per i confini, che vengono da `voce` e non sono righe di `fatto`. */
-  id: number | null;
+  id: string | number | null;
   valore: string;
 }
 
@@ -123,7 +123,7 @@ export function daFonte(m: Materia, fonte: FonteMateria): VoceFatto[] {
  * esistono: un'offerta stagionale finita a settembre non deve continuare a
  * generare post a novembre, e nessuno si ricorda di cancellarla a mano.
  */
-export async function leggiMateria(aziendaId: number): Promise<Materia> {
+export async function leggiMateria(aziendaId: string | number): Promise<Materia> {
   const [voce] = await query<{
     voce: string | null;
     pubblico: string | null;
@@ -145,7 +145,7 @@ export async function leggiMateria(aziendaId: number): Promise<Materia> {
     [aziendaId]
   );
 
-  const fatti = await query<{ id: number; chiave: string; valore: string }>(
+  const fatti = await query<{ id: string | number; chiave: string; valore: string }>(
     `SELECT id, chiave, valore
        FROM wesion.fatto
       WHERE azienda_id = $1

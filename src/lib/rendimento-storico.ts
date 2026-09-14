@@ -31,7 +31,7 @@ interface ContenutoSnapshot {
 /** Salva lo snapshot di oggi. Va chiamato DOPO aver letto quello precedente,
  *  mai prima — altrimenti il confronto sarebbe di uno snapshot con se stesso. */
 export async function salvaSnapshotRendimento(
-  aziendaId: number,
+  aziendaId: string | number,
   perQuery: RigaRendimento[],
   perPagina: RigaRendimento[]
 ): Promise<void> {
@@ -44,7 +44,7 @@ export async function salvaSnapshotRendimento(
 
 /** L'ultimo snapshot PRIMA di questo giro — null se è il primo audit mai fatto. */
 export async function leggiUltimoSnapshot(
-  aziendaId: number
+  aziendaId: string | number
 ): Promise<{ contenuto: ContenutoSnapshot; creato_at: string } | null> {
   const [riga] = await query<{ contenuto: ContenutoSnapshot; creato_at: string }>(
     `SELECT contenuto, creato_at FROM wesion.snapshot

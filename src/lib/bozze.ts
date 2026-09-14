@@ -16,8 +16,8 @@ import type { AvvisoTesto } from './controlloTesto';
 
 /** Una bozza come la vede la consolle: gia' unita all'azienda che la riguarda. */
 export interface Bozza {
-  id: number;
-  azienda_id: number;
+  id: string | number;
+  azienda_id: string | number;
   azienda: string;
   citta: string | null;
   tipo: string;

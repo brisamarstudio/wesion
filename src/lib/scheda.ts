@@ -21,7 +21,7 @@ import { query } from './db';
 import type { TagAttivita } from './ricorrenze';
 
 export interface FattoScheda {
-  id: number;
+  id: string | number;
   chiave: string;
   valore: string;
   fonte: string;
@@ -35,7 +35,7 @@ export interface ServizioScheda {
 }
 
 export interface Scheda {
-  id: number;
+  id: string | number;
   nome: string;
   slug: string;
   citta: string | null;
@@ -75,7 +75,7 @@ export interface Scheda {
   fatti: FattoScheda[];
   servizi: ServizioScheda[];
   /** Chi può dare comandi al router. */
-  titolari: Array<{ id: number; tipo: string; valore: string }>;
+  titolari: Array<{ id: string | number; tipo: string; valore: string }>;
   /**
    * Cosa è uscito davvero, per questo cliente.
    *
@@ -100,7 +100,7 @@ export interface Scheda {
 }
 
 export interface BozzaDaApprovare {
-  id: number;
+  id: string | number;
   tipo: string;
   stato: string;
   titolo: string | null;
@@ -113,7 +113,7 @@ export interface BozzaDaApprovare {
 
 /** Una cosa uscita: il post com'è, e dove è finito. */
 export interface VoceStorico {
-  id: number;
+  id: string | number;
   tipo: string;
   titolo: string | null;
   testo: string | null;
@@ -147,7 +147,7 @@ export const VOCE_VUOTA: Scheda['voce'] = {
 
 export async function leggiScheda(aziendaId: string | number): Promise<Scheda | null> {
   const [azienda] = await query<{
-    id: number;
+    id: string | number;
     nome: string;
     slug: string;
     citta: string | null;
@@ -207,7 +207,7 @@ export async function leggiScheda(aziendaId: string | number): Promise<Scheda | 
     [aziendaId]
   );
 
-  const titolari = await query<{ id: number; tipo: string; valore: string }>(
+  const titolari = await query<{ id: string | number; tipo: string; valore: string }>(
     `SELECT id, tipo, valore FROM wesion.contatto WHERE azienda_id = $1 AND e_titolare ORDER BY id`,
     [aziendaId]
   );

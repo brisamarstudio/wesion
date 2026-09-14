@@ -212,7 +212,7 @@ export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoP
  * non si reggono mai sulla stessa cosa finche' c'e' materia.
  */
 function materiaPerRicorrenza(m: Materia, giro: number): { fatto: string; fonte: string; fattoId: number | null } {
-  const disponibili: Array<{ fonte: string; voce: { id: number | null; valore: string } }> = [];
+  const disponibili: Array<{ fonte: string; voce: { id: string | number | null; valore: string } }> = [];
   for (const fonte of ['offerta', 'punti_forza', 'materiali', 'apprezzato'] as const) {
     for (const voce of daFonte(m, fonte)) disponibili.push({ fonte, voce });
   }
@@ -247,7 +247,7 @@ function materiaPerPilastro(
  * il cliente ha già visto.
  */
 export async function salvaPiano(
-  aziendaId: number,
+  aziendaId: string | number,
   slot: SlotPiano[],
   anno: number,
   mese: number
@@ -255,7 +255,7 @@ export async function salvaPiano(
   const inizio = new Date(anno, mese - 1, 1).toISOString();
   const fine = new Date(anno, mese, 1).toISOString();
 
-  const rimossi = await query<{ id: number }>(
+  const rimossi = await query<{ id: string | number }>(
     `DELETE FROM wesion.bozza
       WHERE azienda_id = $1 AND tipo = 'post_gbp' AND origine = 'piano' AND stato = 'vuota'
         AND pubblica_at >= $2 AND pubblica_at < $3

@@ -13,7 +13,7 @@ import { Pool, types } from 'pg';
  *
  * ⚠️ Per difetto node-postgres restituisce int8 come stringa, perche' un bigint
  * puo' superare quello che un numero JavaScript regge. Corretto in teoria e
- * bugiardo in pratica: tutte le nostre interfacce dichiarano `id: number`, e
+ * bugiardo in pratica: tutte le nostre interfacce dichiarano `id: string | number`, e
  * il codice sembra funzionare — finche' qualcuno non scrive `b.id + 1` e
  * ottiene "411" invece di 42. Scoperto il 27/08/2026 mentre un `find(x => x.id
  * === 51)` non trovava una riga che c'era.

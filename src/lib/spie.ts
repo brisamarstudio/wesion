@@ -101,7 +101,7 @@ const nomi = (
 
 /** Pubblicazioni fallite: la bozza era approvata e alla destinazione non è arrivata. */
 async function pubblicazioniFallite(): Promise<Spia | null> {
-  const righe = await query<{ azienda_id: number; azienda: string; destinazione: string; errore: string | null }>(
+  const righe = await query<{ azienda_id: string | number; azienda: string; destinazione: string; errore: string | null }>(
     `SELECT a.id AS azienda_id, a.nome AS azienda, p.destinazione, p.errore
        FROM wesion.pubblicazione p
        JOIN wesion.bozza b   ON b.id = p.bozza_id
@@ -145,7 +145,7 @@ async function pubblicazioniFallite(): Promise<Spia | null> {
  * lento, e' fermo.
  */
 async function bozzeApprovateFerme(): Promise<Spia | null> {
-  const righe = await query<{ azienda_id: number; azienda: string; tipo: string; minuti: number }>(
+  const righe = await query<{ azienda_id: string | number; azienda: string; tipo: string; minuti: number }>(
     `SELECT a.id AS azienda_id, a.nome AS azienda, b.tipo,
             EXTRACT(EPOCH FROM (now() - b.approvata_at))::int / 60 AS minuti
        FROM wesion.bozza b
@@ -206,7 +206,7 @@ async function bozzeApprovateFerme(): Promise<Spia | null> {
  * cliente a caso. Gli id veri sono numerici: qualunque altra cosa e' un residuo.
  */
 async function idGoogleMalformati(): Promise<Spia | null> {
-  const righe = await query<{ azienda_id: number; azienda: string; account: string; scheda: string }>(
+  const righe = await query<{ azienda_id: string | number; azienda: string; account: string; scheda: string }>(
     `SELECT a.id AS azienda_id, a.nome AS azienda,
             COALESCE(s.config->>'gbp_account_id', '')  AS account,
             COALESCE(s.config->>'gbp_location_id', '') AS scheda
@@ -252,7 +252,7 @@ async function idGoogleMalformati(): Promise<Spia | null> {
  * differenza fra correggere e riaprire una pratica.
  */
 async function postSpariti(): Promise<Spia | null> {
-  const righe = await query<{ azienda_id: number; azienda: string; stato: string; quando: string }>(
+  const righe = await query<{ azienda_id: string | number; azienda: string; stato: string; quando: string }>(
     `SELECT a.id AS azienda_id, a.nome AS azienda, p.stato_remoto AS stato,
             to_char(p.eseguita_at, 'DD/MM') AS quando
        FROM wesion.pubblicazione p
@@ -334,7 +334,7 @@ async function bozzeScadute(): Promise<Spia | null> {
  * Dopo le 11: prima di quell'ora e' presto, la lavagna spesso si scrive tardi.
  */
 async function menuNonArrivato(): Promise<Spia | null> {
-  const righe = await query<{ id: number; azienda: string }>(
+  const righe = await query<{ id: string | number; azienda: string }>(
     `SELECT a.id, a.nome AS azienda
        FROM wesion.servizio s
        JOIN wesion.azienda a ON a.id = s.azienda_id
@@ -365,7 +365,7 @@ async function menuNonArrivato(): Promise<Spia | null> {
 
 /** Clienti attivi senza niente in coda: da qui in poi da loro non esce più nulla. */
 async function codaVuota(): Promise<Spia | null> {
-  const righe = await query<{ id: number; azienda: string }>(
+  const righe = await query<{ id: string | number; azienda: string }>(
     `SELECT a.id, a.nome AS azienda
        FROM wesion.azienda a
       WHERE a.stato = 'cliente'
@@ -398,7 +398,7 @@ async function codaVuota(): Promise<Spia | null> {
 
 /** Clienti senza voce: i loro testi escono corretti e intercambiabili. */
 async function voceMancante(): Promise<Spia | null> {
-  const righe = await query<{ id: number; azienda: string }>(
+  const righe = await query<{ id: string | number; azienda: string }>(
     `SELECT a.id, a.nome AS azienda
        FROM wesion.azienda a
        LEFT JOIN wesion.voce v ON v.azienda_id = a.id
@@ -425,7 +425,7 @@ async function voceMancante(): Promise<Spia | null> {
 
 /** Clienti senza nessun fatto attivo: non c'è materia prima da cui partire. */
 async function fattiMancanti(): Promise<Spia | null> {
-  const righe = await query<{ id: number; azienda: string }>(
+  const righe = await query<{ id: string | number; azienda: string }>(
     `SELECT a.id, a.nome AS azienda
        FROM wesion.azienda a
       WHERE a.stato = 'cliente'
