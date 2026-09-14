@@ -57,7 +57,7 @@ function quando(richiesta: Request) {
   return { anno, mese, quantita };
 }
 
-async function preparaPiano(aziendaId: number, richiesta: Request) {
+async function preparaPiano(aziendaId: string | number, richiesta: Request) {
   const { anno, mese, quantita } = quando(richiesta);
   const materia = await leggiMateria(aziendaId);
   const esito = costruisciPiano(materia, { anno, mese, quantita });
