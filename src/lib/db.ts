@@ -23,7 +23,7 @@ import { Pool, types } from 'pg';
  * di quanti se ne possano scrivere. Meglio un numero vero che una stringa che
  * si finge tale.
  */
-types.setTypeParser(types.builtins.INT8, (v) => Number(v));
+types.setTypeParser(types.builtins.INT8, (v) => (v === null || v === undefined ? null : String(v)));
 
 const globalePool = globalThis as unknown as { poolWesion?: Pool };
 
