@@ -143,9 +143,9 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
    * parte, al suo giro (30 secondi). La dashboard non ha nessuna porta verso
    * di lui — vedi la nota in cima a `/api/bozze/[id]`.
    */
-  const [bozzaInCorso, setBozzaInCorso] = useState<number | null>(null);
+  const [bozzaInCorso, setBozzaInCorso] = useState<string | number | null>(null);
 
-  async function decidiBozza(idBozza: number, azione: 'approva' | 'rifiuta') {
+  async function decidiBozza(idBozza: string | number, azione: 'approva' | 'rifiuta') {
     setMessaggio(null);
     setBozzaInCorso(idBozza);
     try {
@@ -359,7 +359,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tipo: pezzo.tipo,
-        fattoId: pezzo.fattoId ? Number(pezzo.fattoId) : undefined,
+        fattoId: pezzo.fattoId ? pezzo.fattoId : undefined,
         quando: pezzo.quando || undefined,
         angolo: pezzo.angolo || undefined,
       }),
