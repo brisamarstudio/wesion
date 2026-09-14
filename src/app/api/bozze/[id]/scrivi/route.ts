@@ -13,7 +13,7 @@ import { scriviBozza } from '@/lib/scrivi';
 
 export async function POST(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const bozzaId = Number(id);
+  const bozzaId = id;
   if (!Number.isFinite(bozzaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   try {

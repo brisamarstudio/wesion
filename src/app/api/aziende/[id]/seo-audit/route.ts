@@ -50,7 +50,7 @@ ${generatore.contenuto}`;
 
 export async function POST(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;

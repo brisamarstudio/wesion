@@ -19,7 +19,7 @@ export const maxDuration = 300;
 
 export async function POST(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const massimo = Number(new URL(richiesta.url).searchParams.get('massimo')) || 20;

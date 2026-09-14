@@ -23,7 +23,7 @@ import { aggiornaAzienda, leggiAnagrafica, type DatiAzienda } from '@/lib/anagra
  */
 export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const anagrafica = await leggiAnagrafica(aziendaId);
@@ -33,7 +33,7 @@ export async function GET(_r: Request, contesto: { params: Promise<{ id: string 
 
 export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   try {
@@ -48,7 +48,7 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
 
 export async function DELETE(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const [a] = await query<{ nome: string; stato: string; bozze: number; servizi: number; messaggi: number }>(

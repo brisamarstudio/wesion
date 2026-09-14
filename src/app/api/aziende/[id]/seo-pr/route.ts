@@ -28,7 +28,7 @@ async function urlDellaPR(aziendaId: number): Promise<string | null> {
 
 export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;
@@ -49,7 +49,7 @@ export async function GET(_r: Request, contesto: { params: Promise<{ id: string 
 
 export async function POST(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;
@@ -92,7 +92,7 @@ export async function POST(_r: Request, contesto: { params: Promise<{ id: string
  */
 export async function DELETE(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;

@@ -21,7 +21,7 @@ import { leggiSchedaGoogle } from '@/lib/gbp';
 
 export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const [servizio] = await query<{ config: { gbp_location_id?: string } | null }>(

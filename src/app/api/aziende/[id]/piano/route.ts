@@ -78,7 +78,7 @@ async function preparaPiano(aziendaId: number, richiesta: Request) {
 
 export async function GET(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   try {
@@ -90,7 +90,7 @@ export async function GET(richiesta: Request, contesto: { params: Promise<{ id: 
 
 export async function POST(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   try {

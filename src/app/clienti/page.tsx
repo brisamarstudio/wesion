@@ -31,7 +31,7 @@ import { BottoneImportaGBP } from '@/componenti/BottoneImportaGBP';
 export const dynamic = 'force-dynamic';
 
 interface Cliente {
-  id: number;
+  id: string | number;
   nome: string;
   categoria: string | null;
   citta: string | null;

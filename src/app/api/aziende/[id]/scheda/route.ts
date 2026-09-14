@@ -10,7 +10,7 @@ import { leggiScheda, salvaScheda, type ModificheScheda } from '@/lib/scheda';
 
 export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const scheda = await leggiScheda(aziendaId);
@@ -20,7 +20,7 @@ export async function GET(_r: Request, contesto: { params: Promise<{ id: string 
 
 export async function PUT(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = Number(id);
+  const aziendaId = id;
   if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   try {

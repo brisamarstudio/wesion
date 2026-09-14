@@ -29,7 +29,7 @@ const DECIDIBILI = ['vuota', 'generata', 'attesa_approvazione'];
 
 export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const idBozza = Number(id);
+  const idBozza = id;
   if (!Number.isFinite(idBozza)) {
     return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
   }
@@ -232,7 +232,7 @@ const CANCELLABILI = ['vuota', 'generata', 'attesa_approvazione', 'approvata', '
 
 export async function DELETE(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const idBozza = Number(id);
+  const idBozza = id;
   if (!Number.isFinite(idBozza)) {
     return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
   }

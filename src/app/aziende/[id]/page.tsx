@@ -14,8 +14,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function PaginaCliente({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const aziendaId = Number(id);
-  if (!Number.isFinite(aziendaId)) notFound();
+  const aziendaId = id;
+  if (!id) notFound();
 
   const scheda = await leggiScheda(aziendaId);
   if (!scheda) notFound();

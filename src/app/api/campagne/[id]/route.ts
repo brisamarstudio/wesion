@@ -20,7 +20,7 @@ import { query } from '@/lib/db';
 
 export async function DELETE(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const campagnaId = Number(id);
+  const campagnaId = id;
   if (!Number.isFinite(campagnaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   // `?aziende=si` porta via anche i lead. Senza, si cancella solo la campagna

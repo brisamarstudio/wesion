@@ -145,7 +145,7 @@ export const VOCE_VUOTA: Scheda['voce'] = {
   da_evitare: [],
 };
 
-export async function leggiScheda(aziendaId: number): Promise<Scheda | null> {
+export async function leggiScheda(aziendaId: string | number): Promise<Scheda | null> {
   const [azienda] = await query<{
     id: number;
     nome: string;
@@ -295,7 +295,7 @@ export interface ModificheScheda {
 const CHIAVI_AMMESSE = new Set(['cosa_fa', 'offerta', 'materiali', 'punti_forza']);
 const FONTI_AMMESSE = new Set(['detto_dal_cliente', 'recensioni', 'sito', 'maps', 'ricerca']);
 
-export async function salvaScheda(aziendaId: number, m: ModificheScheda): Promise<Scheda | null> {
+export async function salvaScheda(aziendaId: string | number, m: ModificheScheda): Promise<Scheda | null> {
   if (m.settore || m.stato) {
     await query(
       `UPDATE wesion.azienda

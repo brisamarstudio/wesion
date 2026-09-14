@@ -102,7 +102,7 @@ async function slugLibero(nome: string, citta?: string | null): Promise<string> 
  * pubblicata ci punta, e un numero sbagliato che resta in tabella e' peggio di
  * uno che sparisce — da li' il router accetta comandi.
  */
-export async function salvaContatti(aziendaId: number, contatti: ContattoInput[]): Promise<void> {
+export async function salvaContatti(aziendaId: string | number, contatti: ContattoInput[]): Promise<void> {
   const validi = contatti
     .filter((c) => (TIPI_CONTATTO as readonly string[]).includes(c.tipo) && String(c.valore ?? '').trim())
     .map((c) => {
@@ -159,7 +159,7 @@ export async function salvaSito(
   );
 }
 
-export async function leggiAnagrafica(aziendaId: number): Promise<Anagrafica | null> {
+export async function leggiAnagrafica(aziendaId: string | number): Promise<Anagrafica | null> {
   const [a] = await query<Omit<Anagrafica, 'contatti' | 'sito_repo_url' | 'sito_gsc_proprieta'>>(
     `SELECT id, nome, slug, categoria, citta, provincia, indirizzo, cap, maps_url, place_id, stato, fonte, note
        FROM wesion.azienda WHERE id = $1`,
@@ -262,7 +262,7 @@ export async function creaAzienda(d: DatiAzienda): Promise<EsitoCreazione> {
  * COALESCE su ogni campo: quello che non arriva resta com'era. Un modulo che
  * manda solo il telefono non deve svuotare l'indirizzo.
  */
-export async function aggiornaAzienda(aziendaId: number, d: Partial<DatiAzienda>): Promise<Anagrafica | null> {
+export async function aggiornaAzienda(aziendaId: string | number, d: Partial<DatiAzienda>): Promise<Anagrafica | null> {
   const stato = d.stato && STATI.has(d.stato) ? d.stato : null;
 
   await query(

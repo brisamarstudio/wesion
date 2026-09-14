@@ -11,7 +11,7 @@ import { raccogliCampagna } from '@/lib/apify';
 
 export async function POST(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const campagnaId = Number(id);
+  const campagnaId = id;
   if (!Number.isFinite(campagnaId)) {
     return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
   }
