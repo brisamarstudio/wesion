@@ -261,7 +261,7 @@ export function ElencoAziende({
    * cancellarle tutte insieme e' esattamente il gesto che non vuoi fare per
    * sbaglio.
    */
-  const [spuntate, setSpuntate] = useState<Set<number>>(new Set());
+  const [spuntate, setSpuntate] = useState<Set<string | number>>(new Set());
   /** La domanda prima di cancellare le spuntate: null = nessuna in corso. */
   const [confermaBlocco, setConfermaBlocco] = useState(false);
 
