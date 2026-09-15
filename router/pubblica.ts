@@ -130,7 +130,9 @@ async function reclama(bozzaId: number): Promise<boolean> {
         SET stato = 'pubblicando', presa_at = now()
       WHERE id = $1
         AND (stato = 'approvata'
-             OR (stato = 'pubblicando' AND presa_at < now() - (INTERVAL '1 minute' * $2)))
+             -- $2::INT: senza, CockroachDB deduce $2 come INTERVAL e rifiuta
+             -- "interval * interval" — il giro si fermava a ogni passata (15/09/2026).
+             OR (stato = 'pubblicando' AND presa_at < now() - (INTERVAL '1 minute' * $2::INT)))
       RETURNING id`,
     [bozzaId, MINUTI_PRESA]
   );
@@ -486,7 +488,8 @@ export async function giroPubblicazioni(): Promise<EsitoPubblicazione[]> {
               -- Una presa abbandonata: il processo che l'aveva presa e' morto
               -- fra la presa e la fine. Senza questa riga quella bozza non la
               -- ripescherebbe piu' nessuno, per sempre.
-              OR (b.stato = 'pubblicando' AND b.presa_at < now() - (INTERVAL '1 minute' * $2))
+              -- $2::INT: vedi reclama(), CockroachDB non deduce il tipo da solo.
+              OR (b.stato = 'pubblicando' AND b.presa_at < now() - (INTERVAL '1 minute' * $2::INT))
             )
         -- Mai provata, oppure c'è ancora una destinazione che non ce l'ha fatta
         -- e a cui restano tentativi.

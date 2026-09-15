@@ -375,7 +375,7 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
 
   await query(
     `INSERT INTO wesion.bozza (azienda_id, tipo, origine, contenuto, stato, modello, scade_at)
-     VALUES ($1, 'menu', 'foto_whatsapp', $2, 'attesa_approvazione', $3, now() + ($4 || ' minutes')::interval)`,
+     VALUES ($1, 'menu', 'foto_whatsapp', $2, 'attesa_approvazione', $3, now() + ($4::TEXT || ' minutes')::INTERVAL)`,
     [
       a.aziendaId,
       // `sezioni` dentro la bozza e non solo `sezione`: se il titolare
