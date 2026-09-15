@@ -52,6 +52,9 @@ interface Slot {
   fatto: string;
   fonte: string;
   fattoId: number | null;
+  canale?: string;
+  formato?: string;
+  framework?: string;
 }
 
 /** Uno slot GIA' in tabella, con lo stato in cui si trova adesso. */
@@ -132,6 +135,7 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
    * mancano solo in fondo.
    */
   const [quantita, setQuantita] = useState<string>('');
+  const [tipoPiano, setTipoPiano] = useState<string>('post_gbp');
 
   const [anteprima, setAnteprima] = useState<Anteprima | null>(null);
   /**
@@ -149,10 +153,10 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
   const cliente = clienti.find((c) => String(c.id) === clienteId) ?? null;
 
   const parametri = useMemo(() => {
-    const p = new URLSearchParams({ anno, mese });
+    const p = new URLSearchParams({ anno, mese, tipo: tipoPiano });
     if (quantita.trim()) p.set('quantita', quantita.trim());
     return p.toString();
-  }, [anno, mese, quantita]);
+  }, [anno, mese, quantita, tipoPiano]);
 
   async function guarda() {
     setMessaggio(null);
@@ -242,9 +246,21 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                       setAnteprima(null);
                     }}
                   />
+                  <Selector
+                    label="Destinazione"
+                    value={tipoPiano}
+                    onChange={(v) => {
+                      setTipoPiano(v ?? 'post_gbp');
+                      setAnteprima(null);
+                    }}
+                    options={[
+                      { value: 'post_gbp', label: 'Google Business Profile' },
+                      { value: 'social', label: 'Social Media (Facebook / Instagram)' },
+                    ]}
+                  />
                   <TextInput
                     label="Quanti post"
-                    description="Vuoto = 4 a settimana"
+                    description={tipoPiano === 'social' ? 'Vuoto = 3 a settimana' : 'Vuoto = 4 a settimana'}
                     placeholder="auto"
                     value={quantita}
                     onChange={(v) => {
@@ -363,6 +379,9 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                                       vorrebbe dire non dire niente. */}
                                   {s.origine === 'ricorrenza' ? (
                                     <Badge variant="blue" label="ricorrenza" />
+                                  ) : null}
+                                  {s.formato ? (
+                                    <Badge variant="neutral" label={s.formato} />
                                   ) : null}
                                 </HStack>
                               }

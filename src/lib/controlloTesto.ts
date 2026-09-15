@@ -261,6 +261,71 @@ function perConfronto(s: string): string {
 }
 
 /**
+ * Controlli specifici per i canali social (Facebook, Instagram, LinkedIn).
+ *
+ * Ispirato al post-scorer: verifica leggibilità mobile, gancio, hashtag ed emoji.
+ * Sempre avvisi, MAI blocchi: l'operatore decide.
+ */
+export function controllaPostSocial(testo: string): AvvisoTesto[] {
+  const avvisi: AvvisoTesto[] = [...controllaFattiInventati(testo)];
+  const t = testo || '';
+  const attenzione = (messaggio: string, prova?: string) =>
+    avvisi.push({ gravita: 'attenzione', messaggio, prova });
+
+  if (!t.trim()) {
+    avvisi.push({ gravita: 'grave', messaggio: 'Il testo del post è vuoto.' });
+    return avvisi;
+  }
+
+  // 1. Gancio: la prima riga deve essere corta e incisiva per fermare lo scroll
+  const primaRiga = t.trim().split('\n')[0] || '';
+  if (primaRiga.length > 55) {
+    attenzione(
+      `La prima riga è di ${primaRiga.length} caratteri: su mobile supera la soglia ideale (sotto i 50) e rischia di essere tagliata dal "Vedi altro".`,
+      primaRiga
+    );
+  }
+
+  // 2. Muro di testo: paragrafi troppo lunghi senza riga vuota
+  const paragrafi = t.split(/\n\s*\n/);
+  for (const p of paragrafi) {
+    const righe = p.trim().split('\n');
+    if (righe.length > 3) {
+      attenzione('C\'è un paragrafo lungo più di 3 righe senza stacco: sui telefoni sembrerà un muro di testo.');
+      break;
+    }
+  }
+
+  // 3. Emoji: massimo 3-4 per post aziendale
+  const emoji = t.match(/\p{Extended_Pictographic}/gu) || [];
+  if (emoji.length > 4) {
+    attenzione(`Ci sono ${emoji.length} emoji: su post aziendali rischiano di sembrare spam.`);
+  }
+
+  // 4. Hashtag: massimo 5 e preferibilmente in fondo
+  const hashtags = t.match(/#[\p{L}\p{N}_]+/gu) || [];
+  if (hashtags.length > 5) {
+    attenzione(`Ci sono ${hashtags.length} hashtag: gli algoritmi attuali premiano 3-5 hashtag mirati.`);
+  }
+
+  // Hashtag nel corpo prima dell'ultimo paragrafo
+  if (paragrafi.length > 1) {
+    const corpoSenzaFondo = paragrafi.slice(0, -1).join('\n');
+    if (/#[\p{L}\p{N}_]+/gu.test(corpoSenzaFondo)) {
+      attenzione('Ci sono hashtag nel corpo del testo: distraggono la lettura da mobile, meglio metterli tutti in fondo.');
+    }
+  }
+
+  // 5. Invito all'azione (Call-To-Action)
+  const haCta = /\b(comment|scrivi|leggi|scopri|primo commento|whatsapp|link|contatt|info|salva|invia)\b/i.test(t);
+  if (!haCta) {
+    attenzione('Non sembra esserci un invito all\'azione chiaro (es. "scrivi nei commenti", "leggi il primo commento").');
+  }
+
+  return avvisi;
+}
+
+/**
  * Il controllo giusto per il tipo di bozza.
  *
  * Il menu del giorno finisce sul sito del cliente, dove un orario o un prezzo
@@ -274,6 +339,13 @@ function perConfronto(s: string): string {
  */
 export function controllaBozza(tipo: string, testo: string, fattiVeri: string[] = []): AvvisoTesto[] {
   if (tipo === 'menu') return [];
-  const avvisi = tipo === 'post_gbp' ? controllaPostGoogle(testo) : controllaFattiInventati(testo);
+  let avvisi: AvvisoTesto[];
+  if (tipo === 'post_gbp') {
+    avvisi = controllaPostGoogle(testo);
+  } else if (tipo === 'social') {
+    avvisi = controllaPostSocial(testo);
+  } else {
+    avvisi = controllaFattiInventati(testo);
+  }
   return ritiraGiustificati(avvisi, fattiVeri);
 }

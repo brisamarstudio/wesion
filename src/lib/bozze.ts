@@ -82,6 +82,7 @@ const SERVIZIO_PER_TIPO: Record<string, string> = {
   post_gbp: 'post_gbp',
   articolo: 'blog',
   menu: 'menu_del_giorno',
+  social: 'social',
 };
 
 /**
@@ -103,6 +104,13 @@ export function destinazioneBozza(b: Bozza): Destinazione {
   if (b.tipo === 'messaggio_lead') {
     return {
       dove: 'un messaggio WhatsApp al lead',
+      pronta: true,
+    };
+  }
+
+  if (b.tipo === 'social') {
+    return {
+      dove: 'Facebook e Instagram (pubblicazione a mano)',
       pronta: true,
     };
   }
@@ -152,6 +160,7 @@ export const ETICHETTA_TIPO: Record<string, string> = {
   post_gbp: 'Post Google',
   articolo: 'Articolo',
   messaggio_lead: 'Messaggio a un lead',
+  social: 'Post Social',
 };
 
 /**

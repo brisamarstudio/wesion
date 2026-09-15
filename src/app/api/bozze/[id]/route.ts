@@ -43,6 +43,10 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
     cta?: { tipo?: string; url?: string } | null;
     /** Quando deve uscire, come lo scrive una persona: «2026-09-10T10:00». */
     pubblica_at?: string | null;
+    /** Gancio selezionato per i post social. */
+    gancio_scelto?: string | null;
+    /** Primo commento personalizzato per post social. */
+    primo_commento?: string | null;
   };
 
   /**
@@ -52,10 +56,19 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
    * sul suo destino: obbligare a decidere per salvarle vorrebbe dire che per
    * cambiare un bottone bisogna approvare — cioe' far uscire una cosa nel
    * mondo per sistemarne un dettaglio.
+   *
+   * Per le bozze 'social' in Fase 1, non c'e' invio automatico a Meta:
+   * l'operatore puo' segnare direttamente «segna_pubblicata_a_mano».
    */
-  const decide = corpo.azione === 'approva' || corpo.azione === 'rifiuta';
+  const decide =
+    corpo.azione === 'approva' ||
+    corpo.azione === 'rifiuta' ||
+    corpo.azione === 'segna_pubblicata_a_mano';
   if (corpo.azione !== undefined && !decide && corpo.azione !== 'nessuna') {
-    return NextResponse.json({ errore: "azione deve essere 'approva' o 'rifiuta'" }, { status: 400 });
+    return NextResponse.json(
+      { errore: "azione deve essere 'approva', 'rifiuta', 'segna_pubblicata_a_mano' o 'nessuna'" },
+      { status: 400 }
+    );
   }
 
   // Il testo corretto a mano si salva PRIMA di decidere: se l'operatore ha
@@ -112,7 +125,25 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
       `UPDATE wesion.bozza
           SET contenuto = contenuto || jsonb_build_object('testo', $2::text)
         WHERE id = $1 AND stato = ANY($3)`,
-      [idBozza, corpo.testo, DECIDIBILI]
+      [idBozza, corpo.testo, [...DECIDIBILI, 'approvata']]
+    );
+  }
+
+  if (typeof corpo.gancio_scelto === 'string') {
+    await query(
+      `UPDATE wesion.bozza
+          SET contenuto = contenuto || jsonb_build_object('gancio_scelto', $2::text)
+        WHERE id = $1 AND stato = ANY($3)`,
+      [idBozza, corpo.gancio_scelto, [...DECIDIBILI, 'approvata']]
+    );
+  }
+
+  if (typeof corpo.primo_commento === 'string') {
+    await query(
+      `UPDATE wesion.bozza
+          SET contenuto = contenuto || jsonb_build_object('primo_commento', $2::text)
+        WHERE id = $1 AND stato = ANY($3)`,
+      [idBozza, corpo.primo_commento, [...DECIDIBILI, 'approvata']]
     );
   }
 
@@ -123,7 +154,7 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
   }
 
   /**
-   * ⚠️ NON SI APPROVA UNA BOZZA SENZA TESTO.
+   * ⚠️ NON SI APPROVA O SEGNAPUBBLICATA UNA BOZZA SENZA TESTO.
    *
    * Uno slot del piano nasce `vuota`: la consolle gli mostra il COMPITO
    * («cosa deve fare», «si regge su») perche' serve a rivedere il piano, ma
@@ -138,7 +169,7 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
    * Rifiutare invece si puo': dire «questo slot non mi piace» prima di
    * spenderci una generazione e' esattamente il senso del piano.
    */
-  if (corpo.azione === 'approva') {
+  if (corpo.azione === 'approva' || corpo.azione === 'segna_pubblicata_a_mano') {
     const [q] = await query<{ testo: string | null }>(
       `SELECT COALESCE(contenuto->>'summary', contenuto->>'testo') AS testo
          FROM wesion.bozza WHERE id = $1`,
@@ -154,6 +185,55 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
         { status: 409 }
       );
     }
+  }
+
+  /**
+   * Segna come pubblicata a mano (Fase 1 Social).
+   * Non crea righe in wesion.pubblicazione perche' in Fase 1 non ci sono ancora
+   * canali API attivi verso Meta; salva l'esecutore e l'orario in bozza.contenuto.pubblicata_a_mano.
+   */
+  if (corpo.azione === 'segna_pubblicata_a_mano') {
+    const infoPubblicata = {
+      operatore: OPERATORE,
+      data: new Date().toISOString(),
+    };
+    const [aggiornata] = await query<{ id: number; stato: string; azienda_id: number }>(
+      `WITH decisa AS (
+         UPDATE wesion.bozza
+            SET stato = 'pubblicata',
+                contenuto = contenuto || jsonb_build_object('pubblicata_a_mano', $2::jsonb)
+          WHERE id = $1
+            AND stato = ANY($3)
+            -- Solo i social: un post Google o un menu segnati "pubblicati a mano"
+            -- uscirebbero dal giro del router senza essere mai arrivati a Google.
+            AND tipo = 'social'
+          RETURNING id, stato, azienda_id, tipo
+       ), tracciata AS (
+         INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio)
+         SELECT azienda_id, 'bozza_pubblicata_a_mano', $4,
+                jsonb_build_object('bozza_id', id, 'tipo', tipo)
+           FROM decisa
+       )
+       SELECT id, stato, azienda_id FROM decisa`,
+      [idBozza, JSON.stringify(infoPubblicata), [...DECIDIBILI, 'approvata'], OPERATORE]
+    );
+
+    if (!aggiornata) {
+      const [attuale] = await query<{ stato: string }>(
+        `SELECT stato FROM wesion.bozza WHERE id = $1`,
+        [idBozza]
+      );
+      if (!attuale) return NextResponse.json({ errore: 'bozza inesistente' }, { status: 404 });
+      return NextResponse.json(
+        {
+          errore: `La bozza non è più modificabile: adesso è "${attuale.stato}".`,
+          stato: attuale.stato,
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ id: aggiornata.id, stato: aggiornata.stato });
   }
 
   const nuovoStato = corpo.azione === 'approva' ? 'approvata' : 'rifiutata';

@@ -60,7 +60,7 @@ import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
-import { Plus } from 'lucide-react';
+import { Plus, Copy, Check } from 'lucide-react';
 
 /** Il colore dice a colpo d'occhio se la riga aspetta una persona o no. */
 const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 'neutral'> = {
@@ -134,6 +134,8 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
   /** La conferma della cancellazione: un bottone che ha solo il sì non è una decisione. */
   const [daCancellare, setDaCancellare] = useState(false);
   const [inScrittura, setInScrittura] = useState(false);
+  const [copiato, setCopiato] = useState(false);
+  const [copiatoCommento, setCopiatoCommento] = useState(false);
 
   useEffect(() => {
     if (searchParams?.get('nuovo') === '1') {
@@ -354,6 +356,64 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
       return resto;
     });
     router.refresh();
+  }
+
+  async function copiaPostSocial(testo: string, hashtag?: string[]) {
+    const base = testo.trim();
+    const tag =
+      Array.isArray(hashtag) && hashtag.length > 0
+        ? '\n\n' + hashtag.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')
+        : '';
+    await navigator.clipboard.writeText(base + tag);
+    setCopiato(true);
+    setTimeout(() => setCopiato(false), 2500);
+  }
+
+  async function copiaPrimoCommento(commento: string) {
+    await navigator.clipboard.writeText(commento);
+    setCopiatoCommento(true);
+    setTimeout(() => setCopiatoCommento(false), 2500);
+  }
+
+  async function segnaPubblicataAMano() {
+    if (!selezionata) return;
+    setErrore(null);
+    const risposta = await fetch(`/api/bozze/${selezionata.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        azione: 'segna_pubblicata_a_mano',
+        ...(modificato ? { testo: testoCorrente } : {}),
+      }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      router.refresh();
+      return;
+    }
+    setCorrezioni((c) => {
+      const { [selezionata.id]: _tolta, ...resto } = c;
+      return resto;
+    });
+    router.refresh();
+  }
+
+  async function impostaGancio(gancioTesto: string) {
+    if (!selezionata) return;
+    const righe = testoCorrente.split('\n');
+    righe[0] = gancioTesto;
+    const nuovoTesto = righe.join('\n');
+    setCorrezioni((c) => ({ ...c, [selezionata.id]: nuovoTesto }));
+    await fetch(`/api/bozze/${selezionata.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        azione: 'nessuna',
+        gancio_scelto: gancioTesto,
+        testo: nuovoTesto,
+      }),
+    }).catch(() => undefined);
   }
 
   /**
@@ -612,7 +672,79 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
 
                   Lo sfondo NON e' facoltativo: senza, il testo scorre sotto i
                   bottoni e si legge attraverso. */}
-              {DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
+              {/* ── BARRA DELLE AZIONI ────────────────────────────────────── */}
+              {selezionata.tipo === 'social' ? (
+                <div
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 2,
+                    background: 'var(--color-background-surface)',
+                    paddingBlock: 'var(--spacing-2)',
+                  }}
+                >
+                  <HStack gap={2} align="center" wrap="wrap">
+                    <Button
+                      label={copiato ? 'Copiato!' : 'Copia per Facebook / Instagram'}
+                      variant="primary"
+                      icon={copiato ? <Check size={16} /> : <Copy size={16} />}
+                      isDisabled={!testoCorrente?.trim()}
+                      clickAction={() =>
+                        copiaPostSocial(
+                          testoCorrente,
+                          selezionata.contenuto.hashtag as string[] | undefined
+                        )
+                      }
+                    />
+                    {selezionata.contenuto.primo_commento ? (
+                      <Button
+                        label={copiatoCommento ? 'Commento copiato!' : 'Copia 1° commento'}
+                        variant="secondary"
+                        clickAction={() =>
+                          copiaPrimoCommento(String(selezionata.contenuto.primo_commento))
+                        }
+                      />
+                    ) : null}
+                    {selezionata.stato !== 'pubblicata' ? (
+                      <Button
+                        label="Segna come pubblicata a mano"
+                        variant={selezionata.stato === 'approvata' ? 'primary' : 'secondary'}
+                        isDisabled={!testoCorrente?.trim()}
+                        clickAction={segnaPubblicataAMano}
+                      />
+                    ) : null}
+                    {DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
+                      <>
+                        <Button
+                          label="Approva"
+                          variant="secondary"
+                          isDisabled={!testoCorrente?.trim()}
+                          clickAction={() => decidi('approva')}
+                        />
+                        <Button
+                          label="Rifiuta"
+                          variant="secondary"
+                          clickAction={() => decidi('rifiuta')}
+                        />
+                        <Button
+                          label="Cancella"
+                          variant="ghost"
+                          clickAction={() => setDaCancellare(true)}
+                        />
+                      </>
+                    ) : null}
+                    {selezionata.stato === 'vuota' ? (
+                      <Button
+                        label="Scrivi il post"
+                        variant="primary"
+                        isLoading={inScrittura}
+                        clickAction={scrivi}
+                      />
+                    ) : null}
+                    {modificato ? <Badge variant="warning" label="testo modificato" /> : null}
+                  </HStack>
+                </div>
+              ) : DECIDIBILI.has(selezionata.stato) && !scade?.scaduta ? (
                 <div
                   style={{
                     position: 'sticky',
@@ -708,6 +840,184 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                       <Text type="supporting">senza copertina</Text>
                     )}
                   </HStack>
+                </VStack>
+              ) : null}
+
+              {/* ── La scheda del post social ─────────────────────────── */}
+              {selezionata.tipo === 'social' ? (
+                <VStack gap={3}>
+                  <HStack gap={2} align="center" wrap="wrap">
+                    <Badge
+                      variant="neutral"
+                      label={`Formato: ${String(selezionata.contenuto.formato ?? 'post')}`}
+                    />
+                    {selezionata.contenuto.framework ? (
+                      <Badge
+                        variant="neutral"
+                        label={`Framework: ${String(selezionata.contenuto.framework)}`}
+                      />
+                    ) : null}
+                    {selezionata.contenuto.canale ? (
+                      <Badge
+                        variant="blue"
+                        label={`Canale: ${String(selezionata.contenuto.canale)}`}
+                      />
+                    ) : null}
+                  </HStack>
+
+                  {/* Se ci sono dati mancanti / da verificare prima di pubblicare */}
+                  {Array.isArray(selezionata.contenuto.dati_mancanti) &&
+                  selezionata.contenuto.dati_mancanti.length > 0 ? (
+                    <Banner
+                      status="warning"
+                      title="Dati non verificati (richiedono conferma dal cliente)"
+                      description={selezionata.contenuto.dati_mancanti.join(' • ')}
+                    />
+                  ) : null}
+
+                  {/* Selettore ganci alternativi */}
+                  {Array.isArray(selezionata.contenuto.ganci) &&
+                  selezionata.contenuto.ganci.length > 1 ? (
+                    <VStack gap={1}>
+                      <Text type="supporting">Ganci alternativi (clicca per applicare al post)</Text>
+                      <VStack gap={1}>
+                        {selezionata.contenuto.ganci.map((g, idx) => {
+                          const testoGancio = String(g);
+                          const eAttivo = testoCorrente.startsWith(testoGancio);
+                          return (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                border: eAttivo
+                                  ? '1px solid var(--color-border-accent, #3b82f6)'
+                                  : '1px solid var(--color-border-subtle, #e5e7eb)',
+                                background: eAttivo
+                                  ? 'var(--color-background-accent-subtle, #eff6ff)'
+                                  : 'var(--color-background-surface)',
+                                cursor: DECIDIBILI.has(selezionata.stato) ? 'pointer' : 'default',
+                                fontSize: '13px',
+                              }}
+                              onClick={() => {
+                                if (DECIDIBILI.has(selezionata.stato)) {
+                                  void impostaGancio(testoGancio);
+                                }
+                              }}
+                            >
+                              <HStack justify="between" align="center">
+                                <Text>
+                                  <strong>Opzione {idx + 1}:</strong> {testoGancio}
+                                </Text>
+                                {eAttivo ? <Badge variant="success" label="Attivo" /> : null}
+                              </HStack>
+                            </div>
+                          );
+                        })}
+                      </VStack>
+                    </VStack>
+                  ) : null}
+
+                  {/* Slide del carosello */}
+                  {selezionata.contenuto.formato === 'carosello' &&
+                  Array.isArray(selezionata.contenuto.slide) &&
+                  selezionata.contenuto.slide.length > 0 ? (
+                    <VStack gap={2}>
+                      <Text type="supporting">
+                        Slide del carosello ({selezionata.contenuto.slide.length} slide)
+                      </Text>
+                      <List hasDividers density="compact">
+                        {(
+                          selezionata.contenuto.slide as Array<{
+                            n?: number;
+                            testo?: string;
+                            prompt_immagine?: string;
+                          }>
+                        ).map((sl, i) => (
+                          <ListItem
+                            key={i}
+                            label={`Slide ${sl.n ?? i + 1}: ${sl.testo ?? ''}`}
+                            description={
+                              sl.prompt_immagine ? `Prompt grafica: ${sl.prompt_immagine}` : undefined
+                            }
+                          />
+                        ))}
+                      </List>
+                    </VStack>
+                  ) : null}
+
+                  {/* Sceneggiatura Reel */}
+                  {selezionata.contenuto.formato === 'reel' &&
+                  Array.isArray(selezionata.contenuto.script_reel) &&
+                  selezionata.contenuto.script_reel.length > 0 ? (
+                    <VStack gap={2}>
+                      <Text type="supporting">Sceneggiatura Reel</Text>
+                      <List hasDividers density="compact">
+                        {(
+                          selezionata.contenuto.script_reel as Array<{
+                            secondi?: string;
+                            a_video?: string;
+                            voce?: string;
+                          }>
+                        ).map((b, i) => (
+                          <ListItem
+                            key={i}
+                            label={`[${b.secondi ?? '0-3s'}] ${b.voce ?? ''}`}
+                            description={`A video: ${b.a_video ?? ''}`}
+                          />
+                        ))}
+                      </List>
+                    </VStack>
+                  ) : null}
+
+                  {/* Primo commento (hashtag o link) */}
+                  {selezionata.contenuto.primo_commento ? (
+                    <VStack gap={1}>
+                      <HStack justify="between" align="center">
+                        <Text type="supporting">Primo commento (per hashtag o link esterni)</Text>
+                        <Button
+                          label={copiatoCommento ? 'Copiato!' : 'Copia 1° commento'}
+                          variant="secondary"
+                          size="sm"
+                          clickAction={() =>
+                            copiaPrimoCommento(String(selezionata.contenuto.primo_commento))
+                          }
+                        />
+                      </HStack>
+                      <TextArea
+                        label="Primo commento"
+                        isLabelHidden
+                        value={String(selezionata.contenuto.primo_commento)}
+                        rows={3}
+                        isDisabled={!DECIDIBILI.has(selezionata.stato)}
+                        onChange={(v) => {
+                          void fetch(`/api/bozze/${selezionata.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ azione: 'nessuna', primo_commento: v }),
+                          });
+                        }}
+                      />
+                    </VStack>
+                  ) : null}
+
+                  {/* Traccia se già segnata come pubblicata a mano */}
+                  {selezionata.contenuto.pubblicata_a_mano ? (
+                    <Banner
+                      status="success"
+                      title="Pubblicata a mano"
+                      description={`Segnata da ${
+                        (selezionata.contenuto.pubblicata_a_mano as { operatore?: string })
+                          .operatore ?? 'dashboard'
+                      } il ${
+                        (selezionata.contenuto.pubblicata_a_mano as { data?: string }).data
+                          ? quandoBreve(
+                              (selezionata.contenuto.pubblicata_a_mano as { data?: string }).data!
+                            )
+                          : 'oggi'
+                      }`}
+                    />
+                  ) : null}
                 </VStack>
               ) : null}
 

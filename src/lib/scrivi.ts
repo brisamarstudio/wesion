@@ -28,6 +28,7 @@ import { leggiMateria, type Materia } from './materia';
 import { voceDi } from './materia';
 import { DIVIETI_BASE, REGOLE_CRITICHE, SISTEMA_COPYWRITER } from './regolePost';
 import { vocePerPrompt } from './voce';
+import { scriviBozzaSocial } from './scrivi-social';
 
 interface BozzaDaScrivere {
   id: string | number;
@@ -209,6 +210,29 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
       modello: art.modello,
       ms: art.ms,
       avvisiGravi: avvisiArt.filter((a) => a.gravita === 'grave').length,
+    };
+  }
+
+  if (bozza.tipo === 'social') {
+    const soc = await scriviBozzaSocial(bozza);
+    const avvisiSoc = controllaBozza(bozza.tipo, soc.testo, fattiVeri(materia));
+
+    await query(
+      `UPDATE wesion.bozza
+          SET contenuto = contenuto || $2::jsonb,
+              avvisi    = $3::jsonb,
+              modello   = $4,
+              stato     = 'attesa_approvazione'
+        WHERE id = $1 AND stato = 'vuota'`,
+      [bozzaId, JSON.stringify(soc.contenutoSocial), JSON.stringify(avvisiSoc), soc.modello]
+    );
+
+    return {
+      bozzaId,
+      testo: soc.testo,
+      modello: soc.modello,
+      ms: soc.ms,
+      avvisiGravi: avvisiSoc.filter((a) => a.gravita === 'grave').length,
     };
   }
 

@@ -1418,6 +1418,44 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 ) : null}
               </VStack>
 
+              <VStack gap={2}>
+                <HStack gap={2} align="center">
+                  <Button
+                    label={attivo('social') ? 'Social Media: attivo' : 'Social Media: spento'}
+                    size="sm"
+                    variant={attivo('social') ? 'primary' : 'secondary'}
+                    onClick={() => cambiaServizio('social', {}, !attivo('social'))}
+                  />
+                </HStack>
+                {attivo('social') ? (
+                  <VStack gap={2}>
+                    <Banner
+                      status="info"
+                      title="Fase 1: Pubblicazione Assistita"
+                      description="I post social generati nel piano editoriale hanno ganci alternativi, formattazione mobile e primo commento. In consolle si copiano con un click per Facebook e Instagram e si segnano come pubblicati a mano."
+                    />
+                    <Selector
+                      label="Canali di destinazione"
+                      description="Su quali canali è presente il cliente."
+                      value={config('social').canali || 'facebook,instagram'}
+                      onChange={(v) => cambiaServizio('social', { canali: v ?? 'facebook,instagram' })}
+                      options={[
+                        { value: 'facebook,instagram', label: 'Facebook e Instagram' },
+                        { value: 'facebook', label: 'Solo Facebook' },
+                        { value: 'instagram', label: 'Solo Instagram' },
+                      ]}
+                    />
+                    <TextInput
+                      label="Post a settimana nel piano mensile"
+                      description="Frequenza consigliata: 3 post a settimana (lun/mer/ven)."
+                      placeholder="3"
+                      value={config('social').post_a_settimana ?? '3'}
+                      onChange={(v) => cambiaServizio('social', { post_a_settimana: v })}
+                    />
+                  </VStack>
+                ) : null}
+              </VStack>
+
               <VStack gap={1}>
                 <Text type="supporting">Chi può dare comandi al router</Text>
                 {s.titolari.length ? (

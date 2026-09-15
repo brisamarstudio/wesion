@@ -1223,6 +1223,93 @@ Si clona così:
 GIT_SSH_COMMAND="ssh -i '<percorso>/.ssh/id_ed25519' -o IdentitiesOnly=yes" git clone git@github.com:...
 ```
 
+## 14.3 Il giro sulle query: da Search Console ai contenuti (idea del 14/09/2026) — **da costruire**
+
+L'audit del §14.2 sistema la **tecnica** (schema, `llms.txt`, `robots.txt`). Non guarda
+**cosa cerca la gente**: quali query portano impressioni ma zero clic, quali domande non
+hanno una pagina. È il pezzo che manca per chiudere il cerchio *analizza → decide →
+esegue → misura*.
+
+**Da dove nasce.** Due cose della stessa sera:
+
+1. Un post di Fabio Ariotti (Facebook, 12/09/2026) su un «agente SEO» per `weboptech.com`:
+   clic da 107 a 2.950 in 28 giorni. Il processo descritto è quello giusto (analisi, keyword,
+   mappa degli argomenti, contenuti, linking, pubblicazione, aggiornamento, Search Console).
+   **Il grafico però non basta a copiare niente**: i clic salgono ×27 con le impressioni solo
+   ×1,7 e la posizione da 11,1 a 9,4, a gradino in 2-3 giorni. Sembra un evento puntuale
+   (una query di volume al primo posto, un problema tecnico risolto, sitelink sul brand),
+   non la rampa lenta che fanno i contenuti. Mancano query, pagine e conversioni.
+2. **Lo stesso lavoro fatto a mano su Artigiano il Conte**, dall'export CSV di Search
+   Console (3 mesi, 142 query, 72 clic). Ha prodotto in una sera:
+
+   | Segnale nelle query | Azione | Esito |
+   |---|---|---|
+   | «armadi su misura»: 57 impressioni, posizione 6,2, **0 clic** | pagina `/armadi-su-misura` | online 14/09 |
+   | «falegname…» sono le query con clic; nei title la parola non c'era | «falegname»/«falegnameria» nei title | online 14/09 |
+   | «riparazione mobili cucina», «riparazione cassetti milano», «piccole riparazioni» senza pagina | chiesto al cliente se ripara → sì → `/riparazioni-mobili` | online 14/09 |
+   | «falegname buccinasco» con clic, Buccinasco non tra i comuni | comune aggiunto a `areaServed` e testi | online 14/09 |
+   | «lo conte binasco» 41 impressioni, **0 clic** | `alternateName` nello schema | online 14/09 |
+   | «falegname arconate/cuggiono/mesero» in posizione 30-50 | **nessuna**: fuori zona | scartato apposta |
+   | 56 clic su 72 da mobile, posizione 4,8 contro 21 da computer | è ricerca locale in giro: velocità mobile prima di tutto | nota |
+
+   Da misurare fra 4-8 settimane sulla property `artigianoilconte.it`: è il primo caso
+   di confronto prima/dopo che abbiamo.
+
+3. **Brace Mia, il caso opposto** (Search Console `bracemia.it`, 3 mesi al 14/09/2026):
+   3.310 clic, CTR 13,4%, posizione media 3,6 — **ma le prime 10 query sono tutte il nome**
+   («brace mia», «bracemia zibido», «brace mia menu»…), circa 2.200 clic su 3.310. Il sito
+   vince la ricerca sul brand (e la toglie a TheFork/TripAdvisor: valore vero). Filtrando
+   le query **senza** `brace`/`bracemia` il quadro cambia:
+
+   | Query senza il nome | Impressioni | Clic |
+   |---|---|---|
+   | brace | 427 | 1 |
+   | braceria | 233 | 1 |
+   | ristorante zibido san giacomo | 191 | 1 |
+   | zibido san giacomo ristorante | 60 | 1 |
+   | griglieria | 48 | 2 |
+   | ristoranti vicino a me | 47 | 1 |
+   | bracemia bari | 39 | 1 |
+   | braceria rozzano | 29 | 2 |
+   | la braceria pugliese | 22 | 2 |
+
+   Lezioni per il giro:
+   - **Il filtro brand/non-brand è il primo passo, non un dettaglio.** Senza, un sito che vince
+     solo sul nome sembra un successo SEO e il lavoro vero (clienti nuovi) resta invisibile.
+     Il report al cliente deve mostrare le due righe separate.
+   - Serve **la posizione** per query: «braceria» a 233 impressioni con 1 clic è una miniera se
+     sta in posizione 5-12, un muro se sta a 40.
+   - «ristoranti vicino a me» si vince con la **scheda Google** (categorie, foto, recensioni),
+     non con il sito: il giro deve poter proporre azioni GBP, non solo codice.
+   - «bracemia bari», «la braceria pugliese»: possibile omonimo o tratto distintivo (cucina
+     pugliese?). Il giro non decide: **chiede al cliente**, come per le riparazioni di Massimo.
+
+**Il giro, come andrebbe costruito:**
+
+1. **Lettura mensile** per cliente: `search-console.ts` c'è già. Query × pagina × dispositivo,
+   ultimi 3 mesi, con posizione e CTR.
+2. **Classificazione**, in codice e non a sensazione:
+   - *miniera*: impressioni alte, 0 clic, posizione 4-12 → title/description o pagina dedicata
+   - *domanda scoperta*: gruppo di query simili senza una pagina che le copra → pagina o articolo
+   - *brand debole*: query col nome del cliente fuori dal primo posto → `alternateName`, scheda Google
+   - *fuori zona*: comuni lontani dall'`areaServed` → **si ignorano**, non si inseguono
+3. **Proposta**, con lo stesso bottone del §14.2 (PR, «Applica» / «Scarta»): title, FAQ,
+   pagina nuova, oppure una **bozza di articolo** nel calendario, dove Wesion pubblica già.
+4. **Domande al cliente prima di scrivere fatti.** Su Artigiano il Conte la pagina Riparazioni
+   è nata solo dopo il «sì, ripara». Prezzi, tempi, garanzie, servizi non confermati: la
+   proposta li chiede, non li scrive. Stessa famiglia di `CHIAVI_DI_FATTO`.
+5. **Misura il mese dopo**: per ogni proposta applicata, le query collegate prima e dopo.
+   Senza questo punto il giro è solo un generatore di contenuti.
+
+⚠️ **Il punto 4 non si toglie per andare più veloci.** Quella sera il dato vero ha corretto
+due volte chi lavorava (il relay email e «falegname» dimenticato nei title). Un agente senza
+controllo avrebbe riempito ogni FAQ di prezzi e tempi inventati, e le AI li avrebbero
+ripetuti ai clienti come promesse.
+
+**Aspettative da dire al cliente:** per un artigiano locale non sono migliaia di clic.
+L'obiettivo misurabile è **richieste di preventivo in più al mese** (su Artigiano il Conte
+arrivano in `leads`, con la data: si confrontano con le curve di Search Console).
+
 ## 15. Il tono, se devi scrivere codice qui
 
 Come in `gbp-autoposter`: i commenti non dicono *cosa* fa il codice — quello si legge —
@@ -1230,3 +1317,27 @@ ma **perché è così**, citando il giorno in cui la strada sbagliata è costata
 Fra tre mesi il *cosa* si ricostruisce in dieci minuti, il *perché* no.
 
 Il codice è in italiano, nomi compresi. Mantienilo.
+
+## 16. Modulo Social (Fase 1 — 15/09/2026)
+
+Portato dentro Wesion il sistema operativo social (voce → ideazione → scrittura → formattazione → pubblicazione assistita).
+
+### 16.1 Principi e vincoli della Fase 1
+1. **Nessun bot o API Meta runtime non testata:** in Fase 1 non si aprono connessioni verso le Graph API di Facebook/Instagram. La pubblicazione è manuale e assistita: in consolle l'operatore copia il post e il primo commento con un click, li incolla nella Meta Business Suite, e segna la bozza come `segna_pubblicata_a_mano`.
+2. **Il router WhatsApp/Oracle non tocca le social:** in `router/pubblica.ts` (`reclama` e `giroPubblicazioni`) è stato aggiunto il filtro `AND b.tipo <> 'social'`. Una bozza social non entra mai nel giro automatico del router. Il deploy del router su Oracle è gestito separatamente dall'amministratore (checkout parziale).
+3. **Nessun fatto inventato:** se un post richiede informazioni non presenti in `wesion.fatto`, il generatore popola `dati_mancanti` e la consolle mostra un banner di avviso giallo che blocca l'approvazione inconsapevole.
+4. **Piano GBP e Piano Social separati ma convergenti:** `costruisciPiano()` per GBP non è stato toccato. È stato creato `costruisciPianoSocial()` in `src/lib/piano-social.ts`, riutilizzando la stessa materia prima (fatti, pilastri, ricorrenze). Il regression test su MyWebby (82) e Don Carlo (234) per ottobre 2026 ha confermato la completa identità (18 slot ciascuno, date e fatti identici).
+
+### 16.2 Modifiche effettuate
+- **Database (`db/schema.sql`):** Esteso il CHECK constraint di `wesion.servizio.tipo` e `wesion.bozza.tipo` per includere `'social'`.
+- **Modelli e regole (`src/lib/social.ts`, `src/lib/regoleSocial.ts`):** Definite le interfacce `ContenutoSocial`, formati (`post`, `carosello`, `reel`, `domanda`), framework di copywriting (`PAS`, `AIDA`, `BAB`, `STAR`, `libero`), regole di formattazione mobile (spaziature, max 3-5 hashtag nel primo commento, no muri di testo).
+- **Scrittura e controllo qualità (`src/lib/scrivi-social.ts`, `src/lib/scrivi.ts`, `src/lib/controlloTesto.ts`):** `scriviBozzaSocial()` integrato nella catena `generaJson()`, con validazione del gancio (<55 caratteri), controllo emoji, conteggio hashtag e parsing di slide/reel.
+- **API Bozze (`src/app/api/bozze/[id]/route.ts`):** Implementata l'azione `segna_pubblicata_a_mano` (imposta `stato='pubblicata'`, registra `bozza.contenuto.pubblicata_a_mano` ed emette l'evento `bozza_pubblicata_a_mano`), con supporto per `gancio_scelto` e `primo_commento`.
+- **Scheda Cliente (`src/componenti/SchedaCliente.tsx`):** Aggiunta la sezione di configurazione del servizio `Social Media` sotto al Blog (canali, post a settimana).
+- **Consolle Bozze (`src/componenti/ConsolleBozze.tsx`):**
+  - Pulsante «Copia per Facebook / Instagram» con testo pulito e hashtag.
+  - Pulsante «Copia 1° commento» per link e tag.
+  - Pulsante «Segna come pubblicata a mano».
+  - Ispettore visuale per ganci alternativi (cliccabili per sostituzione immediata), slide del carosello con prompt grafici, sceneggiatura reel a tabella e banner per dati mancanti da verificare.
+- **Piano Editoriale (`src/componenti/PianoEditoriale.tsx` e `src/app/api/aziende/[id]/piano/route.ts`):** Selettore di destinazione (GBP vs Social Media FB/IG), con anteprima e generazione bozze vuote dedicate.
+

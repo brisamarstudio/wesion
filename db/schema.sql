@@ -426,3 +426,25 @@ ALTER TABLE wesion.bozza ADD CONSTRAINT bozza_stato_check
 -- sarebbe l'unica scansione della tabella in tutto il giro.
 CREATE INDEX IF NOT EXISTS idx_bozza_prese ON wesion.bozza (presa_at)
   WHERE stato = 'pubblicando';
+
+-- ============ AGGIUNTA DEL 15/09/2026 — il modulo social ============
+--
+-- Servizio 'social' attivabile per cliente (post, caroselli, reel, domande),
+-- e bozze di tipo 'social'. In Fase 1 le bozze non si pubblicano in automatico:
+-- vengono approvate in consolle e l'operatore le copia su Meta Business Suite
+-- segnandole come pubblicate a mano.
+
+-- ⚠️ I NOMI DEI VINCOLI NON SONO GLI STESSI OVUNQUE (15/09/2026). Postgres chiama
+-- un CHECK inline `<tabella>_<colonna>_check`, CockroachDB `check_<colonna>`: su
+-- Cockroach c'era `check_tipo`. Cancellando solo `bozza_tipo_check` il vincolo
+-- vecchio restava, conviveva con quello nuovo e rifiutava 'social' in silenzio.
+-- Quindi si cancellano TUTTI E DUE i nomi, poi si crea quello nuovo.
+ALTER TABLE wesion.servizio DROP CONSTRAINT IF EXISTS check_tipo;
+ALTER TABLE wesion.servizio DROP CONSTRAINT IF EXISTS servizio_tipo_check;
+ALTER TABLE wesion.servizio ADD CONSTRAINT servizio_tipo_check
+  CHECK (tipo IN ('menu_del_giorno','post_gbp','blog','whatsapp_bot','social'));
+
+ALTER TABLE wesion.bozza DROP CONSTRAINT IF EXISTS check_tipo;
+ALTER TABLE wesion.bozza DROP CONSTRAINT IF EXISTS bozza_tipo_check;
+ALTER TABLE wesion.bozza ADD CONSTRAINT bozza_tipo_check
+  CHECK (tipo IN ('menu','post_gbp','articolo','messaggio_lead','social'));

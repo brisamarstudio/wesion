@@ -129,6 +129,9 @@ async function reclama(bozzaId: number): Promise<boolean> {
     `UPDATE wesion.bozza
         SET stato = 'pubblicando', presa_at = now()
       WHERE id = $1
+        -- In Fase 1 le bozze social si approvano in dashboard e si copiano a mano,
+        -- non entrano mai nel giro di pubblicazione automatica del router.
+        AND tipo <> 'social'
         AND (stato = 'approvata'
              -- $2::INT: senza, CockroachDB deduce $2 come INTERVAL e rifiuta
              -- "interval * interval" — il giro si fermava a ogni passata (15/09/2026).
@@ -483,7 +486,9 @@ export async function giroPubblicazioni(): Promise<EsitoPubblicazione[]> {
   const daFare = await query<{ id: number }>(
     `SELECT b.id
        FROM wesion.bozza b
-      WHERE (
+      -- In Fase 1 le bozze social non vanno mai nel giro automatico del router.
+      WHERE b.tipo <> 'social'
+        AND (
               b.stato = 'approvata'
               -- Una presa abbandonata: il processo che l'aveva presa e' morto
               -- fra la presa e la fine. Senza questa riga quella bozza non la

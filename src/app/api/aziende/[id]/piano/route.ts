@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { leggiMateria, materiaUtilizzabile } from '@/lib/materia';
 import { costruisciPiano, postPerMese, salvaPiano } from '@/lib/piano';
+import { costruisciPianoSocial, salvaPianoSocial } from '@/lib/piano-social';
 
 /**
  * Cosa e' GIA' programmato per questo cliente in questo mese.
@@ -22,7 +23,12 @@ import { costruisciPiano, postPerMese, salvaPiano } from '@/lib/piano';
  * piano o guardando quello che aveva gia' costruito ieri — che sono due
  * situazioni opposte con lo stesso schermo davanti.
  */
-async function giaProgrammati(aziendaId: string | number, anno: number, mese: number) {
+async function giaProgrammati(
+  aziendaId: string | number,
+  anno: number,
+  mese: number,
+  tipo: string = 'post_gbp'
+) {
   const inizio = new Date(anno, mese - 1, 1).toISOString();
   const fine = new Date(anno, mese, 1).toISOString();
   return query<{
@@ -39,10 +45,10 @@ async function giaProgrammati(aziendaId: string | number, anno: number, mese: nu
             EXISTS (SELECT 1 FROM wesion.pubblicazione p
                      WHERE p.bozza_id = b.id AND p.esito = 'ok') AS pubblicata
        FROM wesion.bozza b
-      WHERE b.azienda_id = $1 AND b.origine = 'piano'
+      WHERE b.azienda_id = $1 AND b.origine = 'piano' AND b.tipo = $4
         AND b.pubblica_at >= $2 AND b.pubblica_at < $3
       ORDER BY b.pubblica_at`,
-    [aziendaId, inizio, fine]
+    [aziendaId, inizio, fine, tipo]
   );
 }
 
@@ -51,23 +57,38 @@ function quando(richiesta: Request) {
   const adesso = new Date();
   const anno = Number(p.get('anno')) || adesso.getFullYear();
   const mese = Number(p.get('mese')) || adesso.getMonth() + 1;
-  // Il bundle vende 4 post a settimana: è il default, non un numero fisso.
-  const aSettimana = Number(p.get('settimana')) || 4;
+  const tipo = p.get('tipo') === 'social' ? 'social' : 'post_gbp';
+  // Default GBP: 4 a settimana. Default Social: 3 a settimana.
+  const defaultSettimana = tipo === 'social' ? 3 : 4;
+  const aSettimana = Number(p.get('settimana')) || defaultSettimana;
   const quantita = Number(p.get('quantita')) || postPerMese(anno, mese, aSettimana);
-  return { anno, mese, quantita };
+  return { anno, mese, quantita, tipo, aSettimana };
 }
 
 async function preparaPiano(aziendaId: string | number, richiesta: Request) {
-  const { anno, mese, quantita } = quando(richiesta);
+  const { anno, mese, quantita, tipo } = quando(richiesta);
   const materia = await leggiMateria(aziendaId);
+  const esistenti = await giaProgrammati(aziendaId, anno, mese, tipo);
+
+  if (tipo === 'social') {
+    const esito = costruisciPianoSocial(materia, { anno, mese, quantita });
+    return {
+      anno,
+      mese,
+      quantita,
+      tipo,
+      esistenti,
+      materiaSufficiente: materiaUtilizzabile(materia),
+      ...esito,
+    };
+  }
+
   const esito = costruisciPiano(materia, { anno, mese, quantita });
-
-  const esistenti = await giaProgrammati(aziendaId, anno, mese);
-
   return {
     anno,
     mese,
     quantita,
+    tipo,
     esistenti,
     // Detto esplicitamente: un piano si costruisce anche con poca materia, ma
     // esce povero, e chi lo guarda deve sapere che il problema è a monte.
@@ -105,7 +126,10 @@ export async function POST(richiesta: Request, contesto: { params: Promise<{ id:
         { status: 409 }
       );
     }
-    const scritto = await salvaPiano(aziendaId, piano.slot, piano.anno, piano.mese);
+    const scritto =
+      piano.tipo === 'social'
+        ? await salvaPianoSocial(aziendaId, piano.slot as any, piano.anno, piano.mese)
+        : await salvaPiano(aziendaId, piano.slot as any, piano.anno, piano.mese);
     return NextResponse.json({ ...piano, ...scritto });
   } catch (errore: unknown) {
     return NextResponse.json({ errore: errore instanceof Error ? errore.message : String(errore) }, { status: 400 });
