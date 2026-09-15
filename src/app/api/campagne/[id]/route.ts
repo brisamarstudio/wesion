@@ -20,8 +20,10 @@ import { query } from '@/lib/db';
 
 export async function DELETE(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const campagnaId = id;
-  if (!Number.isFinite(campagnaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const campagnaId = Number(id);
+  if (!Number.isSafeInteger(campagnaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   // `?aziende=si` porta via anche i lead. Senza, si cancella solo la campagna
   // e le aziende restano (con campagna_id a NULL, per la chiave ON DELETE SET NULL).

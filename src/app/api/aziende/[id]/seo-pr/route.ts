@@ -28,8 +28,10 @@ async function urlDellaPR(aziendaId: string | number): Promise<string | null> {
 
 export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = id;
-  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const aziendaId = Number(id);
+  if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;
   if (!GITHUB_TOKEN) return NextResponse.json({ errore: 'GITHUB_TOKEN non configurato.' }, { status: 500 });
@@ -49,8 +51,10 @@ export async function GET(_r: Request, contesto: { params: Promise<{ id: string 
 
 export async function POST(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = id;
-  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const aziendaId = Number(id);
+  if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;
   if (!GITHUB_TOKEN) return NextResponse.json({ errore: 'GITHUB_TOKEN non configurato.' }, { status: 500 });
@@ -92,8 +96,10 @@ export async function POST(_r: Request, contesto: { params: Promise<{ id: string
  */
 export async function DELETE(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = id;
-  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const aziendaId = Number(id);
+  if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const { GITHUB_TOKEN } = process.env;
   if (!GITHUB_TOKEN) return NextResponse.json({ errore: 'GITHUB_TOKEN non configurato.' }, { status: 500 });

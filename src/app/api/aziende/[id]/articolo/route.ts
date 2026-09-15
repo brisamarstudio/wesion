@@ -19,8 +19,10 @@ import { query } from '@/lib/db';
 
 export async function POST(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = id;
-  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const aziendaId = Number(id);
+  if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const corpo = (await richiesta.json().catch(() => ({}))) as {
     fattoId?: number;

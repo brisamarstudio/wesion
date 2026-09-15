@@ -19,8 +19,10 @@ const MAX_BYTE = 8 * 1024 * 1024;
 
 export async function POST(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const bozzaId = id;
-  if (!Number.isFinite(bozzaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const bozzaId = Number(id);
+  if (!Number.isSafeInteger(bozzaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const modulo = await richiesta.formData().catch(() => null);
   const file = modulo?.get('file');
@@ -76,8 +78,10 @@ export async function POST(richiesta: Request, contesto: { params: Promise<{ id:
  */
 export async function DELETE(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const bozzaId = id;
-  if (!Number.isFinite(bozzaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const bozzaId = Number(id);
+  if (!Number.isSafeInteger(bozzaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   await query(`UPDATE wesion.bozza SET contenuto = contenuto - 'foto' WHERE id = $1`, [bozzaId]);
   return NextResponse.json({ tolta: true });

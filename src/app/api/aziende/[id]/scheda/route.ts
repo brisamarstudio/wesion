@@ -10,8 +10,10 @@ import { leggiScheda, salvaScheda, type ModificheScheda } from '@/lib/scheda';
 
 export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = id;
-  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const aziendaId = Number(id);
+  if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   const scheda = await leggiScheda(aziendaId);
   if (!scheda) return NextResponse.json({ errore: 'azienda inesistente' }, { status: 404 });
@@ -20,8 +22,10 @@ export async function GET(_r: Request, contesto: { params: Promise<{ id: string 
 
 export async function PUT(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const aziendaId = id;
-  if (!Number.isFinite(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const aziendaId = Number(id);
+  if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
   try {
     const corpo = (await richiesta.json()) as ModificheScheda;

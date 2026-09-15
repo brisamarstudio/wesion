@@ -29,8 +29,10 @@ const DECIDIBILI = ['vuota', 'generata', 'attesa_approvazione'];
 
 export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const idBozza = id;
-  if (!Number.isFinite(idBozza)) {
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const idBozza = Number(id);
+  if (!Number.isSafeInteger(idBozza)) {
     return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
   }
 
@@ -232,8 +234,10 @@ const CANCELLABILI = ['vuota', 'generata', 'attesa_approvazione', 'approvata', '
 
 export async function DELETE(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  const idBozza = id;
-  if (!Number.isFinite(idBozza)) {
+  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
+  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
+  const idBozza = Number(id);
+  if (!Number.isSafeInteger(idBozza)) {
     return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
   }
 

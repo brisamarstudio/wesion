@@ -22,8 +22,20 @@ import { Pool, types } from 'pg';
  * miliardi che JavaScript regge senza perdere precisione servirebbero piu' post
  * di quanti se ne possano scrivere. Meglio un numero vero che una stringa che
  * si finge tale.
+ *
+ * ⚠️ CockroachDB (dal 14/09/2026): li' `int` E' INT8, quindi passa di qui anche
+ * ogni `count(*)::int`. E gli id di `unique_rowid()` sono da 19 cifre. Il 14/09
+ * questa riga era diventata `String(v)`: gli id enormi si salvavano, ma i
+ * contatori diventavano testo e le route facevano `Number.isFinite("235")`,
+ * sempre false -> 400 su tutta la dashboard. Il 15/09 i dati sono stati
+ * rimigrati con gli id originali e le sequenze (db/migra-neon-cockroach.mjs):
+ * gli id sono di nuovo piccoli. Quindi: numero quando e' sicuro, stringa solo
+ * se un valore supera MAX_SAFE_INTEGER — cosi' non si tronca MAI in silenzio.
  */
-types.setTypeParser(types.builtins.INT8, (v) => (v === null || v === undefined ? null : String(v)));
+types.setTypeParser(types.builtins.INT8, (v) => {
+  const n = Number(v);
+  return Number.isSafeInteger(n) ? n : v;
+});
 
 const globalePool = globalThis as unknown as { poolWesion?: Pool };
 
