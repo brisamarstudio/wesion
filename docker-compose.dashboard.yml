@@ -36,6 +36,11 @@ services:
       OCR_MODEL: ${OCR_MODEL:-google/gemini-2.5-flash}
       # La catena: gratis, forfait, a consumo. Nessuna e' obbligatoria da sola,
       # ma senza almeno una non si genera niente.
+      # ⚠️ Una chiave nuova nel .env NON arriva al container finche' non la si
+      # elenca QUI: il 15/09/2026 ARK e XKIRO erano nel .env di Contabo e la
+      # dashboard non le vedeva, e la catena le saltava in silenzio.
+      ARK_API_KEY: ${ARK_API_KEY}
+      XKIRO_API_KEY: ${XKIRO_API_KEY}
       GROQ_API_KEY: ${GROQ_API_KEY}
       NARA_API_KEY: ${NARA_API_KEY}
       ZAI_API_KEY: ${ZAI_API_KEY}
