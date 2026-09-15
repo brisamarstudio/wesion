@@ -48,6 +48,59 @@ export async function tokenAccessoGSC(): Promise<string> {
   return tokenInCache!;
 }
 
+/** Il dominio nudo di un indirizzo: "https://www.bracemia.it/menu" -> "bracemia.it". */
+export function dominioDi(indirizzo: string): string {
+  return String(indirizzo ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^sc-domain:/, '')
+    .replace(/^[a-z]+:\/\//, '')
+    .replace(/^www\./, '')
+    .split(/[/?#:]/)[0];
+}
+
+export interface EsitoProprieta {
+  /** Una sola property chiaramente sua. */
+  trovata: string | null;
+  /** Piu' di una (dominio E prefisso URL): le si mostra, decide una persona. */
+  candidate: string[];
+  /** I domini cercati, per dire "non c'e' niente per X" invece di un vuoto muto. */
+  domini: string[];
+}
+
+/**
+ * Propone la property Search Console di un cliente leggendo `sites.list`,
+ * cioe' le property VERE a cui il nostro account ha accesso — non se ne
+ * inventa una scrivendo "sc-domain:" davanti al dominio (15/09/2026).
+ *
+ * ⚠️ PROPONE E BASTA, come `repo-locale.ts` e `gbp.ts`: la scrive in tabella
+ * una persona premendo «Salva».
+ *
+ * Se per lo stesso sito esistono sia la property di dominio sia un prefisso
+ * URL, vince quella di DOMINIO: copre www, senza www, http e https insieme,
+ * e un audit sul prefisso sbagliato vede meta' dei dati senza dirlo.
+ */
+export async function proponiProprieta(indirizzi: string[]): Promise<EsitoProprieta> {
+  const domini = [...new Set(indirizzi.map(dominioDi).filter((d) => d.includes('.')))];
+  if (!domini.length) return { trovata: null, candidate: [], domini };
+
+  const token = await tokenAccessoGSC();
+  const risposta = await fetch('https://www.googleapis.com/webmasters/v3/sites', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!risposta.ok) {
+    throw new Error(`Search Console (elenco property): ${(await risposta.text()).slice(0, 300)}`);
+  }
+  const { siteEntry = [] } = (await risposta.json()) as { siteEntry?: { siteUrl: string }[] };
+
+  const candidate = siteEntry.map((s) => s.siteUrl).filter((url) => domini.includes(dominioDi(url)));
+  const diDominio = candidate.filter((c) => c.startsWith('sc-domain:'));
+
+  if (diDominio.length === 1) return { trovata: diDominio[0], candidate, domini };
+  if (candidate.length === 1) return { trovata: candidate[0], candidate, domini };
+  return { trovata: null, candidate, domini };
+}
+
 export interface RigaRendimento {
   chiavi: string[];
   clic: number;

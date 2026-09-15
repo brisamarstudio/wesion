@@ -121,6 +121,11 @@ export function ModuloAzienda({
     messaggio: string;
     candidati?: { cartella: string; repo_url: string }[];
   } | null>(null);
+  const [cercandoGsc, setCercandoGsc] = useState(false);
+  const [esitoGsc, setEsitoGsc] = useState<{
+    tipo: "trovato" | "candidati" | "vuoto" | "errore";
+    messaggio: string;
+  } | null>(null);
 
   const nuova = !azienda?.id;
 
@@ -253,6 +258,58 @@ export function ModuloAzienda({
       }
     } finally {
       setCercandoRepo(false);
+    }
+  }
+
+  /**
+   * Propone la property Search Console chiedendo a Google quali property
+   * esistono davvero per il sito del cliente. Stesse regole di
+   * `cercaRepoLocale`: riempie solo un campo vuoto, non salva.
+   */
+  async function cercaSearchConsole() {
+    setErrore(null);
+    setEsitoGsc(null);
+    setCercandoGsc(true);
+    try {
+      // I siti del modulo aperto, anche se corretti e non ancora salvati.
+      const siti = dati.contatti.filter((c) => c.tipo === "sito" && c.valore.trim()).map((c) => c.valore.trim());
+      const qs = new URLSearchParams(siti.map((s) => ["sito", s]));
+      const r = await fetch(`/api/aziende/${azienda?.id}/gsc?${qs}`);
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setEsitoGsc({ tipo: "errore", messaggio: e?.errore ?? "Ricerca non riuscita." });
+        return;
+      }
+      // Senza repository la property non si salva (salvaSito: niente repo, niente riga).
+      const senzaRepo = dati.sito_repo_url.trim()
+        ? ""
+        : " ⚠️ Serve anche il Repository del sito: senza, la property non viene salvata.";
+      if (e.trovata) {
+        if (dati.sito_gsc_proprieta.trim() && dati.sito_gsc_proprieta.trim() !== e.trovata) {
+          setEsitoGsc({
+            tipo: "candidati",
+            messaggio: `Il campo è già compilato con "${dati.sito_gsc_proprieta}", Google propone "${e.trovata}". Confronta e decidi tu.`,
+          });
+        } else {
+          setDati((d) => ({ ...d, sito_gsc_proprieta: e.trovata }));
+          setEsitoGsc({
+            tipo: "trovato",
+            messaggio: `Presa da Search Console: ${e.trovata}. Niente è ancora salvato: premi «Salva».${senzaRepo}`,
+          });
+        }
+      } else if (e.candidate?.length) {
+        setEsitoGsc({
+          tipo: "candidati",
+          messaggio: `Più di una property per ${e.domini.join(", ")}: ${e.candidate.join(" · ")}. Scegli tu.`,
+        });
+      } else {
+        setEsitoGsc({
+          tipo: "vuoto",
+          messaggio: `Nessuna property Search Console per ${e.domini?.join(", ") || "questo sito"}: il sito va prima aggiunto e verificato su search.google.com/search-console.`,
+        });
+      }
+    } finally {
+      setCercandoGsc(false);
     }
   }
 
@@ -558,6 +615,36 @@ export function ModuloAzienda({
                       Il repository ce l&apos;ha già la cartella sul disco, non si ricopia a mano.
                     </Text>
                   </HStack>
+
+                  <HStack gap={2} align="center" wrap="wrap">
+                    <Button
+                      label="Trova su Search Console"
+                      size="sm"
+                      variant="secondary"
+                      isLoading={cercandoGsc}
+                      clickAction={cercaSearchConsole}
+                    />
+                    <Text type="supporting" color="secondary">
+                      La property la sa Google: la cerca per il sito nei Contatti.
+                    </Text>
+                  </HStack>
+
+                  {esitoGsc ? (
+                    <Banner
+                      status={esitoGsc.tipo === "trovato" ? "success" : esitoGsc.tipo === "errore" ? "error" : "warning"}
+                      title={
+                        esitoGsc.tipo === "trovato"
+                          ? "Property trovata"
+                          : esitoGsc.tipo === "vuoto"
+                            ? "Niente su Search Console"
+                            : esitoGsc.tipo === "errore"
+                              ? "Ricerca non riuscita"
+                              : "Serve una scelta"
+                      }
+                      description={esitoGsc.messaggio}
+                      defaultIsExpanded
+                    />
+                  ) : null}
 
                   {esitoRepo ? (
                     <Banner
