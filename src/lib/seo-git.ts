@@ -68,8 +68,30 @@ async function leggiSeEsiste(percorso: string): Promise<string | null> {
   }
 }
 
-const IGNORA = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.astro']);
+/**
+ * ⚠️ NON SOLO LE CARTELLE DI BUILD: ANCHE GLI ARCHIVI (15/09/2026).
+ *
+ * Il repo di Artigiano il Conte tiene in `seo/raw-html/` le pagine salvate dal
+ * vecchio WordPress, col loro JSON-LD. Visitando in ordine alfabetico `seo/`
+ * viene prima di `src/`: i cinque posti si riempivano di pagine morte, il
+ * `Layout.astro` vero non entrava mai, il prompt pesava 35.000 token e il
+ * modello proponeva correzioni a file che nessuno serve. Su Laravel succede lo
+ * stesso con `storage/`, `vendor/` e le copie `.bak` lasciate in giro.
+ */
+const IGNORA = new Set([
+  '.git', 'node_modules', 'dist', 'build', '.next', '.astro', '.vercel', '.wrangler', 'coverage',
+  'vendor', 'storage', 'bootstrap', 'db-backups', 'backups', 'backup',
+  'seo', 'riferimento-visivo', 'raw-html', 'export', 'archivio',
+]);
 const ESTENSIONI_UTILI = new Set(['.astro', '.blade.php', '.php', '.html', '.tsx', '.jsx', '.vue', '.svelte']);
+/** Copie di sicurezza: `home.blade.php.bak`, `Layout.astro.backup-0907`, `x.bak2-164805`. */
+const COPIA_DI_SICUREZZA = /\.(bak|backup|old|orig)[\w-]*$/i;
+/**
+ * Dove sta il codice che il sito serve davvero: si guarda QUI prima di tutto il
+ * resto, così i posti vanno ai layout veri e non a quello che capita prima
+ * nell'alfabeto.
+ */
+const SORGENTI_PRIMA = ['src/layouts', 'resources/views/layouts', 'src', 'resources/views', 'app', 'layouts', 'components', 'templates', 'pages'];
 
 /**
  * Cerca i file che probabilmente contengono il grafo JSON-LD.
@@ -80,9 +102,11 @@ const ESTENSIONI_UTILI = new Set(['.astro', '.blade.php', '.php', '.html', '.tsx
  */
 export async function trovaFileSchema(radice: string, massimo = 5): Promise<string[]> {
   const trovati: string[] = [];
+  const visitate = new Set<string>();
 
   async function esplora(dir: string): Promise<void> {
-    if (trovati.length >= massimo) return;
+    if (trovati.length >= massimo || visitate.has(dir)) return;
+    visitate.add(dir);
     let voci;
     try {
       voci = await readdir(dir, { withFileTypes: true });
@@ -97,15 +121,20 @@ export async function trovaFileSchema(radice: string, massimo = 5): Promise<stri
         await esplora(p);
         continue;
       }
+      if (COPIA_DI_SICUREZZA.test(v.name)) continue;
       const estensioneOk = [...ESTENSIONI_UTILI].some((e) => v.name.endsWith(e));
       if (!estensioneOk) continue;
+      const relativo = path.relative(radice, p);
+      if (trovati.includes(relativo)) continue;
       const contenuto = await leggiSeEsiste(p);
       if (contenuto && (contenuto.includes('application/ld+json') || contenuto.includes('@graph'))) {
-        trovati.push(path.relative(radice, p));
+        trovati.push(relativo);
       }
     }
   }
 
+  // Prima i sorgenti veri, poi il resto del repo (le cartelle gia' viste si saltano).
+  for (const s of SORGENTI_PRIMA) await esplora(path.join(radice, s));
   await esplora(radice);
   return trovati;
 }

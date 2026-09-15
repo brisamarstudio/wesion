@@ -222,7 +222,16 @@ ${
      * E il tetto: il default (1600) è tarato su un post di tre righe, qui
      * tornano file interi.
      */
-    const { testo, modello } = await genera(sistema, utente, { maxTokens: 8000, grezzo: true });
+    const { testo, modello } = await genera(sistema, utente, {
+      maxTokens: 8000,
+      grezzo: true,
+      timeoutMs: 180_000,
+      // Fuori formato = si prova il modello dopo, invece di arrendersi al primo (15/09/2026).
+      valida: (t) => {
+        const p = leggiProposta(t);
+        return p.modifiche.length > 0 || Boolean(p.riepilogo);
+      },
+    });
     const dato = leggiProposta(testo);
 
     // ⚠️ "Zero blocchi E zero riepilogo" non vuol dire "va tutto bene": vuol

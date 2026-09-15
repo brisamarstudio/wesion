@@ -37,6 +37,14 @@ export interface Modello {
    * finiti sul fornitore a pagamento per questo, non per mancanza di capacita'.
    */
   ragiona?: string;
+  /**
+   * Campi in piu' nel corpo della richiesta, quelli che solo QUESTO fornitore
+   * capisce (es. `thinking` di ModelArk). Stessa ragione di `ragiona`: un campo
+   * sconosciuto a un altro fornitore gli farebbe rispondere 400.
+   */
+  extra?: Record<string, unknown>;
+  /** Quanto aspettarlo prima di passare al prossimo. Default 60s. */
+  timeoutMs?: number;
 }
 
 /**
@@ -46,6 +54,48 @@ export interface Modello {
  * uno slot vero, ha scritto l'italiano migliore dei tre in 1,4 secondi.
  */
 export const CATENA: Modello[] = [
+  /**
+   * ModelArk (BytePlus, ByteDance), primo — a pagamento, scelto per qualità.
+   *
+   * Provato il 15/09/2026 sull'audit SEO VERO di Artigiano il Conte (prompt da
+   * ~32.000 token, formato WESION:FILE rigido): 7 blocchi, 0 scartati dal
+   * parser, 54 secondi. Nessun altro anello della catena reggeva quel prompt:
+   * Groq gratuito rifiuta oltre 8.000 token al minuto.
+   *
+   * ⚠️ `thinking: disabled` NON È UN DETTAGLIO. Col ragionamento acceso lo
+   * stesso audit ha superato i 3 minuti senza rispondere. Per scrivere seguendo
+   * regole scritte pensarci a lungo non serve (vedi `chiedi`).
+   *
+   * ⚠️ Endpoint della regione ap-southeast (Singapore): la chiave e' legata a
+   * quella. eu-west risponde "API key format is incorrect", cn-beijing "doesn't
+   * exist" — cioe' errori che sembrano di chiave e sono di indirizzo.
+   */
+  {
+    nome: 'modelark/dola-seed-2-1-turbo',
+    url: 'https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions',
+    chiaveEnv: 'ARK_API_KEY',
+    modello: 'dola-seed-2-1-turbo-260628',
+    costa: true,
+    extra: { thinking: { type: 'disabled' } },
+    timeoutMs: 180_000,
+  },
+  /**
+   * xKiro, secondo — aggregatore con modelli gratuiti, API compatibile OpenAI.
+   *
+   * Stessa prova del 15/09/2026: `deepseek-v4.1-flash:free` ha risposto nel
+   * formato giusto in 36 secondi (3 blocchi su 4 applicabili). Nella stessa
+   * prova `qwen3.7-max:free` e `minimax-m3:free` hanno dato 502 in 15s: il
+   * piano gratuito non regge richieste in parallelo, da riprovare prima di
+   * metterli in catena.
+   */
+  {
+    nome: 'xkiro/deepseek-v4.1-flash:free',
+    url: 'https://api.xkiro.com/v1/chat/completions',
+    chiaveEnv: 'XKIRO_API_KEY',
+    modello: 'deepseek/deepseek-v4.1-flash:free',
+    costa: false,
+    timeoutMs: 180_000,
+  },
   {
     nome: 'groq/openai/gpt-oss-120b',
     url: 'https://api.groq.com/openai/v1/chat/completions',
@@ -55,44 +105,9 @@ export const CATENA: Modello[] = [
     // gpt-oss accetta low/medium/high.
     ragiona: 'low',
   },
-  {
-    nome: 'groq/qwen/qwen3.6-27b',
-    url: 'https://api.groq.com/openai/v1/chat/completions',
-    chiaveEnv: 'GROQ_API_KEY',
-    modello: 'qwen/qwen3.6-27b',
-    costa: false,
-    // qwen accetta solo 'none' o 'default'. 'none' e' anche il modo giusto di
-    // zittire i tag <think> che altrimenti finiscono nel testo.
-    ragiona: 'none',
-  },
-  /**
-   * Nara, secondo. Gratis, e scrive bene.
-   *
-   * ⚠️ SOLO I MODELLI COL SUFFISSO `-free` SONO DAVVERO GRATIS. Il listino ne
-   * mostra 54, compresi nomi di punta, ma provati il 27/08/2026 quelli senza
-   * suffisso rispondono `429 Insufficient credits`: la quota giornaliera copre
-   * un sottoinsieme. Cambiare questo modello con uno più altisonante vuol dire
-   * spegnere l'anello senza accorgersene, perché la catena scivola al
-   * successivo in silenzio.
-   *
-   * `minimax-m3-free` è stato il migliore della giornata come testo — legge
-   * come una persona invece che come un'agenzia — a 8,5 secondi. Scartati:
-   * `tencent-hy3-free` (risposta vuota), `qwen-3.8-max-free` (41 secondi),
-   * `mimo-v2.5-free` (402 payment_required).
-   *
-   * ⚠️ DIPENDE DA UN CANALE TELEGRAM. L'accesso richiede di essere iscritti a
-   * un canale e di aver ricollegato l'account: se un giorno esci, o loro lo
-   * chiudono, la chiave smette di funzionare. Non lo sapresti da un avviso, lo
-   * vedresti dai post che non escono — per questo sta secondo e non primo, e
-   * per questo sotto c'è ancora chi lo sostituisce.
-   */
-  {
-    nome: 'nara/minimax-m3-free',
-    url: 'https://router.bynara.id/v1/chat/completions',
-    chiaveEnv: 'NARA_API_KEY',
-    modello: 'minimax-m3-free',
-    costa: false,
-  },
+  // ⚠️ TOLTI IL 15/09/2026, rispondevano 404 "model does not exist" a ogni
+  // chiamata (la catena scivolava oltre in silenzio): `groq/qwen/qwen3.6-27b`
+  // e `nara/minimax-m3-free`. Prima di rimetterne uno, provarlo davvero.
   /**
    * Nara a pagamento, quarto — messo qui apposta, PRIMA di Z.AI.
    *
@@ -228,6 +243,15 @@ export interface OpzioniGenerazione {
    * com'è. Per il codice, dove gli spazi contano.
    */
   grezzo?: boolean;
+  /**
+   * Una risposta arrivata ma inutilizzabile (fuori formato) conta come un
+   * modello che non ha risposto: si passa al prossimo. Senza, il 15/09/2026
+   * l'audit SEO si fermava sul primo modello che scriveva il suo ragionamento
+   * invece dei blocchi WESION:FILE, con tutta la catena ancora da provare.
+   */
+  valida?: (testo: string) => boolean;
+  /** Tetto di attesa per ogni modello, se il compito ne chiede piu' del suo default. */
+  timeoutMs?: number;
 }
 
 async function chiedi(
@@ -264,12 +288,15 @@ async function chiedi(
     // Il compito è scrivere tre righe seguendo regole scritte, non risolvere un
     // problema: pensarci a lungo non migliora il testo, allunga solo l'attesa.
     if (m.ragiona) corpo.reasoning_effort = m.ragiona;
+    if (m.extra) Object.assign(corpo, m.extra);
 
     const risposta = await fetch(m.url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${chiave}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(corpo),
-      signal: AbortSignal.timeout(60000),
+      // Il piu' largo fra quello del modello e quello del compito: un audit da
+      // 30.000 token non si scrive in 60 secondi, un post si'.
+      signal: AbortSignal.timeout(Math.max(m.timeoutMs ?? 60_000, opzioni.timeoutMs ?? 0)),
     });
 
     if (!risposta.ok) {
@@ -316,7 +343,10 @@ export async function genera(
 
   for (const m of CATENA) {
     const testo = await chiedi(m, sistema, utente, false, opzioni);
-    if (testo) return { testo, modello: m.nome, ms: Date.now() - inizio, saltati };
+    if (testo && (!opzioni.valida || opzioni.valida(testo))) {
+      return { testo, modello: m.nome, ms: Date.now() - inizio, saltati };
+    }
+    if (testo) console.warn(`[generatore] ${m.nome} ha risposto fuori formato: provo il prossimo`);
     saltati.push(m.nome);
   }
 
