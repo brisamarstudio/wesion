@@ -89,6 +89,16 @@ const STATO: Record<string, { testo: string; colore: 'neutral' | 'warning' | 'bl
   scaduta: { testo: 'scaduta', colore: 'red' },
 };
 
+/**
+ * "solo 0 fatti" non è italiano (15/09/2026, visto dall'operatore): una frase
+ * scritta pensando al 3 va provata anche con lo 0 e l'1.
+ */
+function quantiFatti(n: number): string {
+  if (n === 0) return 'nessun fatto';
+  if (n === 1) return 'un solo fatto';
+  return `solo ${n} fatti`;
+}
+
 const MESI = [
   'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
   'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
@@ -226,7 +236,7 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                     hasSearch={clienti.length > 8}
                     options={clienti.map((c) => ({
                       value: String(c.id),
-                      label: `${c.nome}${c.fatti < 4 ? `  (solo ${c.fatti} fatti)` : ''}`,
+                      label: `${c.nome}${c.fatti < 4 ? `  (${quantiFatti(c.fatti)})` : ''}`,
                     }))}
                   />
                   <Selector
@@ -293,8 +303,12 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
                 {cliente && cliente.fatti < 4 ? (
                   <Banner
                     status="warning"
-                    title={`${cliente.nome} ha solo ${cliente.fatti} fatti`}
-                    description="Sotto i quattro i temi disponibili sono pochi e il mese si ripete. Si aggiungono dalla scheda del cliente, sezione «Cosa è vero»."
+                    title={
+                      cliente.fatti === 0
+                        ? `Di ${cliente.nome} non sappiamo ancora niente`
+                        : `Di ${cliente.nome} sappiamo poco: ${quantiFatti(cliente.fatti)}`
+                    }
+                    description="Con meno di quattro cose vere sul cliente, i post del mese finiscono per ripetersi. Aggiungile dalla sua scheda, nella sezione «Cosa è vero»."
                   />
                 ) : null}
 

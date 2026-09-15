@@ -615,7 +615,9 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const mancanze = [
     s.stato !== 'cliente' ? "lo stato non è «cliente»: le spie dei silenzi lo ignorano" : null,
     s.settore.length === 0 ? 'nessun settore: i temi saranno solo quelli generici' : null,
-    quantiFatti < 4 ? `solo ${quantiFatti} fatti: servono almeno 4 per non ripetersi` : null,
+    quantiFatti < 4
+      ? `${quantiFatti === 0 ? 'nessun fatto ancora' : quantiFatti === 1 ? 'un solo fatto' : `solo ${quantiFatti} fatti`}: ne servono almeno 4 perché i post non si ripetano`
+      : null,
     s.titolari.length === 0 ? 'nessun titolare abilitato: il router non accetterà comandi' : null,
     !s.servizi.some((x) => x.attivo) ? 'nessun servizio attivo: non c’è niente da pubblicare' : null,
   ].filter(Boolean) as string[];
