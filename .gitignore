@@ -11,3 +11,7 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Credenziali di accesso scritte a mano: mai in git
+wesion-admin-credenziali.txt
+*credenziali*.txt
