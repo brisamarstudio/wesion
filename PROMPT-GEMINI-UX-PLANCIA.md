@@ -60,6 +60,9 @@ Sito:  SEO ultimo controllo 15/09 · 1 proposta da guardare   [Guarda]
 
 Vietate nell'interfaccia visibile (restano solo in "Avanzate" se servono): endpoint, router, token,
 payload, config, slot, fatto_id, sezione, API, REST, account id, location id.
+**Ogni frase con un numero va provata con 0, 1 e tanti**: il 15/09/2026 la dashboard diceva
+«Artigiano il Conte ha solo 0 fatti». Si scrive «nessun post da approvare», «un post», «3 post».
+Frasi da persona, non da modulo: «Di Artigiano il Conte non sappiamo ancora niente», non «0 fatti».
 Sostituzioni: "piano editoriale" → "calendario dei post"; "Da approvare" → "Da approvare" (va bene);
 "Cosa è uscito" → "Pubblicati"; "Cosa è vero" → "Cosa sappiamo" (con sotto una riga di spiegazione).
 
