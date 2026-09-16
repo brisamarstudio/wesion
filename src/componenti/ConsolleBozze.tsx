@@ -1574,6 +1574,17 @@ Premi «Scrivi il testo» per generarlo.`}
                         (perCampoLocale(selezionata.pubblica_at) || undefined) as
                           ISODateTimeString | undefined
                       }
+                      /* ⚠️ MIN = ADESSO, NON UNA DECORAZIONE (16/09/2026). Una
+                         bozza di MyWebby ferma dal 31/08 aveva ancora «Esce il 2
+                         settembre» con il calendario aperto sul 16: il selettore
+                         lasciava scegliere il 2 come se fosse una data valida
+                         qualunque. Qui si blocca solo la SCELTA di una nuova
+                         data passata — il server rifiuta lo stesso, questo
+                         evita solo di doverlo scoprire dopo il click. Finché
+                         `adesso` non e' arrivato (vedi `useAdesso`) il calendario
+                         resta senza vincolo, per non disegnare due HTML diversi
+                         fra server e browser. */
+                      min={adesso ? (new Date(adesso).toISOString().slice(0, 16) as ISODateTimeString) : undefined}
                       onChange={(v) => void cambiaQuando(v ?? '')}
                     />
                   ) : (

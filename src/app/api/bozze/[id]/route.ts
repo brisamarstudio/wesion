@@ -177,6 +177,27 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
         { status: 400 }
       );
     }
+    /**
+     * ⚠️ NON SI PROGRAMMA NEL PASSATO (16/09/2026). Vista una bozza di
+     * MyWebby ferma dal 31/08, con «Esce il» ancora sul 2 settembre mentre in
+     * calendario si era già al 16 — il selettore lasciava scegliere (e quindi
+     * confermare) una data di due settimane fa come se fosse normale.
+     *
+     * Il margine di cinque minuti non è indulgenza: e' il tempo che passa fra
+     * quando la pagina disegna «adesso» e quando l'operatore clicca Salva, e
+     * senza quello ogni salvataggio sul minuto giusto fallirebbe per un
+     * arrotondamento. Non tocca le bozze che erano GIÀ nel passato prima di
+     * questa modifica: quelle restano visibili, e il badge «tocca a oggi» le
+     * segnala già — qui si blocca solo chi ne sceglie una nuova.
+     */
+    if (quando && quando.getTime() < Date.now() - 5 * 60_000) {
+      return NextResponse.json(
+        {
+          errore: `Quella data è già passata (${corpo.pubblica_at}): non si può programmare un'uscita nel passato. Scegline una da adesso in poi, o lascia «al primo giro utile».`,
+        },
+        { status: 400 }
+      );
+    }
     await query(
       `UPDATE wesion.bozza SET pubblica_at = $2 WHERE id = $1 AND stato = ANY($3)`,
       [idBozza, quando, DECIDIBILI]
