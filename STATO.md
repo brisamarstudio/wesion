@@ -1376,3 +1376,77 @@ sparsi in «Servizi». Brief completo in `PROMPT-GEMINI-UX-PLANCIA.md`.
    `servizio.config` intera: la password di WordPress è già nell'HTML della
    pagina. Il campo serve a chi condivide lo schermo. Toglierli davvero vuol dire
    non mandarli al client — modifica al server, **ancora da fare**.
+
+## 18. Il menù è fatto di prodotti (16/09/2026)
+
+Stessa giornata della Plancia, e stessa fonte: chi lo usa. «Il tool è talmente
+AIchese che solo tu riesci a trovare una logica di navigazione».
+
+**Primo giro** (sbagliato a metà): nove voci accorpate in tre per FASE DEL LAVORO
+— Oggi, Clienti, Nuovi. Risolveva il numero, non il problema: «Oggi» metteva
+nella stessa coda un post di Google (si approva ed esce da solo) e uno social (si
+approva e poi si incolla a mano). Due gesti diversi con lo stesso nome.
+
+**Secondo giro** (quello buono, deciso dall'operatore): il menù è fatto di
+**prodotti** — Google, Social, Sito — e dentro ognuno c'è il suo giro completo.
+Poi Clienti (con filtro per prodotto) e Nuovi clienti. In fondo Spie, Cose ferme,
+Manuale.
+
+**Le cose da sapere prima di toccarlo**
+
+1. **`src/lib/prodotti.ts` è l'unico posto** dove sta scritto quale `bozza.tipo`
+   appartiene a quale prodotto. Un tipo nuovo che non finisce lì non compare in
+   nessuna coda — è voluto (meglio invisibile che nel posto sbagliato).
+2. **Gli indirizzi non sono cambiati.** `/bozze`, `/calendario`, `/piano`,
+   `/insights` rispondono come prima; il prodotto viaggia come `?prodotto=`, e
+   senza vuol dire «tutto». Ci puntano i segnalibri e gli href delle spie.
+3. **`/api/conteggi` gira su OGNI pagina**: due query e basta. Metterci il numero
+   delle spie vuol dire far girare tutte le query di `spie.ts` a ogni click.
+4. **La Plancia del cliente è l'eccezione voluta**: lì i prodotti si vedono uno
+   accanto all'altro, perché la domanda al telefono è «come sta questo cliente».
+5. Pagina nuova: **`/proposte`**, l'audit SEO di tutti i clienti in fila. Prima
+   esisteva solo dentro la scheda del singolo.
+
+## 19. Il guasto delle CTE su CockroachDB (16/09/2026) — **leggere prima di scrivere SQL**
+
+Sintomo: in consolle «Non è andata, e non si sa perché» premendo **Approva**.
+Sembrava il generatore («il modello non ha fatto fallback?»). Era SQL.
+
+`PATCH /api/bozze/[id]` scrive la decisione e la sua traccia in una CTE sola. Su
+Neon funzionava; su CockroachDB:
+
+```
+WITH clause "tracciata" does not return any columns
+```
+
+cioè 500 → HTML → nessun campo `errore` → messaggio vuoto. **Dalla migrazione del
+15/09 al pomeriggio del 16/09 nessuno ha potuto approvare, rifiutare o cancellare
+dalla dashboard.**
+
+**La regola, per la prossima volta:** su CockroachDB una CTE che scrive vuole
+`RETURNING` **e** vuole essere referenziata nella query principale — una CTE di
+sola scrittura mai guardata può non essere eseguita affatto, e la traccia
+sparirebbe in silenzio. Da qui il `(SELECT count(*) FROM tracciata)`.
+
+**E la lezione di contorno, che vale di più:** «non si sa perché» compariva
+PROPRIO quando il motivo esisteva ed era nei log. Un messaggio d'errore che si
+arrende manda a cercare nel posto sbagliato — quella volta nel modello che scrive
+i testi. Ora dice almeno la famiglia del guasto e dove sta scritto il resto.
+
+**`npm run log`** (nuovo): le ultime righe del container, senza il rito dell'SSH.
+`npm run log -- 500 --cerca 429`. Stessa ragione di `npm run deploy`. Legge SOLO
+la dashboard: il router sta su Oracle, è un'altra macchina.
+
+## 20. Chi ha scritto un post (16/09/2026)
+
+`bozza.modello` diceva una bugia: un post di M Hotel Don Carlo è uscito su Google
+con un testo riscritto a mano, e in tabella risultava di `groq/gpt-oss-120b`.
+Quel campo esiste per una ragione sola (vedi `generatore.ts`): fra sei mesi
+«questo post fa schifo» è inutile se non si sa chi l'ha scritto. **Un campo che
+risponde il nome sbagliato è peggio di un campo vuoto: il vuoto ti fa cercare, la
+bugia ti fa smettere di cercare.**
+
+Adesso una correzione a mano mette `modello = 'mano'` e conserva il primo autore
+in `contenuto.scritto_prima_da`; in consolle la voce si chiama «Chi l'ha
+scritto». ⚠️ **Resta da correggere la riga della bozza 85**, già pubblicata prima
+della modifica: va fatto con un UPDATE sul database, non dall'interfaccia.

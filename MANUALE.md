@@ -23,11 +23,49 @@ di solito la risposta è lì.
 ## La catena, in una riga
 
 ```
-Campagna → Aziende → (telefonata) → Cliente → Come parla → Cosa sappiamo
-        → Piano del mese → Bozze → APPROVI TU → esce
+Nuovi clienti → (telefonata) → Cliente → Come parla → Cosa sappiamo
+        → Il mese → Da approvare → APPROVI TU → esce
 ```
 
-Ogni pagina del menu è un anello. Sotto, uno per uno.
+---
+
+## Il menù: tre prodotti, i clienti, e i nuovi (dal 16/09/2026)
+
+Il menù non dice più **dove stanno le cose**, dice **cosa vendiamo**. Dentro
+ogni prodotto c'è il suo giro completo, sempre nello stesso ordine — impararlo
+una volta basta per tutti e tre.
+
+```
+▸ Google        38    Da approvare · Calendario · Il mese
+▸ Social         2    Da copiare · Calendario · Il mese
+▸ Sito           1    Articoli da approvare · Proposte per il sito
+▸ Clienti       14    tutti / Google / Social / Sito
+▸ Nuovi clienti       Da chiamare · Campagne · Messaggi da mandare
+─────────────
+  Spie · Cose ferme · Manuale
+```
+
+**Perché per prodotto e non per fase del lavoro.** Prima Google e Social
+stavano nella stessa coda, chiamata «Bozze». Ma non sono lo stesso gesto: un
+post di Google **lo approvi ed esce da solo**, uno social **lo approvi e poi lo
+incolli a mano**. Ogni coda adesso lo scrive in cima, sotto il titolo.
+
+**Il numero accanto alla voce** è quanto aspetta te in quel prodotto. Se non
+c'è, non c'è niente da decidere.
+
+**I vecchi nomi, dove sono finiti:**
+
+| Prima | Adesso |
+|---|---|
+| Bozze | Google → Da approvare (e Social, e Sito: sono separate) |
+| Piano | dentro ogni prodotto → Il mese |
+| Calendario | dentro Google e Social → Calendario |
+| Aziende | Nuovi clienti → Da chiamare |
+| Da fare | Cose ferme, in fondo |
+| + Post al Volo | il bottone in cima a «Da approvare» |
+
+I vecchi indirizzi funzionano ancora tutti: `/bozze` senza altro mostra tutto
+insieme, come prima.
 
 ---
 
@@ -55,7 +93,7 @@ città, quante. Poi **aspetti** e premi «Raccogli».
 
 ---
 
-## 🏢 Aziende — *chi chiamo per primo*
+## 🏢 Nuovi clienti → Da chiamare — *chi chiamo per primo*
 
 **A cosa serve:** è la lista delle telefonate. I lead raccolti, ordinati per
 quanto conviene chiamarli.
@@ -192,7 +230,7 @@ nessuna parte è un'informazione, non uno spazio bianco.
 
 ---
 
-## 🗂 Piano — *il mese, prima di scrivere*
+## 🗂 Il mese — *il piano, prima di scrivere*
 
 **A cosa serve:** decidere di cosa si parla questo mese, prima che qualcuno
 scriva una riga. Solo per i **clienti**: costruire un mese di post a un prospect
@@ -203,7 +241,7 @@ conviene saperlo prima di guardarlo, non dopo.
 
 ---
 
-## ✍️ Bozze — *la coda di quello che sta per uscire*
+## ✍️ Da approvare — *la coda di quello che sta per uscire*
 
 **A cosa serve:** tutto quello che è scritto e aspetta un sì. Post per Google,
 articoli per il blog, menù del giorno.
@@ -253,6 +291,25 @@ Come funziona poi, da solo:
 
 ---
 
+## 🌐 Sito → Proposte per il sito — *l'audit SEO di tutti insieme*
+
+Wesion legge il codice del sito di un cliente e apre una **proposta** (una PR su
+GitHub) con le correzioni SEO/GEO. Quella proposta va guardata e approvata da te.
+
+Prima la si vedeva **solo dentro la scheda del singolo cliente**: con quindici
+clienti, «ci sono proposte in attesa?» voleva dire aprire quindici schede, cioè
+non chiederselo mai. Questa pagina le mette in fila, una riga per cliente:
+
+- **una proposta aspetta un sì** → c'è lavoro fatto che nessuno ha ancora guardato;
+- **l'ultimo controllo non è andato** → l'audit si è rotto, il motivo è nella scheda;
+- **controllato il …** → tutto a posto, nessuna proposta aperta;
+- **mai controllato** → il cliente ha il sito collegato ma non è mai partito un giro.
+
+Il bottone porta alla scheda del cliente, dove la proposta si legge con il diff e
+si applica. ⚠️ **Da qui non si applica niente**: è un elenco che dice dove andare.
+
+---
+
 ## 🚨 Spie — *cosa è rotto*
 
 **A cosa serve:** qui non si clicca, si legge. Cosa non funziona, cosa è muto,
@@ -263,7 +320,7 @@ più clienti. Chi apre questa pagina di solito ha poco tempo.
 
 ---
 
-## 📈 Da fare — *le cose ferme*
+## 📈 Cose ferme — *quello che è rimasto indietro*
 
 **A cosa serve:** non è un cruscotto e non ci sono grafici. Ogni riga risponde a
 **«cosa faccio adesso»**, e ha un click per andarci.
