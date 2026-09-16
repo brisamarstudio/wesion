@@ -35,6 +35,17 @@ import subprocess
 import sys
 import time
 
+# ⚠️ LA CONSOLE DI WINDOWS NON DEVE POTER AMMAZZARE UN DEPLOY (16/09/2026).
+# Docker stampa caratteri come ▲ nella barra di avanzamento; su cp1252 scriverli
+# alza UnicodeEncodeError, e il primo deploy della Plancia e' morto cosi' A META'
+# BUILD, con l'ssh chiuso di colpo e il server a meta' strada. L'output e'
+# decorazione: se un carattere non si sa disegnare si sostituisce, non si esce.
+for _flusso in (sys.stdout, sys.stderr):
+    try:
+        _flusso.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 REPO = os.path.dirname(os.path.abspath(__file__))
 CARTELLA_SERVER = "/opt/wesion"
 COMPOSE = "docker-compose.dashboard.yml"
