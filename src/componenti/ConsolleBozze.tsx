@@ -771,7 +771,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                           {/* Scaduta e' uno stato eccezionale che chiede
                               un'azione, quindi Badge. Il conto alla rovescia
                               invece e' metadato: testo, non badge. */}
-                          {s?.scaduta ? (
+                          {s?.scaduta && DECIDIBILI.has(b.stato) ? (
                             <Badge variant="error" label="scaduta" />
                           ) : s ? (
                             <Text type="supporting">{s.testo}</Text>
@@ -832,11 +832,26 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
 
               {errore ? <Banner status="error" title="Non è stato possibile" description={errore} /> : null}
 
-              {scade?.scaduta ? (
+              {/* ⚠️ «SCADUTA» NON VALE PER QUELLO CHE E' GIA' USCITO (16/09/2026).
+                  `scade_at` è una data, e una data passata resta passata per
+                  sempre: il menu del 05/09 della Trattoria La Fenice — uscito
+                  sul sito quel giorno, esito ok — si portava dietro un cartello
+                  rosso «va rigenerata» undici giorni dopo. Chi lo legge cerca un
+                  bottone che non può esistere.
+
+                  ⚠️ E «va rigenerata» NON È UN'ISTRUZIONE. Per un menu non c'è
+                  niente da rigenerare qui: il testo viene dall'OCR di una foto
+                  che manda il titolare, e vale per QUEL giorno. L'unica strada
+                  è che la foto arrivi di nuovo — e la manda lui, non noi. */}
+              {scade?.scaduta && !eUscita ? (
                 <Banner
                   status="error"
                   title="Questa bozza è scaduta"
-                  description="Il tempo per dire di sì è passato: pubblicarla adesso vorrebbe dire mandare fuori roba di ieri. Va rigenerata."
+                  description={
+                    selezionata.tipo === 'menu'
+                      ? 'Il menu del giorno vale per quel giorno: pubblicarlo adesso vorrebbe dire mandare fuori quello di ieri. Da qui non si rigenera — il titolare deve rimandare la foto su WhatsApp.'
+                      : 'Il tempo per dire di sì è passato: pubblicarla adesso vorrebbe dire mandare fuori roba di ieri.'
+                  }
                 />
               ) : null}
 
@@ -1041,8 +1056,8 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                   description={
                     selezionata.stato === 'approvata'
                       ? cosaSuccedeOra(selezionata, adesso)
-                      : scade?.scaduta
-                        ? 'Il tempo per dire di sì è passato: va rigenerata.'
+                      : scade?.scaduta && !eUscita
+                        ? 'Il tempo per dire di sì è passato.'
                         : undefined
                   }
                 />
