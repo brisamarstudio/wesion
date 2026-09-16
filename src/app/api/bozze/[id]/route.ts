@@ -64,11 +64,74 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
     corpo.azione === 'approva' ||
     corpo.azione === 'rifiuta' ||
     corpo.azione === 'segna_pubblicata_a_mano';
-  if (corpo.azione !== undefined && !decide && corpo.azione !== 'nessuna') {
+  if (
+    corpo.azione !== undefined &&
+    !decide &&
+    corpo.azione !== 'nessuna' &&
+    corpo.azione !== 'torna_indietro'
+  ) {
     return NextResponse.json(
-      { errore: "azione deve essere 'approva', 'rifiuta', 'segna_pubblicata_a_mano' o 'nessuna'" },
+      {
+        errore:
+          "azione deve essere 'approva', 'rifiuta', 'segna_pubblicata_a_mano', 'torna_indietro' o 'nessuna'",
+      },
       { status: 400 }
     );
+  }
+
+  /**
+   * Disfare l'ultima decisione.
+   *
+   * ⚠️ NASCE DALLA RASSEGNA (16/09/2026): da quando si approva una bozza dopo
+   * l'altra con un bottone solo, la mano va piu' veloce dell'occhio. Un gesto
+   * che si ripete trenta volte DEVE avere il suo contrario, o la trentesima si
+   * fa con la paura.
+   *
+   * ⚠️ SI TORNA INDIETRO SOLO DA `approvata`, e la finestra la decide il
+   * router: al giro dei trenta secondi la bozza passa a `pubblicando` e da li'
+   * non si torna piu'. Non e' una limitazione tecnica, e' la verita': quando il
+   * post e' su Google, toglierlo si fa su Google. Il WHERE lo dice, non il
+   * bottone — fra il disegno del bottone e il click puo' passare il giro.
+   */
+  if (corpo.azione === 'torna_indietro') {
+    const [tornata] = await query<{ id: number; stato: string; tracciati: string }>(
+      `WITH disfatta AS (
+         UPDATE wesion.bozza
+            SET stato = 'attesa_approvazione',
+                approvata_da = NULL, approvata_via = NULL, approvata_at = NULL
+          WHERE id = $1 AND stato = 'approvata'
+          RETURNING id, stato, azienda_id, tipo
+       ), tracciata AS (
+         INSERT INTO wesion.evento (azienda_id, tipo, attore, dettaglio)
+         SELECT azienda_id, 'bozza_torna_indietro', $2,
+                jsonb_build_object('bozza_id', id, 'tipo', tipo)
+           FROM disfatta
+         RETURNING id
+       )
+       SELECT d.id, d.stato, (SELECT count(*) FROM tracciata) AS tracciati
+         FROM disfatta d`,
+      [idBozza, OPERATORE]
+    );
+
+    if (!tornata) {
+      const [attuale] = await query<{ stato: string }>(
+        `SELECT stato FROM wesion.bozza WHERE id = $1`,
+        [idBozza]
+      );
+      if (!attuale) return NextResponse.json({ errore: 'bozza inesistente' }, { status: 404 });
+      return NextResponse.json(
+        {
+          errore:
+            attuale.stato === 'pubblicando' || attuale.stato === 'pubblicata'
+              ? 'È già uscita: il post si toglie dalla scheda Google, non da qui.'
+              : `Non c’è niente da disfare: questa bozza è «${attuale.stato}».`,
+          stato: attuale.stato,
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ id: tornata.id, stato: tornata.stato });
   }
 
   // Il testo corretto a mano si salva PRIMA di decidere: se l'operatore ha

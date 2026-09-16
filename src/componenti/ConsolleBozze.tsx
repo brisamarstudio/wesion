@@ -33,6 +33,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Card } from '@astryxdesign/core/Card';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { Button } from '@astryxdesign/core/Button';
@@ -165,6 +166,25 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
    */
   const [cliente, setCliente] = useState('tutti');
   const [cerca, setCerca] = useState('');
+  /**
+   * La rassegna: le bozze passano davanti una per volta.
+   *
+   * ⚠️ NASCE DA UNA CODA DI 36 (16/09/2026). La lista mostrava trentasei righe
+   * con la stessa descrizione — «MyWebby · Post Google · Piano del mese» — e
+   * titoli che si ripetono, perché sono gli angoli del piano e non i post. Per
+   * decidere bisognava aprirle una per una: tre click a bozza, centootto in
+   * tutto. «La logica esiste, la UX no».
+   *
+   * `saltate` non e' un filtro: sono quelle messe in fondo con «Salta», e
+   * tornano da sole quando le altre sono finite — saltare non deve voler dire
+   * perdere.
+   */
+  const [saltate, setSaltate] = useState<Array<string | number>>([]);
+  const [ultimaDecisa, setUltimaDecisa] = useState<{
+    id: string | number;
+    azione: 'approva' | 'rifiuta';
+    titolo: string;
+  } | null>(null);
   const [selezionataId, setSelezionataId] = useState<string | number | null>(null);
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
   const [correzioni, setCorrezioni] = useState<Record<string | number, string>>({});
@@ -223,6 +243,25 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
         .some((v) => String(v).toLowerCase().includes(q));
     });
   }, [bozze, filtro, cliente, cerca]);
+
+  /**
+   * Cosa passa in rassegna: le decidibili di questo filtro, NELLO STESSO ORDINE
+   * della lista (che gia' mette in cima quelle il cui turno è arrivato).
+   *
+   * ⚠️ Fuori le bozze senza testo: quello che si legge in una bozza vuota è il
+   * COMPITO, non il post, e il server rifiuta di approvarla (giustamente). In
+   * rassegna sarebbero trenta schermate con un bottone che non funziona: si
+   * scrivono, non si approvano — e per quelle c'è il pannello, con «Scrivi».
+   */
+  const coda = useMemo(
+    () => filtrate.filter((b) => DECIDIBILI.has(b.stato) && testoBozza(b.contenuto).trim().length > 0),
+    [filtrate]
+  );
+  const corrente = useMemo(() => {
+    const nonSaltate = coda.filter((b) => !saltate.some((x) => String(x) === String(b.id)));
+    // Finite le altre, tornano quelle saltate: il giro si chiude, non si perde.
+    return nonSaltate[0] ?? coda[0] ?? null;
+  }, [coda, saltate]);
 
   const selezionata = bozze.find((b) => b.id === selezionataId) ?? null;
 
@@ -372,17 +411,24 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     router.refresh();
   }
 
-  async function decidi(azione: 'approva' | 'rifiuta') {
-    if (!selezionata) return;
+  /**
+   * Decidere. Di solito la bozza aperta nel pannello, ma la rassegna passa la
+   * SUA: li' si decide senza aprire niente, una riga dopo l'altra.
+   */
+  async function decidi(azione: 'approva' | 'rifiuta', quale: Bozza | null = selezionata) {
+    if (!quale) return;
     setErrore(null);
-    const risposta = await fetch(`/api/bozze/${selezionata.id}`, {
+    // La correzione in corso si manda solo se riguarda QUESTA bozza: in
+    // rassegna la bozza decisa e quella aperta nel pannello possono essere due.
+    const suQuestaCorretto = quale.id === selezionata?.id && modificato;
+    const risposta = await fetch(`/api/bozze/${quale.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         azione,
         // Il testo si manda solo se e' stato davvero toccato: cosi' una
         // riapprovazione non riscrive `contenuto` con quello che c'era gia'.
-        ...(modificato ? { testo: testoCorrente } : {}),
+        ...(suQuestaCorretto ? { testo: testoCorrente } : {}),
       }),
     });
     const esito = await risposta.json().catch(() => ({}));
@@ -392,9 +438,37 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
       return;
     }
     setCorrezioni((c) => {
-      const { [selezionata.id]: _tolta, ...resto } = c;
+      const { [quale.id]: _tolta, ...resto } = c;
       return resto;
     });
+    setUltimaDecisa({ id: quale.id, azione, titolo: titoloBozza(quale.contenuto, quale.tipo) });
+    router.refresh();
+  }
+
+  /**
+   * Disfare l'ultima decisione, finche' il router non l'ha presa in mano.
+   *
+   * Un gesto che si ripete trenta volte deve avere il suo contrario, o la
+   * trentesima si fa con la paura. Quanto duri la finestra non lo decide questa
+   * pagina: lo dice il server, e se è tardi lo scrive («È già uscita»).
+   */
+  async function tornaIndietro() {
+    if (!ultimaDecisa) return;
+    setErrore(null);
+    const risposta = await fetch(`/api/bozze/${ultimaDecisa.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ azione: 'torna_indietro' }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setErrore(perche(risposta, esito));
+      setUltimaDecisa(null);
+      router.refresh();
+      return;
+    }
+    setSaltate((s) => s.filter((x) => String(x) !== String(ultimaDecisa.id)));
+    setUltimaDecisa(null);
     router.refresh();
   }
 
@@ -542,6 +616,91 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                 startIcon="search"
               />
             </VStack>
+
+            {/* ── LA RASSEGNA ───────────────────────────────────
+                Una bozza per volta, sopra la lista. Solo in «Da decidere»: le
+                altre viste si guardano, non si decidono. La lista resta sotto
+                — serve quando cerchi una cosa precisa, non quando devi
+                svuotare la coda. */}
+            {filtro === 'da_decidere' && corrente ? (
+              <VStack paddingInline={3} gap={2}>
+                {ultimaDecisa ? (
+                  <Banner
+                    status="success"
+                    title={`${ultimaDecisa.azione === 'approva' ? 'Approvata' : 'Rifiutata'}: «${ultimaDecisa.titolo}»`}
+                    description={
+                      ultimaDecisa.azione === 'approva'
+                        ? 'Esce al prossimo giro del router. Finché non è uscita si può disfare.'
+                        : 'Resta in archivio come decisione: si può disfare.'
+                    }
+                    endContent={<Button label="Torna indietro" size="sm" clickAction={tornaIndietro} />}
+                  />
+                ) : null}
+
+                <Card>
+                  <VStack gap={3} padding={4}>
+                    <HStack justify="between" align="center" wrap="wrap" gap={2}>
+                      <HStack gap={2} align="center" wrap="wrap">
+                        <Text weight="medium">{corrente.azienda}</Text>
+                        <Text type="supporting" color="secondary">
+                          {cosaSuccedeOra(corrente, adesso)}
+                        </Text>
+                      </HStack>
+                      <Text type="supporting" color="secondary">
+                        {`${coda.length - saltate.filter((x) => coda.some((b) => String(b.id) === String(x))).length} da decidere`}
+                        {saltate.length ? ` · ${saltate.length} saltate` : ''}
+                      </Text>
+                    </HStack>
+
+                    <Heading level={3}>{titoloBozza(corrente.contenuto, corrente.tipo)}</Heading>
+
+                    {/* Il testo intero, non un'anteprima: si sta decidendo se
+                        farlo uscire. `pre-wrap` perché gli a capo sono parte del
+                        post — su Google si vedono. */}
+                    <Text style={{ whiteSpace: 'pre-wrap' }}>{testoBozza(corrente.contenuto)}</Text>
+
+                    {corrente.avvisi.some((a) => a.gravita === 'grave') ? (
+                      <Banner
+                        status="warning"
+                        title="C’è qualcosa da controllare prima"
+                        description={corrente.avvisi
+                          .filter((a) => a.gravita === 'grave')
+                          .map((a) => a.messaggio)
+                          .join(' · ')}
+                      />
+                    ) : null}
+
+                    <HStack gap={2} wrap="wrap">
+                      <Button
+                        label="Approva e avanti"
+                        variant="primary"
+                        clickAction={() => decidi('approva', corrente)}
+                      />
+                      <Button
+                        label="Salta"
+                        variant="secondary"
+                        onClick={() => setSaltate((s) => [...s, corrente.id])}
+                      />
+                      <Button
+                        label="Rifiuta"
+                        variant="ghost"
+                        clickAction={() => decidi('rifiuta', corrente)}
+                      />
+                      {/* Correggere è un altro mestiere: si apre il pannello,
+                          dove ci sono il testo modificabile, la foto e la data. */}
+                      <Button
+                        label="Apri per correggere"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelezionataId(corrente.id);
+                          setErrore(null);
+                        }}
+                      />
+                    </HStack>
+                  </VStack>
+                </Card>
+              </VStack>
+            ) : null}
 
             {filtrate.length === 0 ? (
               <EmptyState
