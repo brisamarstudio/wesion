@@ -573,7 +573,7 @@ export function ElencoAziende({
            ed è quello che mancava per non dover scorrere prima di decidere. */
         <LayoutHeader hasDivider>
           <HStack gap={3} align="center" wrap="wrap">
-            <Heading level={2}>Aziende</Heading>
+            <Heading level={2}>Da chiamare</Heading>
             <Text color="secondary">
               {quante}
               {totalePagine > 1 ? ` · pagina ${pagina} di ${totalePagine}` : ''}

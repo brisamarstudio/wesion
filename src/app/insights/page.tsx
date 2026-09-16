@@ -157,7 +157,7 @@ export default async function PaginaInsights() {
         height="fill"
         header={
           <LayoutHeader hasDivider>
-            <Heading level={2}>Da fare</Heading>
+            <Heading level={2}>Cose ferme</Heading>
           </LayoutHeader>
         }
         content={

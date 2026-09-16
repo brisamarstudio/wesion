@@ -443,7 +443,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
       header={
         <LayoutHeader hasDivider>
           <HStack gap={3} align="center">
-            <Heading level={2}>Bozze</Heading>
+            <Heading level={2}>Da approvare</Heading>
             <Text color="secondary">
               {daDecidere === 0 ? 'niente da decidere' : `${daDecidere} da decidere`}
             </Text>
@@ -463,7 +463,7 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
                   <SegmentedControlItem value="tutte" label={`Tutte (${bozze.length})`} />
                 </SegmentedControl>
                 <Button
-                  label="+ CREA POST SINGOLO AL VOLO"
+                  label="+ Post al volo"
                   variant="primary"
                   size="sm"
                   icon={<Plus size={16} />}

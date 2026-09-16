@@ -118,6 +118,10 @@ export function Calendario({
   const uscite = tutte.filter((v) => v.uscita).length;
   const oggiVoci = giorni.find((g) => giornoRoma(g.data) === oggi)?.voci ?? [];
 
+  /** «Oggi esce un post» / «Oggi escono 3 post»: mai «1 cose». */
+  const riepilogoOggi =
+    oggiVoci.length === 1 ? 'Oggi esce un post' : `Oggi escono ${oggiVoci.length} post`;
+
   return (
     <Layout
       height="fill"
@@ -201,19 +205,29 @@ export function Calendario({
               </Banner>
             ) : null}
 
+            {/* ⚠️ UN AVVISO SOLO, E LE FRASI PROVATE CON 0, 1 E TANTI (16/09/2026).
+                Erano due banner uno sopra l'altro che dicevano la stessa cosa
+                con parole diverse, e il secondo scriveva «Oggi escono 1 cose».
+                Quello che aspetta te viene prima; quello che esce da solo è una
+                riga sotto, non un secondo cartello. */}
             {daFare > 0 ? (
               <Banner
                 status="warning"
-                title={`${daFare} cose aspettano una persona questa settimana`}
-                description="Finché nessuno le guarda non escono, e la data passa lo stesso."
-                endContent={<Button label="Vai alle bozze" size="sm" onClick={() => router.push('/bozze')} />}
+                title={
+                  daFare === 1
+                    ? 'Una cosa aspetta te, questa settimana'
+                    : `${daFare} cose aspettano te, questa settimana`
+                }
+                description={
+                  'Finché nessuno le guarda non escono, e la data passa lo stesso.' +
+                  (oggiVoci.length ? ` · ${riepilogoOggi}` : '')
+                }
+                endContent={<Button label="Vai ad approvarle" size="sm" onClick={() => router.push('/bozze')} />}
               />
-            ) : null}
-
-            {oggiVoci.length > 0 ? (
+            ) : oggiVoci.length > 0 ? (
               <Banner
                 status="info"
-                title={`Oggi escono ${oggiVoci.length} cose`}
+                title={riepilogoOggi}
                 description={[...new Set(oggiVoci.map((v) => v.azienda))].join(' · ')}
               />
             ) : null}

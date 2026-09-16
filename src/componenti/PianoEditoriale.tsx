@@ -204,7 +204,7 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
       header={
         <LayoutHeader hasDivider>
           <HStack gap={3} align="center">
-            <Heading level={2}>Piano editoriale</Heading>
+            <Heading level={2}>Il mese</Heading>
             <Text color="secondary">giorni e temi, non testi</Text>
           </HStack>
         </LayoutHeader>
