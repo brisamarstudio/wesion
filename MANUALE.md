@@ -23,7 +23,7 @@ di solito la risposta è lì.
 ## La catena, in una riga
 
 ```
-Campagna → Aziende → (telefonata) → Cliente → Come parla → Cosa è vero
+Campagna → Aziende → (telefonata) → Cliente → Come parla → Cosa sappiamo
         → Piano del mese → Bozze → APPROVI TU → esce
 ```
 
@@ -114,12 +114,29 @@ da solo appena lo promuovi.
 
 | | a cosa serve |
 |---|---|
-| **Chi è** | Anagrafica, categoria, stato commerciale. E l'audit SEO/GEO/AEO (sotto). |
+| **Plancia** | 🟢 **La prima, e quella che ti serve il 90% delle volte.** In cima «Da fare oggi»: cosa aspetta te, con il bottone che porta dove si fa. Sotto una scheda per canale — Google, Sito e blog, Social, WhatsApp, Menù — con tre stati soli: **Funziona**, **C'è un problema**, **Spento**. Compare solo sui clienti. |
+| **Chi è** | Anagrafica, settore, stato commerciale. E l'audit SEO/GEO/AEO (sotto). |
 | **Come parla** | Il tono del cliente: come scrive lui, non come scriveresti tu. Si costruisce dalle sue recensioni e dai suoi materiali. |
-| **Cosa è vero** | ⚠️ **I fatti.** Le uniche cose che Wesion può affermare. Sotto i quattro fatti, i testi escono poveri — il numero è scritto sulla linguetta apposta. |
-| **Servizi** | Cosa gli abbiamo attivato: blog sul sito, scheda Google, menù del giorno. Qui stanno i segreti e gli id. |
-| **Il mese** | Il piano editoriale suo: cosa esce e quando. |
+| **Cosa sappiamo** | ⚠️ **I fatti.** Le uniche cose che Wesion può affermare. Sotto i quattro fatti, i testi escono poveri — il numero è scritto sulla linguetta apposta. |
+| **Impostazioni** | Cosa gli abbiamo attivato: Google, sito e blog, social, menù, WhatsApp. Un blocco per canale, chiuso: dentro prima le scelte che riguardano il cliente, poi «Avanzate» con id, indirizzi tecnici e segreti. |
+| **Calendario dei post** | Il piano del mese suo: cosa esce e quando. |
 | **Da approvare** | 🔴 **L'ultimo bottone.** Le bozze pronte. Finché non premi tu, non esce niente. |
+| **Pubblicati** | Cosa è uscito davvero, con l'esito. Compare quando c'è qualcosa dentro. |
+
+### «Funziona» non vuol dire «acceso»
+
+Sulla Plancia lo stato di un canale **si calcola**, non si legge dall'interruttore.
+Un blog acceso con l'indirizzo delle prove (`localhost`) è ⚠️ **C'è un problema**,
+non ●: da un server quell'indirizzo non porta da nessuna parte, e prima di questa
+pagina l'unico modo di accorgersene era veder fallire un articolo.
+
+Sono ⚠️ anche: una scheda Google attiva ma non collegata, l'ultimo post che non è
+uscito, un post che Google ha tolto. Il bottone della scheda porta dove si ripara —
+di solito in Impostazioni, sul blocco giusto già aperto.
+
+> **I segreti in Impostazioni sono mascherati, non protetti.** «Mostra» e «Copia»
+> servono quando hai qualcuno alle spalle o stai condividendo lo schermo. Chi apre
+> la dashboard resta uno che può tutto: vedi «Chi entra può fare tutto».
 
 ### Non ricopiare mai Place ID e URL di Maps
 
@@ -216,8 +233,8 @@ pubblicare il menù di ieri.
 ### Se il cliente ha più di un menù
 
 Molti ne hanno più d'uno: La Fenice ha il fisso del giorno, il venerdì a cena, il sabato
-a cena e la domenica a pranzo. **Vanno configurati nella scheda cliente, in «Servizi» →
-`menu_del_giorno` → `menu_sezioni`**, e gli `slug` devono essere identici a quelli delle
+a cena e la domenica a pranzo. **Vanno configurati nella scheda cliente, in «Impostazioni» →
+«Menù del giorno» → «Avanzate» → `menu_sezioni`**, e gli `slug` devono essere identici a quelli delle
 categorie sul sito (`{"action":"sections"}` sull'endpoint del menù te li dice).
 
 Come funziona poi, da solo:
@@ -263,7 +280,7 @@ più clienti. Chi apre questa pagina di solito ha poco tempo.
 4. **Se non cambi lo stato dopo la telefonata**, domani richiami quello di ieri.
    (Aziende)
 5. **Sotto i quattro fatti i testi escono poveri.** Non è il modello che scrive
-   male: non ha niente da dire. (Cosa è vero)
+   male: non ha niente da dire. (Cosa sappiamo)
 
 ---
 

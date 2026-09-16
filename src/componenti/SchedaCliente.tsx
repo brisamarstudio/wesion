@@ -891,7 +891,10 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 sta qui, non sullo schermo di chi deve solo scegliere un tag. */}
             {sezione === 'chi' ? (
             <VStack gap={3}>
-              <HStack gap={2} wrap="wrap">
+              {/* «Settore» e non «Servizi»: si chiamava come la linguetta
+                  accanto, e in due punti diversi voleva dire due cose. */}
+              <HStack gap={2} align="center" wrap="wrap">
+                <Text type="supporting">Settore:</Text>
                 {SETTORI.map((t) => (
                   <Button
                     key={t.id}

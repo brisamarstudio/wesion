@@ -1341,3 +1341,38 @@ Portato dentro Wesion il sistema operativo social (voce → ideazione → scritt
   - Ispettore visuale per ganci alternativi (cliccabili per sostituzione immediata), slide del carosello con prompt grafici, sceneggiatura reel a tabella e banner per dati mancanti da verificare.
 - **Piano Editoriale (`src/componenti/PianoEditoriale.tsx` e `src/app/api/aziende/[id]/piano/route.ts`):** Selettore di destinazione (GBP vs Social Media FB/IG), con anteprima e generazione bozze vuote dedicate.
 
+
+## 17. La Plancia e le Impostazioni (16/09/2026)
+
+Detto da chi la usa il 15/09: «avete costruito in AIchese invece che in umanese.
+Mille cose e non c'è un click». La scheda cliente si apriva su «Chi è» — una
+anagrafica — e lo stato dei canali si doveva dedurre da account id ed endpoint
+sparsi in «Servizi». Brief completo in `PROMPT-GEMINI-UX-PLANCIA.md`.
+
+**Cosa c'è adesso**
+
+- **Plancia**, prima linguetta e predefinita **sui clienti** (su un lead resta
+  «Chi è»: la Plancia non avrebbe niente da dire). In cima «Da fare oggi», sotto
+  una scheda per canale — Google, Sito e blog, Social, WhatsApp, Menù del giorno
+  (solo ristorazione) — con **tre stati soli** e un bottone per scheda.
+- **Impostazioni** (era «Servizi»): un blocco richiudibile per canale, chiuso di
+  default; dentro prima le scelte umane, poi «Avanzate» con id, indirizzi tecnici
+  e segreti. I segreti in campo mascherato con Mostra/Copia.
+- Parole: «Cosa è vero» → **Cosa sappiamo**, «Il mese» → **Calendario dei post**,
+  «Cosa è uscito» → **Pubblicati**, il tag di attività → **Settore**. Fuori
+  dall'interfaccia visibile: router, endpoint, REST API, account id, token.
+
+**Le tre cose da sapere prima di toccarlo**
+
+1. **Lo stato si calcola, non si dichiara.** `src/lib/plancia.ts`, funzioni pure,
+   niente database: un blog acceso su `localhost` è ⚠️, non ●. È la stessa regola
+   di `servizi_pronti` in `bozze.ts`, che però sta in SQL — **sono due copie della
+   stessa frase, se ne cambi una cambia l'altra.** In TypeScript perché la
+   Plancia gira nel browser e la `config` non deve arrivarci.
+2. **I valori delle linguette NON sono cambiati, solo le etichette.** `?tab=servizi`
+   e `?tab=storico` sono negli href delle spie (`src/lib/spie.ts`): rinominare i
+   valori romperebbe ogni link «vai a sistemarlo».
+3. **I segreti mascherati sono mezza cosa.** `leggiScheda` manda al browser
+   `servizio.config` intera: la password di WordPress è già nell'HTML della
+   pagina. Il campo serve a chi condivide lo schermo. Toglierli davvero vuol dire
+   non mandarli al client — modifica al server, **ancora da fare**.
