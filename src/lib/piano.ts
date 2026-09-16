@@ -19,6 +19,7 @@
 
 import { query } from './db';
 import { daFonte, type Materia } from './materia';
+import { giornoRoma } from './quando';
 import { ricorrenzeDelMese, type TagAttivita } from './ricorrenze';
 import { pilastriDisponibili, type Pilastro } from './pilastri';
 
@@ -76,9 +77,31 @@ export function postPerMese(anno: number, mese: number, aSettimana = 4): number 
  * giorno che conta di più. Una scheda Google non è un feed social: non c'è un
  * orario furbo, c'è la data giusta.
  */
-function giorniUtili(anno: number, mese: number): number[] {
+/**
+ * ⚠️ DAL GIORNO INDICATO IN POI, NON DALL'1 (16/09/2026). Fino a oggi
+ * `giorniUtili` dava SEMPRE tutti i giorni del mese, primo compreso: ricostruire
+ * il piano di MyWebby il 16 settembre metteva slot nuovi anche sul 3, il 7, il
+ * 12 — già passati prima ancora di nascere. Il nome «utili» era già una bugia
+ * anche prima di questo: non escludeva nemmeno i weekend, semplicemente dava
+ * tutti i giorni del mese.
+ *
+ * `daGiorno` (default 1) e' il giorno minimo: chi costruisce OGGI il piano del
+ * mese in corso passa il giorno di oggi, e nessuno slot nasce nel passato.
+ */
+function giorniUtili(anno: number, mese: number, daGiorno = 1): number[] {
   const ultimo = new Date(anno, mese, 0).getDate();
-  return Array.from({ length: ultimo }, (_, i) => i + 1);
+  return Array.from({ length: ultimo }, (_, i) => i + 1).filter((g) => g >= daGiorno);
+}
+
+/**
+ * Il giorno minimo per un piano di QUESTO mese: oggi, se il mese richiesto e'
+ * quello in corso; il primo, se e' un mese futuro (o passato, per rivedere uno
+ * storico). Calcolato in ora italiana — stessa regola di ogni altra data qui
+ * dentro, vedi `istanteRoma`.
+ */
+function daGiornoDiDefault(anno: number, mese: number): number {
+  const [annoOggi, meseOggi, giornoOggi] = giornoRoma(new Date()).split('-').map(Number);
+  return anno === annoOggi && mese === meseOggi ? giornoOggi : 1;
 }
 
 /**
@@ -105,6 +128,7 @@ function iso(anno: number, mese: number, giorno: number, ora: number): string {
  */
 export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoPiano {
   const { anno, mese, quantita = postPerMese(anno, mese), ora = 10 } = opzioni;
+  const daGiorno = daGiornoDiDefault(anno, mese);
   const avvisi: string[] = [];
 
   const settori: TagAttivita[] = materia.settore.length ? materia.settore : [];
@@ -123,9 +147,14 @@ export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoP
   }
 
   const suoi = new Set<TagAttivita>([...settori, 'tutti']);
-  const ricorrenze = ricorrenzeDelMese(anno, mese).filter((r) => r.tag.some((t) => suoi.has(t)));
+  // Anche le ricorrenze restano dal giorno di oggi in poi: un piano
+  // ricostruito il 16 non deve proporre — e nemmeno mostrare come già
+  // pianificata — una ricorrenza del 5, che e' già passata.
+  const ricorrenze = ricorrenzeDelMese(anno, mese)
+    .filter((r) => r.tag.some((t) => suoi.has(t)))
+    .filter((r) => r.giorno[1] >= daGiorno);
 
-  const utili = giorniUtili(anno, mese);
+  const utili = giorniUtili(anno, mese, daGiorno);
   const massimoRicorrenze = Math.floor(quantita / 2);
 
   const presi = new Set<number>();

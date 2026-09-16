@@ -194,6 +194,9 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   const [apertoModaleNuovo, setApertoModaleNuovo] = useState(false);
   /** La conferma della cancellazione: un bottone che ha solo il sì non è una decisione. */
   const [daCancellare, setDaCancellare] = useState(false);
+  /** La conferma dello svuotamento: quante se ne stanno per buttare via. */
+  const [daSvuotare, setDaSvuotare] = useState(false);
+  const [svuotando, setSvuotando] = useState(false);
   const [inScrittura, setInScrittura] = useState(false);
   const [copiato, setCopiato] = useState(false);
   const [copiatoCommento, setCopiatoCommento] = useState(false);
@@ -525,6 +528,36 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     router.refresh();
   }
 
+  /**
+   * Svuotare in un click la coda di UN cliente (e, se sei dentro un prodotto,
+   * solo quel prodotto).
+   *
+   * ⚠️ NASCE DA MYWEBBY FERMO A 15 (16/09/2026): un vecchio piano mai
+   * deciso, e ricostruirlo non lo toglieva — la nuova costruzione si somma
+   * alla vecchia, non la sostituisce (vedi `salvaPiano`). «Voglio con un click
+   * svuotare tutto, non ho un CRUD».
+   *
+   * Cancella solo le ANCORA DA DECIDERE (vuota, generata, attesa_approvazione):
+   * quello che è già stato deciso o è già partito non lo tocca — lo dice la
+   * rotta, non questo bottone.
+   */
+  async function svuotaCoda() {
+    if (!cliente || cliente === 'tutti') return;
+    setSvuotando(true);
+    setErrore(null);
+    const url = `/api/aziende/${cliente}/bozze${prodotto ? `?prodotto=${prodotto}` : ''}`;
+    const risposta = await fetch(url, { method: 'DELETE' });
+    const esito = await risposta.json().catch(() => ({}));
+    setSvuotando(false);
+    setDaSvuotare(false);
+    if (!risposta.ok) {
+      setErrore(perche(risposta, esito));
+      return;
+    }
+    setSelezionataId(null);
+    router.refresh();
+  }
+
   async function copiaPostSocial(testo: string, hashtag?: string[]) {
     const base = testo.trim();
     const tag =
@@ -606,6 +639,12 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     .map(([id, nome]) => ({ id, nome }))
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
+  /** Quante finirebbero cancellate da «Svuota la coda», per QUESTO cliente. */
+  const daSvuotarePerCliente =
+    cliente && cliente !== 'tutti'
+      ? bozze.filter((b) => DECIDIBILI.has(b.stato) && String(b.azienda_id) === cliente).length
+      : 0;
+
   return (
     <>
     <Layout
@@ -660,6 +699,18 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                     { value: 'tutti', label: `Tutti i clienti (${clienti.length})` },
                     ...clienti.map((c) => ({ value: c.id, label: c.nome })),
                   ]}
+                />
+              ) : null}
+              {/* ⚠️ SOLO CON UN CLIENTE PRECISO SCELTO (16/09/2026). «Svuota
+                  tutti» sarebbe un bottone che cancella la coda di quindici
+                  aziende insieme: la stessa distanza fra un tasto e un disastro
+                  che ha tenuto «Cancella» fuori dai bottoni di serie. */}
+              {daSvuotarePerCliente > 0 ? (
+                <Button
+                  label={`Svuota la coda (${daSvuotarePerCliente})`}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDaSvuotare(true)}
                 />
               ) : null}
               <TextInput
@@ -1649,6 +1700,18 @@ Premi «Scrivi il testo» per generarlo.`}
         actionLabel="Cancella"
         cancelLabel="Lascia stare"
         onAction={cancella}
+      />
+    ) : null}
+    {daSvuotare ? (
+      <AlertDialog
+        isOpen
+        onOpenChange={(aperto) => (aperto ? null : setDaSvuotare(false))}
+        title={`Svuotare la coda di ${clienti.find((c) => String(c.id) === cliente)?.nome ?? 'questo cliente'}?`}
+        description={`Cancella ${daSvuotarePerCliente === 1 ? 'l’unica bozza ancora da decidere' : `tutte e ${daSvuotarePerCliente} le bozze ancora da decidere`}${prodotto ? ` su ${PRODOTTI[prodotto].label}` : ''}. Quelle già approvate o pubblicate non si toccano. Non si torna indietro: usalo prima di ricostruire un piano più piccolo, non a caso.`}
+        actionLabel="Svuota la coda"
+        cancelLabel="Lascia stare"
+        isActionLoading={svuotando}
+        onAction={svuotaCoda}
       />
     ) : null}
 
