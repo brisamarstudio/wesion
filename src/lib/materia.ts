@@ -39,6 +39,13 @@ export interface Materia {
   materiali: VoceFatto[];
   punti_forza: VoceFatto[];
   /**
+   * I comuni dove lavora, copiati dalle «zone servite» della scheda Google.
+   *
+   * Servono a un post che dice «a Casarile» invece di «nella zona»: è la
+   * differenza fra un post che parla a qualcuno e uno che parla a nessuno.
+   */
+  zone: VoceFatto[];
+  /**
    * Cosa apprezzano i clienti, dalle recensioni.
    *
    * Non c'era in gbp-autoposter. È materiale verificato da terzi — non lo
@@ -79,6 +86,7 @@ export const MATERIA_VUOTA: Materia = {
   offerta: [],
   materiali: [],
   punti_forza: [],
+  zone: [],
   apprezzato: [],
   non_fa: [],
   mai_dire: [],
@@ -164,6 +172,7 @@ export async function leggiMateria(aziendaId: string | number): Promise<Materia>
     offerta: per('offerta'),
     materiali: per('materiali'),
     punti_forza: per('punti_forza'),
+    zone: per('zone'),
     apprezzato: (voce?.apprezzato ?? []).map((v) => ({ id: null, valore: v })),
     non_fa: voce?.non_fa ?? [],
     mai_dire: voce?.mai_dire ?? [],

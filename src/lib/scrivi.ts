@@ -87,9 +87,30 @@ function elenco(titolo: string, voci: string[]): string {
  * arrivava mai al testo, perché era imbavagliata insieme ai divieti. Sono due
  * cose opposte e vanno dette separate.
  */
+/**
+ * La zona di QUESTO post, a giro.
+ *
+ * ⚠️ UNA SOLA, E SEMPRE LA STESSA PER QUESTA BOZZA (16/09/2026). Il titolare di
+ * Artigiano il Conte ha messo diciotto comuni nelle «zone servite» della sua
+ * scheda Google: infilarli tutti in un post lo trasforma in un volantino, e
+ * sceglierne uno a caso vorrebbe dire che lo stesso post, riscritto, parla di un
+ * paese diverso. L'id della bozza è stabile, quindi un piano del mese gira sui
+ * comuni invece di ripetere il capoluogo diciotto volte.
+ *
+ * Le zone vengono dalla scheda del cliente, non da un modello: nominarle è
+ * sicuro, è lui che ha detto a Google di lavorare lì.
+ */
+function zonaDelPost(bozza: BozzaDaScrivere, m: Materia): string {
+  if (!m.zone.length) return '';
+  const n = Number(bozza.id);
+  const i = Number.isFinite(n) ? Math.abs(n) % m.zone.length : 0;
+  return m.zone[i]?.valore ?? '';
+}
+
 export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
   const c = bozza.contenuto;
   const dove = bozza.citta ? `, a ${bozza.citta}` : '';
+  const zona = zonaDelPost(bozza, m);
 
   const pezzi = [
     `ATTIVITÀ: ${bozza.azienda}${dove}.`,
@@ -104,6 +125,19 @@ export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
       ...m.materiali.map((v) => v.valore),
       ...m.punti_forza.map((v) => v.valore),
     ]),
+    /**
+     * Il posto, quando c'è.
+     *
+     * ⚠️ «Se serve al discorso» e non «citala»: un post sui materiali che si apre
+     * con «a Casarile il legno...» suona come una targa, non come una frase. E il
+     * divieto sotto è il solito: la zona è un dato (lavora lì), i tempi e i costi
+     * PER quella zona no — quelli non ce li ha detti nessuno.
+     */
+    zona
+      ? `
+
+LA ZONA di questo post: ${zona}. Nominala se serve al discorso, una volta sola e in modo naturale. Non elencare gli altri comuni. Non promettere tempi, costi o disponibilità specifici per quella zona: non li sappiamo.`
+      : '',
     elenco('\nCONFINI DI QUESTA ATTIVITÀ — non contraddirli mai:', m.non_fa),
     elenco('\nNON DIRE MAI, per esplicita richiesta del cliente:', m.mai_dire),
     elenco('\nNON AFFERMARE MAI, qualunque sia il cliente:', DIVIETI_BASE),

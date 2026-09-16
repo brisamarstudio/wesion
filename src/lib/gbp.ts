@@ -299,19 +299,49 @@ export async function leggiSchedaGoogle(locationId: string): Promise<AnagraficaS
  */
 export async function leggiProfiloGoogle(
   locationId: string
-): Promise<{ descrizione: string; titolo: string; categoria: string }> {
+): Promise<{ descrizione: string; titolo: string; categoria: string; zone: string[] }> {
   const token = await tokenAccesso();
   const risposta = await fetch(
-    `https://mybusinessbusinessinformation.googleapis.com/v1/locations/${locationId}?readMask=title,profile,categories`,
+    `https://mybusinessbusinessinformation.googleapis.com/v1/locations/${locationId}?readMask=title,profile,categories,serviceArea`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!risposta.ok) throw new Error(`Profilo scheda non leggibile: ${(await risposta.text()).slice(0, 200)}`);
 
   const dati = await risposta.json();
+
+  /**
+   * Le ZONE SERVITE, cioè i comuni dove il cliente dice a Google di lavorare.
+   *
+   * ⚠️ NON PASSANO DA UN MODELLO, ED È IL PUNTO (16/09/2026). Sono un elenco
+   * che il titolare ha compilato a mano sulla sua scheda — diciotto comuni
+   * messi in una mattina, nel caso che ha fatto nascere questa riga. Chiedere a
+   * un modello di «estrarre le zone» da quell'elenco vorrebbe dire dargli la
+   * possibilità di dimenticarne tre o di aggiungerne uno vicino: è dato, non
+   * interpretazione, e il dato si copia.
+   *
+   * `placeName` arriva grezzo, e in due forme diverse viste sulla scheda vera
+   * di Artigiano il Conte: «Binasco, MI, Italia» (con virgole) e «26900 Lodi
+   * LO» (senza virgole, con CAP davanti e sigla provincia dietro). Un post che
+   * dicesse «a 26900 Lodi LO» suonerebbe come un'etichetta postale, non come
+   * una frase: si toglie il CAP iniziale e la sigla di due lettere in fondo,
+   * tenendo il pezzo di mezzo — che resta esattamente il nome del comune, mai
+   * inventato, solo ripulito dal formato.
+   */
+  const zone: string[] = (dati.serviceArea?.places?.placeInfos ?? [])
+    .map((p: { placeName?: string }) =>
+      String(p.placeName ?? '')
+        .split(',')[0]
+        .replace(/^\d+\s+/, '')
+        .replace(/\s+[A-Z]{2}$/, '')
+        .trim()
+    )
+    .filter(Boolean);
+
   return {
     descrizione: dati.profile?.description || '',
     titolo: dati.title || '',
     categoria: dati.categories?.primaryCategory?.displayName || '',
+    zone: [...new Set(zone)],
   };
 }
 

@@ -292,7 +292,13 @@ export interface ModificheScheda {
   servizi?: Array<{ tipo: string; attivo: boolean; config: Record<string, string> }>;
 }
 
-const CHIAVI_AMMESSE = new Set(['cosa_fa', 'offerta', 'materiali', 'punti_forza']);
+/**
+ * ⚠️ `zone` è entrata il 16/09/2026 e non è un fatto come gli altri: non la
+ * ricava un modello, si copia dalle «zone servite» della scheda Google. Sta qui
+ * dentro lo stesso perché il generatore legge i fatti, e un post che nomina il
+ * comune giusto vale il doppio di uno che dice «nella zona».
+ */
+const CHIAVI_AMMESSE = new Set(['cosa_fa', 'offerta', 'materiali', 'punti_forza', 'zone']);
 const FONTI_AMMESSE = new Set(['detto_dal_cliente', 'recensioni', 'sito', 'maps', 'ricerca']);
 
 export async function salvaScheda(aziendaId: string | number, m: ModificheScheda): Promise<Scheda | null> {

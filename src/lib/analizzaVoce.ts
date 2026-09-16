@@ -43,6 +43,8 @@ const eOggetto = (x: unknown): x is Record<string, unknown> => Boolean(x) && typ
 export interface Materiale {
   descrizioneGoogle: string;
   categoria: string;
+  /** I comuni dove lavora, come li ha scritti lui sulla scheda Google. */
+  zone: string[];
   recensioni: string[];
   testoSito: string;
   incollato: string;
@@ -55,6 +57,7 @@ export async function raccogliMateriale(aziendaId: string | number, incollato = 
   const m: Materiale = {
     descrizioneGoogle: '',
     categoria: '',
+    zone: [],
     recensioni: [],
     testoSito: '',
     incollato: incollato.trim(),
@@ -80,6 +83,18 @@ export async function raccogliMateriale(aziendaId: string | number, incollato = 
       const profilo = await leggiProfiloGoogle(a.gbp_location);
       m.descrizioneGoogle = profilo.descrizione;
       m.categoria = profilo.categoria;
+      /**
+       * Le zone servite: si copiano, non si interpretano.
+       *
+       * ⚠️ NON ENTRANO IN NESSUN PROMPT (16/09/2026). È un elenco che il
+       * titolare ha compilato sulla sua scheda — diciotto comuni in una
+       * mattina, nel caso vero. Farli passare da un modello vorrebbe dire
+       * dargli modo di perderne tre o di aggiungerne uno vicino «che ci sta».
+       * Stessa famiglia del `llms.txt` del 02/09: quando il dato c'è, non si
+       * chiede a un modello di indovinarlo.
+       */
+      m.zone = profilo.zone;
+      if (m.zone.length) m.fonti.push(`${m.zone.length} zone servite dalla scheda Google`);
       if (profilo.descrizione) m.fonti.push('descrizione della scheda Google');
       else
         m.avvisi.push(
@@ -302,7 +317,14 @@ Restituisci SOLO il JSON.`,
 
 export interface EsitoAnalisi {
   voce: Partial<VoceCliente>;
-  fatti: { cosa_fa: string; offerta: string[]; materiali: string[]; punti_forza: string[] };
+  fatti: {
+    cosa_fa: string;
+    offerta: string[];
+    materiali: string[];
+    punti_forza: string[];
+    /** Copiate da Google, non ricavate: vedi `raccogliMateriale`. */
+    zone: string[];
+  };
   /** Proposto, non applicato: sceglie quali ricorrenze del calendario hanno senso. */
   settore: string[];
   fonti: string[];
@@ -330,7 +352,7 @@ export async function analizzaVoce(aziendaId: string | number, incollato = ''): 
     }),
     estraiFatti(m).catch((e) => {
       m.avvisi.push(`Fatti non ricavati: ${e instanceof Error ? e.message : e}`);
-      return { cosa_fa: '', offerta: [], materiali: [], punti_forza: [], settore: [] };
+      return { cosa_fa: '', offerta: [], materiali: [], punti_forza: [], settore: [] as string[] };
     }),
   ]);
 
@@ -341,5 +363,13 @@ export async function analizzaVoce(aziendaId: string | number, incollato = ''): 
   }
 
   const { settore, ...soloFatti } = fatti;
-  return { voce: { ...voce, apprezzato }, fatti: soloFatti, settore, fonti: m.fonti, avvisi: m.avvisi };
+  return {
+    voce: { ...voce, apprezzato },
+    // Le zone si aggiungono QUI e non dentro `estraiFatti`: quella funzione
+    // parla con un modello, e questo elenco non deve passare di lì.
+    fatti: { ...soloFatti, zone: m.zone },
+    settore,
+    fonti: m.fonti,
+    avvisi: m.avvisi,
+  };
 }

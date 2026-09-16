@@ -460,7 +460,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   /** Cosa ha capito l'analisi. NON e' ancora salvato: si guarda e si accetta. */
   const [proposta, setProposta] = useState<{
     voce: Record<string, unknown>;
-    fatti: { cosa_fa: string; offerta: string[]; materiali: string[]; punti_forza: string[] };
+    fatti: { cosa_fa: string; offerta: string[]; materiali: string[]; punti_forza: string[]; zone: string[] };
     settore: string[];
     fonti: string[];
     avvisi: string[];
@@ -749,6 +749,11 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   </MetadataListItem>
                   <MetadataListItem label="Punti di forza">
                     {proposta.fatti.punti_forza?.join(' · ') || '—'}
+                  </MetadataListItem>
+                  <MetadataListItem label="Zone servite">
+                    {proposta.fatti.zone?.length
+                      ? `${proposta.fatti.zone.join(' · ')} (copiate dalla scheda Google)`
+                      : '—'}
                   </MetadataListItem>
                   <MetadataListItem label="Settore">
                     {proposta.settore?.length
