@@ -230,7 +230,8 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     return bozze.filter((b) => {
       if (cliente && cliente !== 'tutti' && String(b.azienda_id) !== cliente) return false;
       if (filtro === 'da_decidere' && !DECIDIBILI.has(b.stato)) return false;
-      if (filtro === 'attenzione' && !b.avvisi.some((a) => a.gravita === 'grave')) return false;
+      if (filtro === 'attenzione' && !(DECIDIBILI.has(b.stato) && b.avvisi.some((a) => a.gravita === 'grave')))
+        return false;
       if (filtro === 'pubblicate' && b.stato !== 'pubblicata') return false;
       if (filtro === 'fallite' && !b.pubblicazioni.some((p) => p.esito === 'errore')) return false;
       if (!q) return true;
@@ -278,6 +279,10 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     () => (selezionata ? controllaBozza(selezionata.tipo, testoCorrente, selezionata.fatti_veri) : []),
     [selezionata, testoCorrente]
   );
+  /** Già nel mondo: da qui non si aggiusta più niente, si impara e basta. */
+  const eUscita = selezionata
+    ? selezionata.stato === 'pubblicata' || selezionata.stato === 'pubblicando'
+    : false;
   const gravi = avvisiCorrenti.filter((a) => a.gravita === 'grave');
   const attenzioni = avvisiCorrenti.filter((a) => a.gravita === 'attenzione');
 
@@ -539,7 +544,10 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
    */
   const conta = {
     daDecidere: bozze.filter((b) => DECIDIBILI.has(b.stato)).length,
-    conAvvisi: bozze.filter((b) => b.avvisi.some((a) => a.gravita === 'grave')).length,
+    // Solo le decidibili: un avviso su una già uscita è storia, non una coda.
+    conAvvisi: bozze.filter(
+      (b) => DECIDIBILI.has(b.stato) && b.avvisi.some((a) => a.gravita === 'grave')
+    ).length,
     pubblicate: bozze.filter((b) => b.stato === 'pubblicata').length,
     fallite: bozze.filter((b) => b.pubblicazioni.some((p) => p.esito === 'errore')).length,
   };
@@ -774,8 +782,14 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                               uscita dice se questa riga tocca a oggi o fra tre
                               settimane — che e' l'unica domanda che si fa chi
                               guarda questa colonna. */}
+                          {/* ⚠️ Solo sulle decidibili: un post uscito il 04/09 ha
+                              la data nel passato, e cosi' si portava dietro un
+                              «tocca a oggi» giallo per sempre. Non tocca a
+                              nessuno: è già andata. */}
                           {b.pubblica_at ? (
-                            adesso !== null && new Date(b.pubblica_at).getTime() <= adesso ? (
+                            adesso !== null &&
+                            new Date(b.pubblica_at).getTime() <= adesso &&
+                            DECIDIBILI.has(b.stato) ? (
                               <Badge variant="warning" label="tocca a oggi" />
                             ) : (
                               <Text type="supporting">esce il {quandoBreve(b.pubblica_at)}</Text>
@@ -826,11 +840,28 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                 />
               ) : null}
 
+              {/* ⚠️ UN ALLARME ROSSO SU UNA COSA GIA' USCITA NON E' UN ALLARME
+                  (16/09/2026). Gli avvisi si ricalcolano a ogni apertura della
+                  pagina, anche su un post pubblicato dodici giorni fa: rosso e
+                  «Da controllare» su qualcosa che non puoi piu' controllare —
+                  quella roba è su Google, si cambia su Google. Il contenuto
+                  dell'avviso resta identico, cambia cosa ti chiede: prima
+                  «aggiusta», adesso «sappilo, per la prossima volta». */}
               {gravi.map((a, i) => (
-                <Banner key={`g${i}`} status="error" title="Da controllare" description={a.messaggio} />
+                <Banner
+                  key={`g${i}`}
+                  status={eUscita ? 'info' : 'error'}
+                  title={eUscita ? 'Da sapere: è uscita così' : 'Da controllare'}
+                  description={a.messaggio}
+                />
               ))}
               {attenzioni.map((a, i) => (
-                <Banner key={`a${i}`} status="warning" title="Forse" description={a.messaggio} />
+                <Banner
+                  key={`a${i}`}
+                  status={eUscita ? 'info' : 'warning'}
+                  title={eUscita ? 'Da sapere: è uscita così' : 'Forse'}
+                  description={a.messaggio}
+                />
               ))}
 
               {/* ── I DUE BOTTONI STANNO QUI, IN CIMA ────────────────────────
@@ -1484,7 +1515,11 @@ Premi «Scrivi il testo» per generarlo.`}
                           ? ` (prima: ${selezionata.contenuto.scritto_prima_da})`
                           : ''
                       }`
-                    : (selezionata.modello ?? '—')}
+                    : /* Nessun modello e nata a mano: la risposta non è «non si
+                         sa», è «una persona». Il trattino resta solo per i casi
+                         in cui davvero non lo sappiamo (righe vecchie). */
+                      (selezionata.modello ??
+                        (selezionata.origine === 'manuale' ? 'a mano' : '—'))}
                 </MetadataListItem>
               </MetadataList>
 
