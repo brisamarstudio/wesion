@@ -120,12 +120,42 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
     );
   }
 
+  /**
+   * Il testo corretto a mano — e chi l'ha scritto smette di essere una bugia.
+   *
+   * ⚠️ VISTO SU UN POST VERO (16/09/2026): un post di M Hotel Don Carlo uscito
+   * su Google con un testo scritto da una persona e riscritto da capo, e in
+   * `bozza.modello` c'era ancora `groq/openai/gpt-oss-120b`. Quel campo esiste
+   * per una ragione sola, scritta in cima a `generatore.ts`: fra sei mesi
+   * «questo post fa schifo» è una frase inutile se non si sa chi l'ha scritto.
+   * Un campo che risponde il nome sbagliato è peggio di un campo vuoto — il
+   * vuoto ti fa cercare, la bugia ti fa smettere di cercare.
+   *
+   * Quindi: `modello` diventa «mano», e chi aveva scritto la prima versione
+   * resta in `contenuto.scritto_prima_da`. Cosi' restano vere tutte e due le
+   * frasi: «l'ha scritto una persona» e «era partito da quel modello li'».
+   *
+   * Si segna solo se il testo CAMBIA davvero: aprire una bozza, toccare il
+   * campo e rimetterlo com'era non e' una riscrittura.
+   */
   if (typeof corpo.testo === 'string') {
     await query(
       `UPDATE wesion.bozza
-          SET contenuto = contenuto || jsonb_build_object('testo', $2::text)
+          SET contenuto = contenuto
+                || jsonb_build_object('testo', $2::text)
+                || CASE
+                     WHEN COALESCE(contenuto->>'testo', '') = $2::text THEN '{}'::jsonb
+                     ELSE jsonb_build_object(
+                            'scritto_prima_da', COALESCE(modello, 'nessuno'),
+                            'corretto_a_mano', jsonb_build_object('operatore', $4::text, 'data', now())
+                          )
+                   END,
+              modello = CASE
+                          WHEN COALESCE(contenuto->>'testo', '') = $2::text THEN modello
+                          ELSE 'mano'
+                        END
         WHERE id = $1 AND stato = ANY($3)`,
-      [idBozza, corpo.testo, [...DECIDIBILI, 'approvata']]
+      [idBozza, corpo.testo, [...DECIDIBILI, 'approvata'], OPERATORE]
     );
   }
 

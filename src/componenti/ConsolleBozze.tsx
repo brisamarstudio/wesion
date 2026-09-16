@@ -150,14 +150,20 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   const adesso = useAdesso();
   const [filtro, setFiltro] = useState('da_decidere');
   /**
-   * Si parte SENZA cliente scelto, non da «tutti».
+   * Si parte da «tutti», e prima non era cosi'.
    *
-   * L'elenco unico di tre clienti mescolati e' illeggibile proprio quando
-   * serve: si decide un cliente per volta, guardando le sue date di fila. Con
-   * «tutti» di serie, la prima cosa che vedi e' la coda di qualcun altro.
-   * «Tutti i clienti» resta come scelta, non come punto di partenza.
+   * Il ragionamento di partenza (01/09/2026) era buono: le bozze si decidono un
+   * cliente per volta, guardando le sue date di fila. Ma obbligava a scegliere
+   * un nome PRIMA di vedere qualunque cosa, e con trentotto in coda la domanda
+   * di chi apre non e' «di chi», e' «cosa approvo adesso» — detto da chi lo usa
+   * il 16/09/2026, davanti a una pagina che si apriva vuota.
+   *
+   * Funziona perche' l'elenco e' gia' ordinato per quello che conta: prima cio'
+   * che aspetta una persona, e fra quelle prima quelle il cui turno e' arrivato
+   * (vedi l'ORDER BY di `SQL_BOZZE`). Il cliente resta nella riga, e il
+   * selettore resta li' per quando si vuole davvero fare la fila di uno solo.
    */
-  const [cliente, setCliente] = useState('');
+  const [cliente, setCliente] = useState('tutti');
   const [cerca, setCerca] = useState('');
   const [selezionataId, setSelezionataId] = useState<string | number | null>(null);
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
@@ -202,8 +208,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   const filtrate = useMemo(() => {
     const q = cerca.trim().toLowerCase();
     return bozze.filter((b) => {
-      if (!cliente) return false;
-      if (cliente !== 'tutti' && String(b.azienda_id) !== cliente) return false;
+      if (cliente && cliente !== 'tutti' && String(b.azienda_id) !== cliente) return false;
       if (filtro === 'da_decidere' && !DECIDIBILI.has(b.stato)) return false;
       if (filtro === 'attenzione' && !b.avvisi.some((a) => a.gravita === 'grave')) return false;
       if (filtro === 'pubblicate' && b.stato !== 'pubblicata') return false;
@@ -522,7 +527,6 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                   size="sm"
                   hasSearch={clienti.length > 8}
                   options={[
-                    { value: '', label: 'Scegli un cliente…' },
                     { value: 'tutti', label: `Tutti i clienti (${clienti.length})` },
                     ...clienti.map((c) => ({ value: c.id, label: c.nome })),
                   ]}
@@ -539,12 +543,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
               />
             </VStack>
 
-            {!cliente && clienti.length > 1 ? (
-              <EmptyState
-                title="Scegli un cliente"
-                description="Le bozze si decidono un cliente per volta: le date hanno senso in fila, e la coda di uno non c’entra con quella di un altro."
-              />
-            ) : filtrate.length === 0 ? (
+            {filtrate.length === 0 ? (
               <EmptyState
                 title={filtro === 'da_decidere' ? 'Nessuna bozza da decidere' : 'Nessuna bozza'}
                 description={
@@ -1301,7 +1300,17 @@ Premi «Scrivi il testo» per generarlo.`}
                     {`${quandoBreve(selezionata.approvata_at)} da ${selezionata.approvata_da ?? '—'} (${selezionata.approvata_via ?? '—'})`}
                   </MetadataListItem>
                 ) : null}
-                <MetadataListItem label="Modello">{selezionata.modello ?? '—'}</MetadataListItem>
+                {/* «Chi l'ha scritto» e non «Modello»: da quando una correzione a
+                    mano si registra, la risposta può essere una persona. */}
+                <MetadataListItem label="Chi l’ha scritto">
+                  {selezionata.modello === 'mano'
+                    ? `a mano${
+                        typeof selezionata.contenuto?.scritto_prima_da === 'string'
+                          ? ` (prima: ${selezionata.contenuto.scritto_prima_da})`
+                          : ''
+                      }`
+                    : (selezionata.modello ?? '—')}
+                </MetadataListItem>
               </MetadataList>
 
               {selezionata.pubblicazioni.length > 0 ? (
