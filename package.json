@@ -17,7 +17,8 @@
     "utente": "node --experimental-strip-types --env-file=.env db/crea-utente.ts",
     "prova:seo": "node --experimental-strip-types db/prova-seo-proposta.ts",
     "prova:seo-git": "node --experimental-strip-types db/prova-seo-git.ts",
-    "deploy": "python deploy.py"
+    "deploy": "python deploy.py",
+    "log": "python log.py"
   },
   "dependencies": {
     "@astryxdesign/cli": "^0.1.9",

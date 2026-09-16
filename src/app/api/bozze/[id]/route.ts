@@ -197,7 +197,7 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
       operatore: OPERATORE,
       data: new Date().toISOString(),
     };
-    const [aggiornata] = await query<{ id: number; stato: string; azienda_id: number }>(
+    const [aggiornata] = await query<{ id: number; stato: string; azienda_id: number; tracciati: string }>(
       `WITH decisa AS (
          UPDATE wesion.bozza
             SET stato = 'pubblicata',
@@ -213,8 +213,10 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
          SELECT azienda_id, 'bozza_pubblicata_a_mano', $4,
                 jsonb_build_object('bozza_id', id, 'tipo', tipo)
            FROM decisa
+         RETURNING id
        )
-       SELECT id, stato, azienda_id FROM decisa`,
+       SELECT d.id, d.stato, d.azienda_id, (SELECT count(*) FROM tracciata) AS tracciati
+         FROM decisa d`,
       [idBozza, JSON.stringify(infoPubblicata), [...DECIDIBILI, 'approvata'], OPERATORE]
     );
 
@@ -244,12 +246,23 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
    * volte, prima o poi si trova un'approvazione senza evento e non si sa piu'
    * chi l'ha fatta.
    *
+   * ⚠️ IL `RETURNING` DENTRO `tracciata` NON E' DECORAZIONE, E IL `count(*)`
+   * NEMMENO (16/09/2026). Su Neon questa query funzionava; dopo la migrazione a
+   * CockroachDB del 15/09 rispondeva `WITH clause "tracciata" does not return
+   * any columns` — un 500, cioe' HTML, cioe' in dashboard «Non è andata, e non
+   * si sa perche'». Per un giorno intero APPROVA, RIFIUTA e CANCELLA non hanno
+   * funzionato, e sembrava un problema del modello che scrive i testi.
+   * Cockroach pretende due cose da una CTE che scrive: che restituisca colonne,
+   * e che qualcuno la guardi — una CTE di sola scrittura mai referenziata puo'
+   * non essere eseguita affatto, e la traccia sparirebbe in silenzio. Il
+   * `(SELECT count(*) FROM tracciata)` serve a quello: e' lo sguardo.
+   *
    * La scadenza si controlla nel WHERE e non prima: fra il momento in cui la
    * pagina ha disegnato il bottone e il momento del click possono passare i
    * quindici minuti del menu, e sarebbe proprio il caso che vogliamo evitare —
    * un SI tardivo che pubblica il menu di ieri.
    */
-  const [aggiornata] = await query<{ id: number; stato: string; azienda_id: number }>(
+  const [aggiornata] = await query<{ id: number; stato: string; azienda_id: number; tracciati: string }>(
     `WITH decisa AS (
        UPDATE wesion.bozza
           SET stato         = $2,
@@ -265,8 +278,10 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
        SELECT azienda_id, 'bozza_' || $2, $3,
               jsonb_build_object('bozza_id', id, 'tipo', tipo)
          FROM decisa
+       RETURNING id
      )
-     SELECT id, stato, azienda_id FROM decisa`,
+     SELECT d.id, d.stato, d.azienda_id, (SELECT count(*) FROM tracciata) AS tracciati
+       FROM decisa d`,
     [idBozza, nuovoStato, OPERATORE, DECIDIBILI]
   );
 
@@ -326,7 +341,7 @@ export async function DELETE(_richiesta: Request, contesto: { params: Promise<{ 
    * decisione: se la riga sparisce, la traccia del fatto che e' sparita resta.
    * Ci si mette dentro il titolo, perche' dopo non c'e' piu' modo di saperlo.
    */
-  const [tolta] = await query<{ id: number; stato: string }>(
+  const [tolta] = await query<{ id: number; stato: string; tracciati: string }>(
     `WITH via AS (
        DELETE FROM wesion.bozza
         WHERE id = $1 AND stato = ANY($2)
@@ -337,8 +352,10 @@ export async function DELETE(_richiesta: Request, contesto: { params: Promise<{ 
               jsonb_build_object('bozza_id', id, 'tipo', tipo,
                                  'titolo', contenuto->>'titolo', 'stato_era', stato)
          FROM via
+       RETURNING id
      )
-     SELECT id, stato FROM via`,
+     SELECT v.id, v.stato, (SELECT count(*) FROM tracciata) AS tracciati
+       FROM via v`,
     [idBozza, CANCELLABILI, OPERATORE]
   );
 

@@ -109,6 +109,28 @@ function cosaSuccedeOra(b: Bozza, adesso: number | null): string {
   return `NON esce ancora: è programmata per il ${quandoBreve(b.pubblica_at)} (${fra})`;
 }
 
+
+/**
+ * Cosa scrivere quando una chiamata non e' andata.
+ *
+ * ⚠️ «Non è andata, e non si sa perché» E' COSTATO UN GIORNO (16/09/2026).
+ * Le rotte un motivo lo dicono sempre — in JSON, in italiano. Quel testo
+ * compariva solo quando la risposta NON era JSON, cioe' quando il server era
+ * esploso (500) o non aveva risposto affatto (502/504): esattamente il caso in
+ * cui il motivo esiste ed e' nei log. Detto «non si sa perche'», si finisce a
+ * cercarlo nel posto sbagliato — quella volta nel modello che scrive i testi,
+ * mentre era una query rotta dalla migrazione a CockroachDB.
+ *
+ * Adesso dice almeno DI CHE FAMIGLIA e' il guasto, e dove sta scritto il resto.
+ */
+function perche(risposta: Response, esito: { errore?: string } | null): string {
+  if (esito?.errore) return esito.errore;
+  if (risposta.status >= 500) {
+    return `Il server è andato in errore (${risposta.status}). Non è il testo e non sei tu: il motivo è nei log del server (npm run log).`;
+  }
+  return `Il server ha risposto ${risposta.status} senza spiegare. Il motivo è nei log (npm run log).`;
+}
+
 export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -301,7 +323,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     const esito = await risposta.json().catch(() => ({}));
     setInScrittura(false);
     if (!risposta.ok) {
-      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      setErrore(perche(risposta, esito));
       return;
     }
     router.refresh();
@@ -324,7 +346,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     });
     const esito = await risposta.json().catch(() => ({}));
     if (!risposta.ok) {
-      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      setErrore(perche(risposta, esito));
       return;
     }
     router.refresh();
@@ -336,7 +358,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     const risposta = await fetch(`/api/bozze/${selezionata.id}`, { method: 'DELETE' });
     const esito = await risposta.json().catch(() => ({}));
     if (!risposta.ok) {
-      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      setErrore(perche(risposta, esito));
       router.refresh();
       return;
     }
@@ -360,7 +382,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     });
     const esito = await risposta.json().catch(() => ({}));
     if (!risposta.ok) {
-      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      setErrore(perche(risposta, esito));
       router.refresh();
       return;
     }
@@ -401,7 +423,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     });
     const esito = await risposta.json().catch(() => ({}));
     if (!risposta.ok) {
-      setErrore(esito?.errore ?? 'Non è andata, e non si sa perché.');
+      setErrore(perche(risposta, esito));
       router.refresh();
       return;
     }
