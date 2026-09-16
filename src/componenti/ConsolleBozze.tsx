@@ -54,6 +54,7 @@ import {
   type Bozza,
 } from '@/lib/bozze';
 import { controllaBozza } from '@/lib/controlloTesto';
+import { leggiProdotto, eDelProdotto, PRODOTTI } from '@/lib/prodotti';
 import { quandoBreve, scadenza, perCampoLocale } from '@/lib/quando';
 import { DateTimeInput, type ISODateTimeString } from '@astryxdesign/core/DateTimeInput';
 import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
@@ -108,9 +109,21 @@ function cosaSuccedeOra(b: Bozza, adesso: number | null): string {
   return `NON esce ancora: è programmata per il ${quandoBreve(b.pubblica_at)} (${fra})`;
 }
 
-export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
+export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  /**
+   * Il prodotto, letto dall'indirizzo: `?prodotto=google`.
+   *
+   * ⚠️ IL FILTRO SI APPLICA QUI, PRIMA DI TUTTO IL RESTO, e non fra i filtri
+   * della pagina: e' un CONFINE, non una preferenza. Dentro «Google» i post
+   * social non esistono — non sono nascosti, non ci sono — e cosi' i conti, la
+   * ricerca e l'elenco dei clienti parlano tutti della stessa cosa. Senza
+   * prodotto (`/bozze` liscio, i vecchi segnalibri) si vede tutto, come prima.
+   */
+  const prodotto = leggiProdotto(searchParams?.get('prodotto'));
+  const bozze = useMemo(() => tutte.filter((b) => eDelProdotto(b.tipo, prodotto)), [tutte, prodotto]);
   // L'ora arriva dopo il montaggio: prima non si sa, e va bene cosi'.
   const adesso = useAdesso();
   const [filtro, setFiltro] = useState('da_decidere');
@@ -443,10 +456,18 @@ export function ConsolleBozze({ bozze }: { bozze: Bozza[] }) {
       header={
         <LayoutHeader hasDivider>
           <HStack gap={3} align="center">
-            <Heading level={2}>Da approvare</Heading>
+            <Heading level={2}>{prodotto ? PRODOTTI[prodotto].label : 'Da approvare'}</Heading>
             <Text color="secondary">
-              {daDecidere === 0 ? 'niente da decidere' : `${daDecidere} da decidere`}
+              {daDecidere === 0
+                ? 'niente da decidere'
+                : daDecidere === 1
+                  ? 'una cosa da decidere'
+                  : `${daDecidere} da decidere`}
             </Text>
+            {/* Cosa succede quando premi «Approva»: non è uguale per tutti i
+                prodotti, e su un post social — che va incollato a mano — darlo
+                per scontato vuol dire lasciarlo fermo per una settimana. */}
+            {prodotto ? <Text type="supporting">{PRODOTTI[prodotto].cosaSucedeDopo}</Text> : null}
           </HStack>
         </LayoutHeader>
       }

@@ -25,6 +25,7 @@ import { Telaio } from '@/componenti/Telaio';
 import { Calendario, type GiornoCalendario, type VoceCalendario } from '@/componenti/Calendario';
 import { CalendarioMese } from '@/componenti/CalendarioMese';
 import { giornoRoma } from '@/lib/quando';
+import { leggiProdotto, eDelProdotto } from '@/lib/prodotti';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,7 @@ export default async function PaginaCalendario({
   searchParams: Promise<{
     da?: string;
     cliente?: string;
+    prodotto?: string;
     vista?: string;
     anno?: string;
     mese?: string;
@@ -93,7 +95,7 @@ export default async function PaginaCalendario({
   else fine.setDate(fine.getDate() + 7);
 
   // Le due insieme: la settimana e i rimasti indietro non si parlano.
-  const [voci, indietro, clienti] = await Promise.all([
+  const [vociTutte, indietroTutte, clienti] = await Promise.all([
     query<VoceCalendario>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at, b.scade_at,
             a.id AS azienda_id, a.nome AS azienda,
@@ -153,6 +155,19 @@ export default async function PaginaCalendario({
     ),
   ]);
 
+  /**
+   * Il prodotto: `?prodotto=google` mostra SOLO il calendario di Google.
+   *
+   * ⚠️ Si filtra qui e non in SQL apposta: la query di questa pagina e' lunga
+   * e ha gia' tre parametri, e una settimana di quindici clienti sono decine di
+   * righe, non migliaia. Il giorno che diventassero migliaia, il posto giusto
+   * e' la WHERE — ma allora e' una scelta, non una svista.
+   */
+  const prodotto = leggiProdotto(p.prodotto);
+  const voci = prodotto ? vociTutte.filter((v) => eDelProdotto(v.tipo, prodotto)) : vociTutte;
+  const indietro = prodotto ? indietroTutte.filter((v) => eDelProdotto(v.tipo, prodotto)) : indietroTutte;
+  const attiva = prodotto ? `/calendario?prodotto=${prodotto}` : '/calendario';
+
   if (mensile) {
     /**
      * Le caselle della griglia: i vuoti prima del 1 servono ad allineare il
@@ -175,7 +190,7 @@ export default async function PaginaCalendario({
     while (celle.length % 7 !== 0) celle.push({ data: null, voci: [] });
 
     return (
-      <Telaio attiva="/calendario">
+      <Telaio attiva={attiva}>
         <CalendarioMese
           celle={celle}
           anno={anno}
@@ -206,7 +221,7 @@ export default async function PaginaCalendario({
   }
 
   return (
-    <Telaio attiva="/calendario">
+    <Telaio attiva={attiva}>
       <Calendario
         giorni={giorni}
         indietro={indietro}

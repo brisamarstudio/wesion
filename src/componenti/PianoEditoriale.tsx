@@ -145,7 +145,17 @@ export function PianoEditoriale({ clienti }: { clienti: ClientePiano[] }) {
    * mancano solo in fondo.
    */
   const [quantita, setQuantita] = useState<string>('');
-  const [tipoPiano, setTipoPiano] = useState<string>('post_gbp');
+  /**
+   * Google o social: lo decide la voce di menu da cui sei entrato.
+   *
+   * ⚠️ Dentro «Social → Il mese» trovare il selettore su «Google Business
+   * Profile» vuol dire generare diciotto post sul canale sbagliato e
+   * accorgersene dopo. Il selettore resta — si cambia idea — ma parte da dove
+   * sei, non da un valore fisso.
+   */
+  const [tipoPiano, setTipoPiano] = useState<string>(
+    parametriUrl?.get('prodotto') === 'social' ? 'social' : 'post_gbp'
+  );
 
   const [anteprima, setAnteprima] = useState<Anteprima | null>(null);
   /**
