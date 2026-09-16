@@ -702,6 +702,70 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     );
   };
 
+  /**
+   * La proposta dell'analisi, disegnata una volta e mostrata in DUE linguette.
+   *
+   * ⚠️ Perche' due: quello che l'analisi tira fuori sono due cose diverse — la
+   * voce («Come parla») e i fatti («Cosa sappiamo») — e chi preme il bottone lo
+   * preme da dove vede il vuoto. Mandarlo nell'altra linguetta a cercare il
+   * risultato e' esattamente il giro che gli fa dire «dove diavolo è finito».
+   */
+  const pannelloProposta = proposta ? (
+            <Banner
+              status="info"
+              title="Cosa ha capito"
+              description={
+                proposta.avvisi.length
+                  ? proposta.avvisi.join(' · ')
+                  : 'Guarda se ti torna. Riempie solo i campi ancora vuoti.'
+              }
+              defaultIsExpanded
+            >
+              <VStack gap={3}>
+                <MetadataList>
+                  <MetadataListItem label="Da dove viene">
+                    {String(proposta.voce.origine || '—')}
+                  </MetadataListItem>
+                  <MetadataListItem label="Come ragiona">
+                    {String(proposta.voce.come_ragiona || '—')}
+                  </MetadataListItem>
+                  <MetadataListItem label="Come parla">{String(proposta.voce.voce || '—')}</MetadataListItem>
+                  <MetadataListItem label="Parole sue">
+                    {(proposta.voce.parole_sue as string[] | undefined)?.join(' · ') || '—'}
+                  </MetadataListItem>
+                  <MetadataListItem label="Cosa gli riconoscono">
+                    {(proposta.voce.apprezzato as string[] | undefined)?.join(' · ') || '—'}
+                  </MetadataListItem>
+                  <MetadataListItem label="Cosa fa">{proposta.fatti.cosa_fa || '—'}</MetadataListItem>
+                  {/* I tre elenchi che riempiono «Cosa è vero»: si guardano
+                      qui perché sono quelli che finiranno nei post come
+                      roba verificata, e leggerli dopo averli accettati è
+                      l'ordine sbagliato. */}
+                  <MetadataListItem label="Offerta">
+                    {proposta.fatti.offerta?.join(' · ') || '—'}
+                  </MetadataListItem>
+                  <MetadataListItem label="Materiali">
+                    {proposta.fatti.materiali?.join(' · ') || '—'}
+                  </MetadataListItem>
+                  <MetadataListItem label="Punti di forza">
+                    {proposta.fatti.punti_forza?.join(' · ') || '—'}
+                  </MetadataListItem>
+                  <MetadataListItem label="Settore">
+                    {proposta.settore?.length
+                      ? proposta.settore.join(' · ')
+                      : s.settore.length
+                        ? 'lo tengo com’è'
+                        : '—'}
+                  </MetadataListItem>
+                </MetadataList>
+                <HStack gap={2}>
+                  <Button label="Porta nei campi" variant="primary" size="sm" onClick={accetta} />
+                  <Button label="Lascia perdere" size="sm" variant="ghost" onClick={() => setProposta(null)} />
+                </HStack>
+              </VStack>
+            </Banner>
+  ) : null;
+
   // Cosa manca per far lavorare questo cliente, detto dove serve.
   const quantiFatti = CHIAVI.reduce((n, c) => n + daRighe(fatti[c.id] ?? '').length, 0);
   const mancanze = [
@@ -869,6 +933,20 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   title="Questo cliente non è ancora pronto"
                   description="Finché manca qualcosa, il piano esce povero."
                   defaultIsExpanded
+                  endContent={
+                    // Un avviso che dice cosa manca e non dice come rimediare
+                    // è mezzo avviso: il bottone sta qui, non due linguette più in là.
+                    quantiFatti < 4 ? (
+                      <Button
+                        label="Leggi sito e scheda Google"
+                        size="sm"
+                        clickAction={async () => {
+                          setSezione('fatti');
+                          await analizzaLaVoce();
+                        }}
+                      />
+                    ) : undefined
+                  }
                 >
                   <List hasDividers density="compact">
                     {mancanze.map((m, i) => (
@@ -1140,9 +1218,15 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                   scritto il cliente. */}
               <VStack gap={2}>
                 <HStack gap={2} align="center" wrap="wrap">
-                  <Button label="Ricava la voce da quello che c’è" size="sm" clickAction={analizzaLaVoce} />
+                  <Button
+                    label="Leggi il suo sito e la sua scheda Google"
+                    variant="primary"
+                    size="sm"
+                    clickAction={analizzaLaVoce}
+                  />
                   <Text type="supporting">
-                    Legge recensioni, descrizione della scheda Google e sito. Non salva niente: propone.
+                    Legge il sito, la descrizione della scheda Google e le recensioni, e propone voce e
+                    fatti. Non salva niente e non inventa niente: quello che non trova lo lascia vuoto.
                   </Text>
                 </HStack>
                 <TextArea
@@ -1154,61 +1238,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 />
               </VStack>
 
-              {proposta ? (
-                <Banner
-                  status="info"
-                  title="Cosa ha capito"
-                  description={
-                    proposta.avvisi.length
-                      ? proposta.avvisi.join(' · ')
-                      : 'Guarda se ti torna. Riempie solo i campi ancora vuoti.'
-                  }
-                  defaultIsExpanded
-                >
-                  <VStack gap={3}>
-                    <MetadataList>
-                      <MetadataListItem label="Da dove viene">
-                        {String(proposta.voce.origine || '—')}
-                      </MetadataListItem>
-                      <MetadataListItem label="Come ragiona">
-                        {String(proposta.voce.come_ragiona || '—')}
-                      </MetadataListItem>
-                      <MetadataListItem label="Come parla">{String(proposta.voce.voce || '—')}</MetadataListItem>
-                      <MetadataListItem label="Parole sue">
-                        {(proposta.voce.parole_sue as string[] | undefined)?.join(' · ') || '—'}
-                      </MetadataListItem>
-                      <MetadataListItem label="Cosa gli riconoscono">
-                        {(proposta.voce.apprezzato as string[] | undefined)?.join(' · ') || '—'}
-                      </MetadataListItem>
-                      <MetadataListItem label="Cosa fa">{proposta.fatti.cosa_fa || '—'}</MetadataListItem>
-                      {/* I tre elenchi che riempiono «Cosa è vero»: si guardano
-                          qui perché sono quelli che finiranno nei post come
-                          roba verificata, e leggerli dopo averli accettati è
-                          l'ordine sbagliato. */}
-                      <MetadataListItem label="Offerta">
-                        {proposta.fatti.offerta?.join(' · ') || '—'}
-                      </MetadataListItem>
-                      <MetadataListItem label="Materiali">
-                        {proposta.fatti.materiali?.join(' · ') || '—'}
-                      </MetadataListItem>
-                      <MetadataListItem label="Punti di forza">
-                        {proposta.fatti.punti_forza?.join(' · ') || '—'}
-                      </MetadataListItem>
-                      <MetadataListItem label="Settore">
-                        {proposta.settore?.length
-                          ? proposta.settore.join(' · ')
-                          : s.settore.length
-                            ? 'lo tengo com’è'
-                            : '—'}
-                      </MetadataListItem>
-                    </MetadataList>
-                    <HStack gap={2}>
-                      <Button label="Porta nei campi" variant="primary" size="sm" onClick={accetta} />
-                      <Button label="Lascia perdere" size="sm" variant="ghost" onClick={() => setProposta(null)} />
-                    </HStack>
-                  </VStack>
-                </Banner>
-              ) : null}
+              {pannelloProposta}
 
               <TextInput
                 label="La voce"
@@ -1268,6 +1298,30 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 su cosa si reggevano. */}
             {sezione === 'fatti' ? (
             <VStack gap={3}>
+              {/* ⚠️ IL BOTTONE VA DOVE SI VEDE IL VUOTO (16/09/2026). Questa
+                  roba Wesion sa già leggerla — sito, scheda Google, recensioni —
+                  ma il bottone stava solo dentro «Come parla» e si chiamava
+                  «Ricava la voce»: chi apriva un cliente con zero fatti non aveva
+                  motivo di cercarlo lì. Artigiano il Conte è rimasto a zero fatti
+                  con il sito e la scheda Google online e collegati tutti e due. */}
+              {s.fatti.length < 4 ? (
+                <VStack gap={2}>
+                  <HStack gap={2} align="center" wrap="wrap">
+                    <Button
+                      label="Leggi il suo sito e la sua scheda Google"
+                      variant="primary"
+                      size="sm"
+                      clickAction={analizzaLaVoce}
+                    />
+                    <Text type="supporting">
+                      {quantiFatti === 0
+                        ? `Di ${s.nome} non sappiamo ancora niente, ma il suo sito e la sua scheda Google sì.`
+                        : 'Riempie solo i campi ancora vuoti: quello che hai scritto tu resta.'}
+                    </Text>
+                  </HStack>
+                  {pannelloProposta}
+                </VStack>
+              ) : null}
               {CHIAVI.map((c) => (
                 <TextArea
                   key={c.id}
