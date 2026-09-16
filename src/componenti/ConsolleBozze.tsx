@@ -647,7 +647,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                         </Text>
                       </HStack>
                       <Text type="supporting" color="secondary">
-                        {`${coda.length - saltate.filter((x) => coda.some((b) => String(b.id) === String(x))).length} da decidere`}
+                        {coda.length === 1 ? 'l’ultima' : `${coda.length} da decidere`}
                         {saltate.length ? ` · ${saltate.length} saltate` : ''}
                       </Text>
                     </HStack>
@@ -726,8 +726,19 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                          resta leggibile nella descrizione — e la colonna con
                          cui si sceglie dev'essere quella che cambia. */
                       label={titoloBozza(b.contenuto, b.tipo)}
+                      /* ⚠️ LA DESCRIZIONE DEVE DISTINGUERE, NON RIPETERE
+                         (16/09/2026). Era «MyWebby · Post Google · Piano del
+                         mese» su trentasei righe di fila: dentro «Google» il tipo
+                         e' gia' detto dalla voce di menu, e l'origine e' la
+                         stessa per tutto un piano. Il pezzo che cambia è il
+                         testo, e i titoli invece si ripetono (sono gli angoli
+                         del piano: «Cosa facciamo» esce una volta al mese). */
                       description={
-                        [b.azienda, ETICHETTA_TIPO[b.tipo] ?? b.tipo, ETICHETTA_ORIGINE[b.origine] ?? b.origine]
+                        [
+                          b.azienda,
+                          prodotto ? null : ETICHETTA_TIPO[b.tipo] ?? b.tipo,
+                          testoBozza(b.contenuto).replace(/\s+/g, ' ').trim().slice(0, 90) || null,
+                        ]
                           .filter(Boolean)
                           .join(' · ')
                       }
@@ -782,7 +793,12 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
           </VStack>
         </LayoutContent>
       }
+      /* ⚠️ IL PANNELLO NON C'E' SE NON SERVE (16/09/2026). Erano 560px fissi
+         che dicevano «Nessuna bozza selezionata» mentre in rassegna stavi gia'
+         leggendo una bozza: un terzo dello schermo occupato per dirti che non
+         c'e' niente. Compare quando apri una riga, e allora serve tutto. */
       end={
+        !selezionata && corrente && filtro === 'da_decidere' ? undefined : (
         <LayoutPanel width={560} hasDivider isScrollable label="Dettaglio bozza" padding={4}>
           {!selezionata ? (
             <EmptyState
@@ -1495,6 +1511,7 @@ Premi «Scrivi il testo» per generarlo.`}
             </VStack>
           )}
         </LayoutPanel>
+        )
       }
     />
     {daCancellare && selezionata ? (
