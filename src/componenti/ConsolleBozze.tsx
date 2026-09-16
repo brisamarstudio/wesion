@@ -379,6 +379,54 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   }
 
   /**
+   * Rifarlo scrivere, tenendo da parte quello di adesso.
+   *
+   * ⚠️ LA CORREZIONE IN CORSO SI PERDE, e va detto prima: se stai riscrivendo
+   * a mano e premi «Riscrivilo», quello che hai battuto non è mai stato salvato
+   * da nessuna parte. Il testo salvato invece torna indietro con un click.
+   */
+  async function riscrivi() {
+    if (!selezionata) return;
+    setErrore(null);
+    setInScrittura(true);
+    const risposta = await fetch(`/api/bozze/${selezionata.id}/riscrivi`, { method: 'POST' });
+    const esito = await risposta.json().catch(() => ({}));
+    setInScrittura(false);
+    if (!risposta.ok) {
+      setErrore(perche(risposta, esito));
+      return;
+    }
+    // Via la correzione a mano di questa bozza: adesso il testo è un altro, e
+    // tenerla vorrebbe dire mostrare la vecchia sopra il nuovo.
+    setCorrezioni((c) => {
+      const { [selezionata.id]: _tolta, ...resto } = c;
+      return resto;
+    });
+    router.refresh();
+  }
+
+  /** Rimettere il testo di prima del «Riscrivilo». */
+  async function rimettiQuelloDiPrima() {
+    if (!selezionata) return;
+    setErrore(null);
+    const risposta = await fetch(`/api/bozze/${selezionata.id}/riscrivi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ annulla: true }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setErrore(perche(risposta, esito));
+      return;
+    }
+    setCorrezioni((c) => {
+      const { [selezionata.id]: _tolta, ...resto } = c;
+      return resto;
+    });
+    router.refresh();
+  }
+
+  /**
    * Spostare la data di uscita.
    *
    * ⚠️ Prima non si poteva: una bozza nasceva con la sua data e per farla
@@ -1042,6 +1090,23 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                       variant="primary"
                       isLoading={inScrittura}
                       clickAction={scrivi}
+                    />
+                  ) : (
+                    /* Su una già scritta: rifarlo scrivere. Il testo di adesso
+                       si mette da parte, e torna col bottone qui accanto. */
+                    <Button
+                      label="Riscrivilo"
+                      variant="secondary"
+                      isLoading={inScrittura}
+                      tooltip="Lo fa riscrivere dal modello. Quello di adesso si può rimettere."
+                      clickAction={riscrivi}
+                    />
+                  )}
+                  {typeof selezionata.contenuto?.testo_prima === 'string' ? (
+                    <Button
+                      label="Rimetti quello di prima"
+                      variant="ghost"
+                      clickAction={rimettiQuelloDiPrima}
                     />
                   ) : null}
                   {modificato ? <Badge variant="warning" label="testo modificato" /> : null}

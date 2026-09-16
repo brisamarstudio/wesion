@@ -143,13 +143,47 @@ export interface EsitoScrittura {
 }
 
 /**
+ * Gli stati da cui si può (ri)scrivere. Mai `approvata` e mai `pubblicata`:
+ * quello che è già partito non si riscrive, si corregge dove è andato.
+ */
+const RISCRIVIBILI = ['vuota', 'generata', 'attesa_approvazione'];
+
+/**
+ * Mette da parte il testo di adesso, prima di coprirlo.
+ *
+ * ⚠️ SI CHIAMA DOPO CHE IL MODELLO HA RISPOSTO, mai prima: se la generazione
+ * fallisce non deve restare in giro un «testo di prima» che non è stato
+ * sostituito da niente.
+ */
+async function metteDaParte(bozzaId: string | number): Promise<void> {
+  await query(
+    `UPDATE wesion.bozza
+        SET contenuto = contenuto || jsonb_build_object(
+              'testo_prima', COALESCE(contenuto->>'testo', ''),
+              'scritto_prima_da', COALESCE(modello, 'nessuno'))
+      WHERE id = $1`,
+    [bozzaId]
+  );
+}
+
+/**
  * Scrive il testo di una bozza vuota e la mette in attesa di approvazione.
  *
  * Rifiuta di lavorare su una bozza che non sia `vuota`: rigenerare sopra un
  * testo che qualcuno ha già corretto a mano è il modo migliore per fargli
  * buttare via mezz'ora senza accorgersene.
+ *
+ * ⚠️ `riscrivi: true` toglie quella guardia, e lo fa a una condizione: il
+ * testo di prima si mette da parte in `contenuto.testo_prima`, con chi l'aveva
+ * scritto. Nasce dal buco trovato il 16/09/2026 — su un post già scritto ma
+ * non ancora uscito le strade erano due, correggerlo a mano o cancellarlo e
+ * rifarlo. Ma la guardia di sopra resta vera: un rigenerato che copre il lavoro
+ * di una persona va bene solo se quella persona può tornare indietro.
  */
-export async function scriviBozza(bozzaId: string | number): Promise<EsitoScrittura> {
+export async function scriviBozza(
+  bozzaId: string | number,
+  opzioni: { riscrivi?: boolean } = {}
+): Promise<EsitoScrittura> {
   const [bozza] = await query<BozzaDaScrivere>(
     `SELECT b.id, b.azienda_id, b.tipo, b.stato, b.contenuto, a.nome AS azienda, a.citta
        FROM wesion.bozza b JOIN wesion.azienda a ON a.id = b.azienda_id
@@ -157,8 +191,13 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
     [bozzaId]
   );
   if (!bozza) throw new Error(`bozza ${bozzaId} inesistente`);
-  if (bozza.stato !== 'vuota') {
-    throw new Error(`La bozza ${bozzaId} non è vuota (è "${bozza.stato}"): non la riscrivo sopra.`);
+  const ammessi = opzioni.riscrivi ? RISCRIVIBILI : ['vuota'];
+  if (!ammessi.includes(bozza.stato)) {
+    throw new Error(
+      opzioni.riscrivi
+        ? `La bozza ${bozzaId} è "${bozza.stato}": è già partita, e quello che è partito non si riscrive da qui.`
+        : `La bozza ${bozzaId} non è vuota (è "${bozza.stato}"): non la riscrivo sopra.`
+    );
   }
 
   const materia = await leggiMateria(bozza.azienda_id);
@@ -177,6 +216,7 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
   if (bozza.tipo === 'articolo') {
     const c = bozza.contenuto;
     const categorie = await categorieBlog(bozza.azienda_id);
+    // (lo stash sta sotto, dopo che il modello ha risposto)
     const art = await scriviArticolo(
       {
         azienda: bozza.azienda,
@@ -190,6 +230,7 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
     );
 
     const avvisiArt = controllaBozza(bozza.tipo, art.corpo, fattiVeri(materia));
+    if (opzioni.riscrivi) await metteDaParte(bozzaId);
 
     await query(
       `UPDATE wesion.bozza
@@ -200,8 +241,8 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
                 -- bozza non deve poter cambiare l'indirizzo di un articolo.
                 'slug', COALESCE(contenuto->>'slug', $6::text)),
               avvisi = $7::jsonb, modello = $8, stato = 'attesa_approvazione'
-        WHERE id = $1 AND stato = 'vuota'`,
-      [bozzaId, art.corpo, art.titolo, art.sommario, art.categoria, art.slug, JSON.stringify(avvisiArt), art.modello]
+        WHERE id = $1 AND stato = ANY($9)`,
+      [bozzaId, art.corpo, art.titolo, art.sommario, art.categoria, art.slug, JSON.stringify(avvisiArt), art.modello, ammessi]
     );
 
     return {
@@ -216,6 +257,7 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
   if (bozza.tipo === 'social') {
     const soc = await scriviBozzaSocial(bozza);
     const avvisiSoc = controllaBozza(bozza.tipo, soc.testo, fattiVeri(materia));
+    if (opzioni.riscrivi) await metteDaParte(bozzaId);
 
     await query(
       `UPDATE wesion.bozza
@@ -223,8 +265,8 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
               avvisi    = $3::jsonb,
               modello   = $4,
               stato     = 'attesa_approvazione'
-        WHERE id = $1 AND stato = 'vuota'`,
-      [bozzaId, JSON.stringify(soc.contenutoSocial), JSON.stringify(avvisiSoc), soc.modello]
+        WHERE id = $1 AND stato = ANY($5)`,
+      [bozzaId, JSON.stringify(soc.contenutoSocial), JSON.stringify(avvisiSoc), soc.modello, ammessi]
     );
 
     return {
@@ -246,6 +288,7 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
    * anni" e' un fatto, non un numero uscito dal modello.
    */
   const avvisi = controllaBozza(bozza.tipo, esito.testo, fattiVeri(materia));
+  if (opzioni.riscrivi) await metteDaParte(bozzaId);
 
   await query(
     `UPDATE wesion.bozza
@@ -253,8 +296,8 @@ export async function scriviBozza(bozzaId: string | number): Promise<EsitoScritt
             avvisi    = $3::jsonb,
             modello   = $4,
             stato     = 'attesa_approvazione'
-      WHERE id = $1 AND stato = 'vuota'`,
-    [bozzaId, esito.testo, JSON.stringify(avvisi), esito.modello]
+      WHERE id = $1 AND stato = ANY($5)`,
+    [bozzaId, esito.testo, JSON.stringify(avvisi), esito.modello, ammessi]
   );
 
   return {
