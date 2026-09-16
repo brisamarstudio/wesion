@@ -110,6 +110,12 @@ function cosaSuccedeOra(b: Bozza, adesso: number | null): string {
   return `NON esce ancora: è programmata per il ${quandoBreve(b.pubblica_at)} (${fra})`;
 }
 
+/** La prima lettera maiuscola: `cosaSuccedeOra` restituisce frasi minuscole
+    pensate per stare in coda a un'altra, e qui apre una frase da sola. */
+function maiuscola(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 
 /**
  * Cosa scrivere quando una chiamata non e' andata.
@@ -180,10 +186,16 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
    * perdere.
    */
   const [saltate, setSaltate] = useState<Array<string | number>>([]);
+  /**
+   * ⚠️ SI SALVA LA BOZZA INTERA, NON SOLO id/titolo (16/09/2026). La prima
+   * versione diceva SEMPRE «Esce al prossimo giro del router» dopo ogni
+   * approvazione — vero per uno slot senza data, falso per uno programmato al
+   * 24 settembre. Serve `pubblica_at` per dire la verità con `cosaSuccedeOra`,
+   * la stessa funzione che la usa già nel pannello.
+   */
   const [ultimaDecisa, setUltimaDecisa] = useState<{
-    id: string | number;
     azione: 'approva' | 'rifiuta';
-    titolo: string;
+    bozza: Bozza;
   } | null>(null);
   const [selezionataId, setSelezionataId] = useState<string | number | null>(null);
   /** Le correzioni in corso, per id: si perdono cambiando riga, apposta. */
@@ -497,7 +509,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
       const { [quale.id]: _tolta, ...resto } = c;
       return resto;
     });
-    setUltimaDecisa({ id: quale.id, azione, titolo: titoloBozza(quale.contenuto, quale.tipo) });
+    setUltimaDecisa({ azione, bozza: quale });
     router.refresh();
   }
 
@@ -511,7 +523,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   async function tornaIndietro() {
     if (!ultimaDecisa) return;
     setErrore(null);
-    const risposta = await fetch(`/api/bozze/${ultimaDecisa.id}`, {
+    const risposta = await fetch(`/api/bozze/${ultimaDecisa.bozza.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ azione: 'torna_indietro' }),
@@ -523,7 +535,7 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
       router.refresh();
       return;
     }
-    setSaltate((s) => s.filter((x) => String(x) !== String(ultimaDecisa.id)));
+    setSaltate((s) => s.filter((x) => String(x) !== String(ultimaDecisa.bozza.id)));
     setUltimaDecisa(null);
     router.refresh();
   }
@@ -734,10 +746,10 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                 {ultimaDecisa ? (
                   <Banner
                     status="success"
-                    title={`${ultimaDecisa.azione === 'approva' ? 'Approvata' : 'Rifiutata'}: «${ultimaDecisa.titolo}»`}
+                    title={`${ultimaDecisa.azione === 'approva' ? 'Approvata' : 'Rifiutata'}: «${titoloBozza(ultimaDecisa.bozza.contenuto, ultimaDecisa.bozza.tipo)}»`}
                     description={
                       ultimaDecisa.azione === 'approva'
-                        ? 'Esce al prossimo giro del router. Finché non è uscita si può disfare.'
+                        ? `${maiuscola(cosaSuccedeOra(ultimaDecisa.bozza, adesso))}. Finché non è uscita si può disfare.`
                         : 'Resta in archivio come decisione: si può disfare.'
                     }
                     endContent={<Button label="Torna indietro" size="sm" clickAction={tornaIndietro} />}
