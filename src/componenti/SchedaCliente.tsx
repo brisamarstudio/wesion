@@ -48,6 +48,7 @@ import { DateInput } from '@astryxdesign/core/DateInput';
 import { Pencil, Plus } from 'lucide-react';
 import { ModuloAzienda, type AziendaModulo } from './ModuloAzienda';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
+import { Plancia } from './Plancia';
 import type { Scheda } from '@/lib/scheda';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
@@ -318,7 +319,13 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
    * `servizi`, non su "Chi è" a fartela ricercare. Letto una volta sola al
    * montaggio: dopo, chi clicca un'altra linguetta a mano decide lui.
    */
-  const [sezione, setSezione] = useState(parametri.get('tab') || 'chi');
+  const [sezione, setSezione] = useState(
+    // Su un cliente si apre la Plancia: la domanda vera aprendo un cliente e'
+    // «cosa devo fare adesso», e «Chi e'» non la sa. Su un lead la Plancia non
+    // avrebbe niente da dire (nessun canale, nessuna bozza), quindi resta
+    // «Chi e'», che per lui e' la pagina giusta: numero e gancio.
+    parametri.get('tab') || (iniziale.stato === 'cliente' ? 'plancia' : 'chi')
+  );
 
   /**
    * ⚠️ QUESTA PAGINA SERVE A DUE PERSONE DIVERSE (31/08/2026).
@@ -650,11 +657,12 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               ) : null}
             </HStack>
             <TabList value={sezione} onChange={setSezione}>
+              {eCliente ? <Tab value="plancia" label="Plancia" /> : null}
               <Tab value="chi" label="Chi è" />
               <Tab value="voce" label="Come parla" />
               <Tab
                 value="fatti"
-                label="Cosa è vero"
+                label="Cosa sappiamo"
                 endContent={
                   s.fatti.length ? (
                     <Badge variant={s.fatti.length >= 4 ? 'neutral' : 'warning'} label={String(s.fatti.length)} />
@@ -666,8 +674,8 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               {/* Servizi e piano del mese su un lead non contattato sono due
                   schermate vuote con dentro delle regole che non lo riguardano:
                   compaiono quando diventa cliente. */}
-              {eCliente ? <Tab value="servizi" label="Servizi" /> : null}
-              {eCliente ? <Tab value="mese" label="Il mese" /> : null}
+              {eCliente ? <Tab value="servizi" label="Impostazioni" /> : null}
+              {eCliente ? <Tab value="mese" label="Calendario dei post" /> : null}
               {/* L'ultimo click: c'è solo quando c'è davvero qualcosa da
                   decidere, e dice quanto. Una linguetta che si apre vuota
                   insegna a non cliccarla. */}
@@ -683,7 +691,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               {s.storico.length > 0 ? (
                 <Tab
                   value="storico"
-                  label="Cosa è uscito"
+                  label="Pubblicati"
                   endContent={<Badge variant="neutral" label={String(s.storico.length)} />}
                 />
               ) : null}
@@ -764,22 +772,33 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
               </VStack>
             ) : null}
 
-            {eCliente && mancanze.length > 0 ? (
-              <Banner
-                status="warning"
-                title="Questo cliente non è ancora pronto"
-                description="Finché manca qualcosa, il piano esce povero."
-                defaultIsExpanded
-              >
-                <List hasDividers density="compact">
-                  {mancanze.map((m, i) => (
-                    <ListItem key={i} label={m} />
-                  ))}
-                </List>
-              </Banner>
-            ) : (
-              <Banner status="success" title="Pronto: si può costruire il piano del mese." />
-            )}
+            {/* ⚠️ NON SULLA PLANCIA: là le stesse cose stanno in «Da fare oggi»,
+                con il bottone che porta dove si sistemano. Due avvisi identici
+                uno sopra l'altro insegnano a saltarli tutti e due.
+                E il verde «Pronto» vale solo per un cliente: a un lead diceva
+                che si può costruire il piano del mese, che per lui non esiste. */}
+            {sezione !== 'plancia' && eCliente ? (
+              mancanze.length > 0 ? (
+                <Banner
+                  status="warning"
+                  title="Questo cliente non è ancora pronto"
+                  description="Finché manca qualcosa, il piano esce povero."
+                  defaultIsExpanded
+                >
+                  <List hasDividers density="compact">
+                    {mancanze.map((m, i) => (
+                      <ListItem key={i} label={m} />
+                    ))}
+                  </List>
+                </Banner>
+              ) : (
+                <Banner status="success" title="Pronto: si può costruire il piano del mese." />
+              )
+            ) : null}
+
+            {sezione === 'plancia' ? (
+              <Plancia s={s} vaiA={setSezione} apriAnagrafica={apriAnagrafica} />
+            ) : null}
 
             {/* ── 1. Chi è ─────────────────────────────────────────────────
                 Il PERCHE' del settore — sceglie temi e ricorrenze, e dedurlo
