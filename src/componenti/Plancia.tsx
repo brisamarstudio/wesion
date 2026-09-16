@@ -27,22 +27,9 @@ import { Button } from '@astryxdesign/core/Button';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { Link } from '@astryxdesign/core/Link';
-import { canali, daFareOggi, type StatoCanale } from '@/lib/plancia';
+import { canali, daFareOggi, COLORE_STATO as COLORE, PAROLA_STATO as PAROLA } from '@/lib/plancia';
 import { soloData } from '@/lib/quando';
 import type { Scheda } from '@/lib/scheda';
-
-/** Colore e parola vanno sempre insieme: il colore da solo non si legge al sole. */
-const COLORE: Record<StatoCanale, 'success' | 'warning' | 'neutral'> = {
-  funziona: 'success',
-  problema: 'warning',
-  spento: 'neutral',
-};
-
-const PAROLA: Record<StatoCanale, string> = {
-  funziona: 'Funziona',
-  problema: 'C’è un problema',
-  spento: 'Spento',
-};
 
 export function Plancia({
   s,

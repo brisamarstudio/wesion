@@ -69,6 +69,19 @@ export function indirizzoDiProva(url: string | undefined): boolean {
   return v.includes('localhost') || v.includes('127.0.0.1');
 }
 
+/** Colore e parola vanno sempre insieme: il colore da solo non si legge al sole. */
+export const COLORE_STATO: Record<StatoCanale, 'success' | 'warning' | 'neutral'> = {
+  funziona: 'success',
+  problema: 'warning',
+  spento: 'neutral',
+};
+
+export const PAROLA_STATO: Record<StatoCanale, string> = {
+  funziona: 'Funziona',
+  problema: 'C’è un problema',
+  spento: 'Spento',
+};
+
 function config(s: Scheda, tipo: string): Record<string, string> {
   return s.servizi.find((x) => x.tipo === tipo)?.config ?? {};
 }

@@ -36,6 +36,7 @@ import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList'
 import { Selector } from '@astryxdesign/core/Selector';
 import { TabList, Tab } from '@astryxdesign/core/TabList';
 import { Card } from '@astryxdesign/core/Card';
+import { Collapsible, CollapsibleGroup } from '@astryxdesign/core/Collapsible';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Divider } from '@astryxdesign/core/Divider';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
@@ -49,6 +50,7 @@ import { Pencil, Plus } from 'lucide-react';
 import { ModuloAzienda, type AziendaModulo } from './ModuloAzienda';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
 import { Plancia } from './Plancia';
+import { canali, COLORE_STATO, PAROLA_STATO } from '@/lib/plancia';
 import type { Scheda } from '@/lib/scheda';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
@@ -80,6 +82,64 @@ const SEP = String.fromCharCode(10);
 /** Da testo a righe e viceversa: nel form le liste sono textarea. */
 const aRighe = (v: string[]): string => v.join('\n');
 const daRighe = (v: string): string[] => v.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+
+/**
+ * Un segreto: si scrive, si copia, e di norma NON si legge.
+ *
+ * ⚠️ MASCHERARLO QUI E' MEZZA COSA, ED E' GIUSTO SAPERLO: `leggiScheda` manda
+ * al browser `servizio.config` INTERA, quindi la password di WordPress e i
+ * segreti del sito sono gia' dentro l'HTML di questa pagina. Questo campo
+ * serve a chi lavora con qualcuno alle spalle o condivide lo schermo — non e'
+ * una protezione. Toglierli davvero vuol dire non mandarli al client, ed e'
+ * una modifica al server, da fare a parte.
+ */
+function CampoSegreto({
+  label,
+  description,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [mostrato, setMostrato] = useState(false);
+  const [copiato, setCopiato] = useState(false);
+  return (
+    <VStack gap={1}>
+      <TextInput
+        label={label}
+        description={description}
+        placeholder={placeholder}
+        type={mostrato ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+      />
+      <HStack gap={2}>
+        <Button
+          label={mostrato ? 'Nascondi' : 'Mostra'}
+          size="sm"
+          variant="ghost"
+          onClick={() => setMostrato((v) => !v)}
+        />
+        <Button
+          label={copiato ? 'Copiato' : 'Copia'}
+          size="sm"
+          variant="ghost"
+          isDisabled={!value}
+          clickAction={async () => {
+            await navigator.clipboard.writeText(value);
+            setCopiato(true);
+            setTimeout(() => setCopiato(false), 2500);
+          }}
+        />
+      </HStack>
+    </VStack>
+  );
+}
 
 export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
   const router = useRouter();
@@ -616,6 +676,31 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     }
     router.refresh();
   }
+
+  /**
+   * Le stesse tre parole della Plancia, in testa a ogni blocco di Impostazioni.
+   *
+   * Non e' decorazione: chi arriva qui ci arriva quasi sempre da un «Sistemalo»,
+   * e deve ritrovare la stessa frase che ha letto di la'. Gli stati li calcola
+   * `lib/plancia.ts`, uno solo per tutta la pagina.
+   */
+  const statiCanali = canali(s);
+  const intestazione = (canaleId: string, nome: string) => {
+    const c = statiCanali.find((x) => x.id === canaleId);
+    return (
+      <HStack gap={2} align="center" wrap="wrap">
+        <Text weight="medium">{nome}</Text>
+        {c ? (
+          <>
+            <StatusDot variant={COLORE_STATO[c.stato]} label={PAROLA_STATO[c.stato]} tooltip={c.dettaglio} />
+            <Text type="supporting" color="secondary">
+              {PAROLA_STATO[c.stato]}
+            </Text>
+          </>
+        ) : null}
+      </HStack>
+    );
+  };
 
   // Cosa manca per far lavorare questo cliente, detto dove serve.
   const quantiFatti = CHIAVI.reduce((n, c) => n + daRighe(fatti[c.id] ?? '').length, 0);
@@ -1196,308 +1281,401 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
             </VStack>
             ) : null}
 
-            {/* ── 4. Servizi ───────────────────────────────────────────────
-                Senza una riga qui il router non pubblica niente, nemmeno se il
-                titolare manda la foto. */}
+            {/* ── 4. Impostazioni ──────────────────────────────────────────
+                Si chiamava «Servizi», ed erano due parole per due cose: la
+                linguetta e il tag di settore (che adesso si chiama Settore e
+                sta in «Modifica anagrafica»).
+
+                ⚠️ TUTTO CHIUSO DI DEFAULT (15/09/2026). Prima questa pagina
+                era un muro: account id, endpoint, segreti in chiaro e «chi può
+                dare comandi» tutti aperti insieme, sullo stesso piano di
+                «Social: attivo». Qui dentro si viene per cambiare UNA cosa —
+                quasi sempre arrivando da un «Sistemalo» della Plancia — non
+                per leggerle tutte. Le scelte umane prima, la roba da tecnici
+                dentro «Avanzate», chiusa un'altra volta. */}
             {sezione === 'servizi' ? (
             <VStack gap={3}>
+              <Text type="supporting" color="secondary">
+                Ogni blocco è chiuso finché non serve. Dentro, prima le scelte che riguardano il
+                cliente, poi «Avanzate» con quello che serve solo a far funzionare il collegamento.
+              </Text>
 
-              <VStack gap={2}>
-                <HStack gap={2} align="center">
-                  <Button
-                    label={attivo('menu_del_giorno') ? 'Menù del giorno: attivo' : 'Menù del giorno: spento'}
-                    size="sm"
-                    variant={attivo('menu_del_giorno') ? 'primary' : 'secondary'}
-                    onClick={() => cambiaServizio('menu_del_giorno', {}, !attivo('menu_del_giorno'))}
-                  />
-                </HStack>
-                {attivo('menu_del_giorno') ? (
-                  <VStack gap={2}>
-                    <TextInput
-                      label="URL a cui mandare il menù"
-                      placeholder="https://ilcliente.it/api/menu"
-                      value={config('menu_del_giorno').site_menu_url ?? ''}
-                      onChange={(v) => cambiaServizio('menu_del_giorno', { site_menu_url: v })}
-                    />
-                    <TextInput
-                      label="Segreto del sito"
-                      description="Uno per cliente."
-                      value={config('menu_del_giorno').site_secret ?? ''}
-                      onChange={(v) => cambiaServizio('menu_del_giorno', { site_secret: v })}
-                    />
-                    <TextInput
-                      label="Pagina del menù"
-                      description="Finisce nel pulsante sotto il post di Google."
-                      placeholder="https://ilcliente.it/menu"
-                      value={config('menu_del_giorno').site_menu_page ?? ''}
-                      onChange={(v) => cambiaServizio('menu_del_giorno', { site_menu_page: v })}
-                    />
-                  </VStack>
-                ) : null}
-              </VStack>
+              <CollapsibleGroup type="multiple" hasDividers>
 
-              <VStack gap={2}>
-                <HStack gap={2} align="center">
-                  <Button
-                    label={attivo('post_gbp') ? 'Scheda Google: attiva' : 'Scheda Google: spenta'}
-                    size="sm"
-                    variant={attivo('post_gbp') ? 'primary' : 'secondary'}
-                    onClick={() => cambiaServizio('post_gbp', {}, !attivo('post_gbp'))}
-                  />
-                </HStack>
-                {attivo('post_gbp') ? (
-                  <VStack gap={3}>
-                    {/* ⚠️ Gli id NON si digitano. Vedi il commento su
-                        `leggiDaGoogle`: e' la regola del guasto del 21/07/2026,
-                        e la prima versione di questa pagina la violava. */}
-                    <HStack gap={2} align="center" wrap="wrap">
-                      <Button label="Leggi le schede da Google" size="sm" clickAction={leggiDaGoogle} />
-                      {config('post_gbp').gbp_account_id ? (
-                        <Text type="supporting">
-                          collegata: account {config('post_gbp').gbp_account_id} · scheda{' '}
-                          {config('post_gbp').gbp_location_id}
-                        </Text>
-                      ) : (
-                        <Text type="supporting">nessuna scheda collegata</Text>
-                      )}
+                {/* ── Google ─────────────────────────────────────────────── */}
+                <Collapsible value="post_gbp" defaultIsOpen={false} trigger={intestazione('google', 'Google')}>
+                  <VStack gap={3} padding={2}>
+                    <HStack gap={2} align="center">
+                      <Button
+                        label={attivo('post_gbp') ? 'Attivo: sì' : 'Attivo: no'}
+                        size="sm"
+                        variant={attivo('post_gbp') ? 'primary' : 'secondary'}
+                        onClick={() => cambiaServizio('post_gbp', {}, !attivo('post_gbp'))}
+                      />
+                      <Text type="supporting" color="secondary">
+                        Pubblichiamo noi i post sulla sua scheda Google.
+                      </Text>
                     </HStack>
 
-                    {schede ? (
-                      schede.length ? (
-                        <Selector
-                          label="Quale scheda è questo cliente"
-                          hasSearch={schede.length > 8}
-                          placeholder="Scegli dall’elenco letto da Google"
-                          value={
-                            config('post_gbp').gbp_location_id
-                              ? `${config('post_gbp').gbp_account_id}/${config('post_gbp').gbp_location_id}`
-                              : ''
-                          }
-                          onChange={(v) => {
-                            const [account, location] = v.split('/');
-                            cambiaServizio('post_gbp', { gbp_account_id: account, gbp_location_id: location });
-                          }}
-                          options={schede.map((x) => ({
-                            value: `${x.accountId}/${x.locationId}`,
-                            label: x.titolo || `scheda ${x.locationId}`,
-                          }))}
-                        />
-                      ) : (
-                        <Banner
-                          status="warning"
-                          title="Google non ha restituito nessuna scheda"
-                          description="O l’agenzia non ne gestisce, o il token non ha i permessi giusti."
-                        />
-                      )
-                    ) : null}
+                    {attivo('post_gbp') ? (
+                      <VStack gap={3}>
+                        {/* ⚠️ Gli id NON si digitano. Vedi il commento su
+                            `leggiDaGoogle`: e' la regola del guasto del 21/07/2026,
+                            e la prima versione di questa pagina la violava. */}
+                        <HStack gap={2} align="center" wrap="wrap">
+                          <Button label="Leggi le schede da Google" size="sm" clickAction={leggiDaGoogle} />
+                          {config('post_gbp').gbp_location_id ? (
+                            <Text type="supporting">una scheda è collegata</Text>
+                          ) : (
+                            <Text type="supporting">nessuna scheda collegata</Text>
+                          )}
+                        </HStack>
 
-                    {/* ── IL BOTTONE SOTTO IL POST ──────────────────────────
-                        Google permette di mettere un pulsante sotto ogni post
-                        (Prenota, Ordina online, Scopri di più...). Wesion
-                        sapeva già farlo — `pubblicaPost` accetta l'azione — ma
-                        glielo passava SOLO il menù del giorno: i diciassette
-                        post di un piano uscivano tutti senza niente da
-                        cliccare, e non era una scelta, era una dimenticanza.
+                        {schede ? (
+                          schede.length ? (
+                            <Selector
+                              label="Quale scheda è questo cliente"
+                              hasSearch={schede.length > 8}
+                              placeholder="Scegli dall’elenco letto da Google"
+                              value={
+                                config('post_gbp').gbp_location_id
+                                  ? `${config('post_gbp').gbp_account_id}/${config('post_gbp').gbp_location_id}`
+                                  : ''
+                              }
+                              onChange={(v) => {
+                                const [account, location] = v.split('/');
+                                cambiaServizio('post_gbp', { gbp_account_id: account, gbp_location_id: location });
+                              }}
+                              options={schede.map((x) => ({
+                                value: `${x.accountId}/${x.locationId}`,
+                                label: x.titolo || `scheda ${x.locationId}`,
+                              }))}
+                            />
+                          ) : (
+                            <Banner
+                              status="warning"
+                              title="Google non ha restituito nessuna scheda"
+                              description="O l’agenzia non ne gestisce, o il collegamento non ha i permessi giusti."
+                            />
+                          )
+                        ) : null}
 
-                        Qui si imposta quello di serie, valido per tutti i post
-                        di questo cliente. Sulla singola bozza si può cambiare
-                        dalla consolle. Il valore si risolve al momento della
-                        pubblicazione, quindi vale anche per le bozze già in
-                        coda: non c'è niente da rigenerare. */}
-                    {eCliente && config('post_gbp').gbp_location_id ? (
-                      <VStack gap={2}>
-                        <Selector
-                          label="Bottone sotto i post"
-                          description="Quello di serie per questo cliente. Sulla singola bozza si può cambiare."
-                          value={config('post_gbp').cta_tipo || ''}
-                          onChange={(v) => cambiaServizio('post_gbp', { cta_tipo: String(v) })}
-                          options={[
-                            { value: '', label: 'Nessun bottone' },
-                            ...Object.entries(AZIONI_BOTTONE).map(([value, label]) => ({ value, label })),
-                          ]}
-                        />
-                        {/* «Chiama ora» usa il numero della scheda Google: un
-                            url lì dentro fa fallire la pubblicazione. */}
-                        {config('post_gbp').cta_tipo && VUOLE_URL(config('post_gbp').cta_tipo) ? (
-                          <TextInput
-                            label="Dove porta il bottone"
-                            description="La pagina del cliente a cui mandare chi clicca."
-                            value={config('post_gbp').cta_url || ''}
-                            onChange={(v) => cambiaServizio('post_gbp', { cta_url: v })}
+                        {/* ── IL BOTTONE SOTTO IL POST ──────────────────────────
+                            Google permette di mettere un pulsante sotto ogni post
+                            (Prenota, Ordina online, Scopri di più...). Wesion
+                            sapeva già farlo — `pubblicaPost` accetta l'azione — ma
+                            glielo passava SOLO il menù del giorno: i diciassette
+                            post di un piano uscivano tutti senza niente da
+                            cliccare, e non era una scelta, era una dimenticanza.
+
+                            Qui si imposta quello di serie, valido per tutti i post
+                            di questo cliente. Sulla singola bozza si può cambiare
+                            dalla consolle. Il valore si risolve al momento della
+                            pubblicazione, quindi vale anche per le bozze già in
+                            coda: non c'è niente da rigenerare. */}
+                        {eCliente && config('post_gbp').gbp_location_id ? (
+                          <VStack gap={2}>
+                            <Selector
+                              label="Bottone sotto i post"
+                              description="Quello di serie per questo cliente. Sulla singola bozza si può cambiare."
+                              value={config('post_gbp').cta_tipo || ''}
+                              onChange={(v) => cambiaServizio('post_gbp', { cta_tipo: String(v) })}
+                              options={[
+                                { value: '', label: 'Nessun bottone' },
+                                ...Object.entries(AZIONI_BOTTONE).map(([value, label]) => ({ value, label })),
+                              ]}
+                            />
+                            {/* «Chiama ora» usa il numero della scheda Google: un
+                                url lì dentro fa fallire la pubblicazione. */}
+                            {config('post_gbp').cta_tipo && VUOLE_URL(config('post_gbp').cta_tipo) ? (
+                              <TextInput
+                                label="Dove porta il bottone"
+                                description="La pagina del cliente a cui mandare chi clicca."
+                                value={config('post_gbp').cta_url || ''}
+                                onChange={(v) => cambiaServizio('post_gbp', { cta_url: v })}
+                              />
+                            ) : null}
+                          </VStack>
+                        ) : null}
+
+                        {/* Se in tabella c'e' gia' qualcosa di storto lo si vede
+                            subito: e' la stessa cosa che sorveglia la spia
+                            `id-google-malformati`, detta qui dove si puo' riparare.
+                            Resta FUORI da «Avanzate»: un avviso chiuso in un
+                            cassetto non è un avviso. */}
+                        {(config('post_gbp').gbp_account_id &&
+                          !/^[0-9]+$/.test(config('post_gbp').gbp_account_id)) ||
+                        (config('post_gbp').gbp_location_id &&
+                          !/^[0-9]+$/.test(config('post_gbp').gbp_location_id)) ? (
+                          <Banner
+                            status="error"
+                            title="La scheda collegata è salvata storta"
+                            description="Così la pubblicazione fallirà al primo tentativo. Rileggi le schede da Google e riscegliela."
                           />
                         ) : null}
+
+                        <Collapsible
+                          value="post_gbp_avanzate"
+                          defaultIsOpen={false}
+                          trigger={<Text type="supporting">Avanzate</Text>}
+                        >
+                          <MetadataList>
+                            <MetadataListItem label="Account">
+                              {config('post_gbp').gbp_account_id || '—'}
+                            </MetadataListItem>
+                            <MetadataListItem label="Scheda">
+                              {config('post_gbp').gbp_location_id || '—'}
+                            </MetadataListItem>
+                          </MetadataList>
+                        </Collapsible>
                       </VStack>
                     ) : null}
+                  </VStack>
+                </Collapsible>
 
-                    {/* Se in tabella c'e' gia' qualcosa di storto lo si vede
-                        subito: e' la stessa cosa che sorveglia la spia
-                        `id-google-malformati`, detta qui dove si puo' riparare. */}
-                    {(config('post_gbp').gbp_account_id &&
-                      !/^[0-9]+$/.test(config('post_gbp').gbp_account_id)) ||
-                    (config('post_gbp').gbp_location_id &&
-                      !/^[0-9]+$/.test(config('post_gbp').gbp_location_id)) ? (
-                      <Banner
-                        status="error"
-                        title="Gli id salvati non sono numerici"
-                        description="Così la pubblicazione fallirà con 404 al primo tentativo. Rileggili da Google."
+                {/* ── Sito e blog ────────────────────────────────────────── */}
+                <Collapsible value="blog" defaultIsOpen={false} trigger={intestazione('sito', 'Sito e blog')}>
+                  <VStack gap={3} padding={2}>
+                    <HStack gap={2} align="center">
+                      <Button
+                        label={attivo('blog') ? 'Attivo: sì' : 'Attivo: no'}
+                        size="sm"
+                        variant={attivo('blog') ? 'primary' : 'secondary'}
+                        onClick={() => cambiaServizio('blog', {}, !attivo('blog'))}
                       />
+                      <Text type="supporting" color="secondary">
+                        Scriviamo noi gli articoli sul suo sito.
+                      </Text>
+                    </HStack>
+
+                    {attivo('blog') ? (
+                      <VStack gap={2}>
+                        {/* La scelta viene PRIMA dei campi: cambia quali campi
+                            hanno senso, e mostrarli tutti insieme vorrebbe dire
+                            chiedere un segreto a chi ha un WordPress e non ce
+                            l'ha, o viceversa. */}
+                        <Selector
+                          label="Che sito ha il cliente"
+                          description="Su WordPress non si installa niente: si pubblica dalla sua area di amministrazione."
+                          value={config('blog').tipo || 'wesion'}
+                          onChange={(v) => cambiaServizio('blog', { tipo: v ?? 'wesion' })}
+                          options={[
+                            { value: 'wesion', label: 'Sito nostro (Astro, Express, Worker)' },
+                            { value: 'wordpress', label: 'Il WordPress del cliente' },
+                          ]}
+                        />
+
+                        <TextInput
+                          label="Pagina del blog"
+                          description="Dove finiscono gli articoli, vista dal cliente."
+                          placeholder="https://ilcliente.it/blog"
+                          value={config('blog').site_blog_page ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { site_blog_page: v })}
+                        />
+                        <TextInput
+                          label="Categorie"
+                          description="Separate da virgola. Il generatore sceglie fra queste."
+                          placeholder="Ristorazione, SEO, Prezzi & Budget, Consigli"
+                          value={config('blog').categorie ?? ''}
+                          onChange={(v) => cambiaServizio('blog', { categorie: v })}
+                        />
+
+                        <Collapsible
+                          value="blog_avanzate"
+                          defaultIsOpen={false}
+                          trigger={<Text type="supporting">Avanzate</Text>}
+                        >
+                          {(config('blog').tipo || 'wesion') === 'wordpress' ? (
+                            <VStack gap={2}>
+                              <TextInput
+                                label="Indirizzo del sito"
+                                description="Solo https: su http WordPress le password per applicazioni non le rilascia nemmeno."
+                                placeholder="https://ilcliente.it"
+                                value={config('blog').wp_base ?? ''}
+                                onChange={(v) => cambiaServizio('blog', { wp_base: v })}
+                              />
+                              <TextInput
+                                label="Utente WordPress"
+                                description="Deve poter pubblicare articoli: Autore o Amministratore."
+                                placeholder="mario"
+                                value={config('blog').wp_utente ?? ''}
+                                onChange={(v) => cambiaServizio('blog', { wp_utente: v })}
+                              />
+                              <CampoSegreto
+                                label="Password per applicazioni"
+                                description="Se la genera lui: Utenti → Profilo → Password per applicazioni. Non è la sua password."
+                                placeholder="abcd EFGH 1234 wxyz ..."
+                                value={config('blog').wp_password_app ?? ''}
+                                onChange={(v) => cambiaServizio('blog', { wp_password_app: v })}
+                              />
+                              <HStack gap={2} align="center">
+                                <Button label="Prova le credenziali" size="sm" clickAction={provaWordPress} />
+                                <Text type="supporting">
+                                  Chiede a WordPress «chi sono io». Verifica in un colpo solo tre cose che si
+                                  rompono spesso: il sito raggiungibile, la password che arriva fino in fondo,
+                                  e i permessi dell’utente.
+                                </Text>
+                              </HStack>
+                            </VStack>
+                          ) : (
+                            <VStack gap={2}>
+                              <TextInput
+                                label="URL a cui mandare gli articoli"
+                                description="L’indirizzo tecnico sul sito del cliente, non la pagina del blog."
+                                placeholder="https://ilcliente.it/api/blog"
+                                value={config('blog').site_blog_url ?? ''}
+                                onChange={(v) => cambiaServizio('blog', { site_blog_url: v })}
+                              />
+                              <CampoSegreto
+                                label="Segreto del blog"
+                                description="Diverso da quello del menù."
+                                value={config('blog').site_blog_secret ?? ''}
+                                onChange={(v) => cambiaServizio('blog', { site_blog_secret: v })}
+                              />
+                            </VStack>
+                          )}
+                        </Collapsible>
+                      </VStack>
                     ) : null}
                   </VStack>
-                ) : null}
-              </VStack>
+                </Collapsible>
 
-              <VStack gap={2}>
-                <HStack gap={2} align="center">
-                  <Button
-                    label={attivo('blog') ? 'Blog: attivo' : 'Blog: spento'}
-                    size="sm"
-                    variant={attivo('blog') ? 'primary' : 'secondary'}
-                    onClick={() => cambiaServizio('blog', {}, !attivo('blog'))}
-                  />
-                </HStack>
-                {attivo('blog') ? (
-                  <VStack gap={2}>
-                    {/* La scelta viene PRIMA dei campi: cambia quali campi
-                        hanno senso, e mostrarli tutti insieme vorrebbe dire
-                        chiedere un segreto a chi ha un WordPress e non ce
-                        l'ha, o viceversa. */}
-                    <Selector
-                      label="Che sito ha il cliente"
-                      description="Su WordPress non si installa niente: si pubblica dalla sua REST API."
-                      value={config('blog').tipo || 'wesion'}
-                      onChange={(v) => cambiaServizio('blog', { tipo: v ?? 'wesion' })}
-                      options={[
-                        { value: 'wesion', label: 'Sito nostro (Astro, Express, Worker)' },
-                        { value: 'wordpress', label: 'Il WordPress del cliente' },
-                      ]}
-                    />
+                {/* ── Social ─────────────────────────────────────────────── */}
+                <Collapsible value="social" defaultIsOpen={false} trigger={intestazione('social', 'Social')}>
+                  <VStack gap={3} padding={2}>
+                    <HStack gap={2} align="center">
+                      <Button
+                        label={attivo('social') ? 'Attivo: sì' : 'Attivo: no'}
+                        size="sm"
+                        variant={attivo('social') ? 'primary' : 'secondary'}
+                        onClick={() => cambiaServizio('social', {}, !attivo('social'))}
+                      />
+                      <Text type="supporting" color="secondary">
+                        Scriviamo noi i post di Facebook e Instagram.
+                      </Text>
+                    </HStack>
 
-                    {(config('blog').tipo || 'wesion') === 'wordpress' ? (
-                      <>
-                        <TextInput
-                          label="Indirizzo del sito"
-                          description="Solo https: su http WordPress le password per applicazioni non le rilascia nemmeno."
-                          placeholder="https://ilcliente.it"
-                          value={config('blog').wp_base ?? ''}
-                          onChange={(v) => cambiaServizio('blog', { wp_base: v })}
+                    {attivo('social') ? (
+                      <VStack gap={2}>
+                        <Banner
+                          status="info"
+                          title="I post si pubblicano a mano"
+                          description="Wesion li scrive e li prepara: gancio, formattazione per il telefono e primo commento. In consolle si copiano con un click, si incollano su Facebook o Instagram e si segnano come pubblicati."
+                        />
+                        <Selector
+                          label="Dove pubblica"
+                          description="Su quali canali è presente il cliente."
+                          value={config('social').canali || 'facebook,instagram'}
+                          onChange={(v) => cambiaServizio('social', { canali: v ?? 'facebook,instagram' })}
+                          options={[
+                            { value: 'facebook,instagram', label: 'Facebook e Instagram' },
+                            { value: 'facebook', label: 'Solo Facebook' },
+                            { value: 'instagram', label: 'Solo Instagram' },
+                          ]}
                         />
                         <TextInput
-                          label="Utente WordPress"
-                          description="Deve poter pubblicare articoli: Autore o Amministratore."
-                          placeholder="mario"
-                          value={config('blog').wp_utente ?? ''}
-                          onChange={(v) => cambiaServizio('blog', { wp_utente: v })}
+                          label="Post a settimana"
+                          description="Quanti ne mette in calendario. Consigliati: 3 (lunedì, mercoledì, venerdì)."
+                          placeholder="3"
+                          value={config('social').post_a_settimana ?? '3'}
+                          onChange={(v) => cambiaServizio('social', { post_a_settimana: v })}
                         />
+                      </VStack>
+                    ) : null}
+                  </VStack>
+                </Collapsible>
+
+                {/* ── Menù del giorno ────────────────────────────────────── */}
+                <Collapsible
+                  value="menu_del_giorno"
+                  defaultIsOpen={false}
+                  trigger={intestazione('menu', 'Menù del giorno')}
+                >
+                  <VStack gap={3} padding={2}>
+                    <HStack gap={2} align="center">
+                      <Button
+                        label={attivo('menu_del_giorno') ? 'Attivo: sì' : 'Attivo: no'}
+                        size="sm"
+                        variant={attivo('menu_del_giorno') ? 'primary' : 'secondary'}
+                        onClick={() => cambiaServizio('menu_del_giorno', {}, !attivo('menu_del_giorno'))}
+                      />
+                      <Text type="supporting" color="secondary">
+                        Il titolare manda la foto del menù su WhatsApp e finisce sul sito.
+                      </Text>
+                    </HStack>
+
+                    {attivo('menu_del_giorno') ? (
+                      <VStack gap={2}>
                         <TextInput
-                          label="Password per applicazioni"
-                          description="Se la genera lui: Utenti → Profilo → Password per applicazioni. Non è la sua password."
-                          placeholder="abcd EFGH 1234 wxyz ..."
-                          value={config('blog').wp_password_app ?? ''}
-                          onChange={(v) => cambiaServizio('blog', { wp_password_app: v })}
+                          label="Pagina del menù"
+                          description="Finisce nel pulsante sotto il post di Google."
+                          placeholder="https://ilcliente.it/menu"
+                          value={config('menu_del_giorno').site_menu_page ?? ''}
+                          onChange={(v) => cambiaServizio('menu_del_giorno', { site_menu_page: v })}
                         />
-                        <HStack gap={2} align="center">
-                          <Button label="Prova le credenziali" size="sm" clickAction={provaWordPress} />
-                          <Text type="supporting">
-                            Chiede a WordPress «chi sono io». Verifica in un colpo solo tre cose che si
-                            rompono spesso: la REST API raggiungibile, l’header Authorization che arriva
-                            fino a PHP, e i permessi dell’utente.
-                          </Text>
-                        </HStack>
-                      </>
+                        <Collapsible
+                          value="menu_avanzate"
+                          defaultIsOpen={false}
+                          trigger={<Text type="supporting">Avanzate</Text>}
+                        >
+                          <VStack gap={2}>
+                            <TextInput
+                              label="URL a cui mandare il menù"
+                              description="L’indirizzo tecnico sul sito del cliente, non la pagina del menù."
+                              placeholder="https://ilcliente.it/api/menu"
+                              value={config('menu_del_giorno').site_menu_url ?? ''}
+                              onChange={(v) => cambiaServizio('menu_del_giorno', { site_menu_url: v })}
+                            />
+                            <CampoSegreto
+                              label="Segreto del sito"
+                              description="Uno per cliente."
+                              value={config('menu_del_giorno').site_secret ?? ''}
+                              onChange={(v) => cambiaServizio('menu_del_giorno', { site_secret: v })}
+                            />
+                          </VStack>
+                        </Collapsible>
+                      </VStack>
+                    ) : null}
+                  </VStack>
+                </Collapsible>
+
+                {/* ── WhatsApp ───────────────────────────────────────────── */}
+                <Collapsible value="whatsapp" defaultIsOpen={false} trigger={intestazione('whatsapp', 'WhatsApp')}>
+                  <VStack gap={2} padding={2}>
+                    <Text type="supporting" color="secondary">
+                      Chi può comandare il bot da WhatsApp: mandare la foto del menù, chiedere un post,
+                      approvare. Gli altri numeri il bot non li ascolta.
+                    </Text>
+                    {s.titolari.length ? (
+                      <List hasDividers density="compact">
+                        {s.titolari.map((t) => (
+                          <ListItem key={t.id} label={t.valore} description={t.tipo} />
+                        ))}
+                      </List>
                     ) : (
-                      <>
-                        <TextInput
-                          label="URL a cui mandare gli articoli"
-                          description="L’endpoint sul sito del cliente."
-                          placeholder="https://ilcliente.it/api/blog"
-                          value={config('blog').site_blog_url ?? ''}
-                          onChange={(v) => cambiaServizio('blog', { site_blog_url: v })}
-                        />
-                        <TextInput
-                          label="Segreto del blog"
-                          description="Diverso da quello del menù."
-                          value={config('blog').site_blog_secret ?? ''}
-                          onChange={(v) => cambiaServizio('blog', { site_blog_secret: v })}
-                        />
-                      </>
+                      /* Dal 31/08/2026 si fa dall'elenco: «Modifica» sulla riga,
+                         un contatto con l'interruttore «titolare» acceso. La riga
+                         di comando resta per il primo giro e per quando la
+                         dashboard non è raggiungibile — le due strade chiamano le
+                         stesse funzioni, apposta. */
+                      <Text type="supporting">
+                        Nessuno: il bot non risponderà a nessun numero. Si abilita da «Modifica anagrafica»
+                        → un contatto con l’interruttore «titolare» acceso. Da riga di comando:{' '}
+                        <code>npm run cliente -- --azienda {s.slug} --titolare &quot;+39…&quot;</code>
+                      </Text>
                     )}
-
-                    <TextInput
-                      label="Pagina del blog"
-                      placeholder="https://ilcliente.it/blog"
-                      value={config('blog').site_blog_page ?? ''}
-                      onChange={(v) => cambiaServizio('blog', { site_blog_page: v })}
-                    />
-                    <TextInput
-                      label="Categorie"
-                      description="Separate da virgola. Il generatore sceglie fra queste."
-                      placeholder="Ristorazione, SEO, Prezzi & Budget, Consigli"
-                      value={config('blog').categorie ?? ''}
-                      onChange={(v) => cambiaServizio('blog', { categorie: v })}
-                    />
+                    <HStack gap={2}>
+                      <Button
+                        label="Modifica anagrafica"
+                        size="sm"
+                        variant="secondary"
+                        clickAction={apriAnagrafica}
+                      />
+                    </HStack>
                   </VStack>
-                ) : null}
-              </VStack>
+                </Collapsible>
 
-              <VStack gap={2}>
-                <HStack gap={2} align="center">
-                  <Button
-                    label={attivo('social') ? 'Social Media: attivo' : 'Social Media: spento'}
-                    size="sm"
-                    variant={attivo('social') ? 'primary' : 'secondary'}
-                    onClick={() => cambiaServizio('social', {}, !attivo('social'))}
-                  />
-                </HStack>
-                {attivo('social') ? (
-                  <VStack gap={2}>
-                    <Banner
-                      status="info"
-                      title="Fase 1: Pubblicazione Assistita"
-                      description="I post social generati nel piano editoriale hanno ganci alternativi, formattazione mobile e primo commento. In consolle si copiano con un click per Facebook e Instagram e si segnano come pubblicati a mano."
-                    />
-                    <Selector
-                      label="Canali di destinazione"
-                      description="Su quali canali è presente il cliente."
-                      value={config('social').canali || 'facebook,instagram'}
-                      onChange={(v) => cambiaServizio('social', { canali: v ?? 'facebook,instagram' })}
-                      options={[
-                        { value: 'facebook,instagram', label: 'Facebook e Instagram' },
-                        { value: 'facebook', label: 'Solo Facebook' },
-                        { value: 'instagram', label: 'Solo Instagram' },
-                      ]}
-                    />
-                    <TextInput
-                      label="Post a settimana nel piano mensile"
-                      description="Frequenza consigliata: 3 post a settimana (lun/mer/ven)."
-                      placeholder="3"
-                      value={config('social').post_a_settimana ?? '3'}
-                      onChange={(v) => cambiaServizio('social', { post_a_settimana: v })}
-                    />
-                  </VStack>
-                ) : null}
-              </VStack>
-
-              <VStack gap={1}>
-                <Text type="supporting">Chi può dare comandi al router</Text>
-                {s.titolari.length ? (
-                  <List hasDividers density="compact">
-                    {s.titolari.map((t) => (
-                      <ListItem key={t.id} label={t.valore} description={t.tipo} />
-                    ))}
-                  </List>
-                ) : (
-                  /* Dal 31/08/2026 si fa dall'elenco: «Modifica» sulla riga,
-                     un contatto con l'interruttore «titolare» acceso. La riga
-                     di comando resta per il primo giro e per quando la
-                     dashboard non è raggiungibile — le due strade chiamano le
-                     stesse funzioni, apposta. */
-                  <Text type="supporting">
-                    Nessuno: il bot non risponderà a nessun numero. Si abilita da «Aziende» → la riga →
-                    «Modifica» → un contatto con l’interruttore «titolare» acceso. Da riga di comando:{' '}
-                    <code>npm run cliente -- --azienda {s.slug} --titolare &quot;+39…&quot;</code>
-                  </Text>
-                )}
-              </VStack>
+              </CollapsibleGroup>
             </VStack>
             ) : null}
 
