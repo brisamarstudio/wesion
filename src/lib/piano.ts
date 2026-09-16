@@ -19,7 +19,7 @@
 
 import { query } from './db';
 import { daFonte, type Materia } from './materia';
-import { giornoRoma } from './quando';
+import { istanteRoma } from './quando';
 import { ricorrenzeDelMese, type TagAttivita } from './ricorrenze';
 import { pilastriDisponibili, type Pilastro } from './pilastri';
 
@@ -78,44 +78,51 @@ export function postPerMese(anno: number, mese: number, aSettimana = 4): number 
  * orario furbo, c'è la data giusta.
  */
 /**
- * ⚠️ DAL GIORNO INDICATO IN POI, NON DALL'1 (16/09/2026). Fino a oggi
- * `giorniUtili` dava SEMPRE tutti i giorni del mese, primo compreso: ricostruire
- * il piano di MyWebby il 16 settembre metteva slot nuovi anche sul 3, il 7, il
- * 12 — già passati prima ancora di nascere. Il nome «utili» era già una bugia
- * anche prima di questo: non escludeva nemmeno i weekend, semplicemente dava
- * tutti i giorni del mese.
+ * ⚠️ DALL'ISTANTE DI ADESSO IN POI, NON DAL GIORNO (16/09/2026). Un primo
+ * giro filtrava per GIORNO (è già oggi o dopo?), e non bastava: un piano
+ * ricostruito il 16 alle 21:49 metteva comunque uno slot «oggi alle 10», cioè
+ * dodici ore nel passato — il giorno era giusto, l'ora no. Qui si confronta
+ * l'ISTANTE VERO (giorno E ora, con `iso`), non solo la data: se «oggi alle
+ * 10» è già passata, quel giorno esce dai disponibili e si passa al prossimo.
  *
- * `daGiorno` (default 1) e' il giorno minimo: chi costruisce OGGI il piano del
- * mese in corso passa il giorno di oggi, e nessuno slot nasce nel passato.
+ * Il nome «utili» era già una bugia anche prima di questo: non escludeva
+ * nemmeno i weekend, semplicemente dava tutti i giorni del mese.
  */
-function giorniUtili(anno: number, mese: number, daGiorno = 1): number[] {
+function giorniUtili(anno: number, mese: number, ora: number): number[] {
   const ultimo = new Date(anno, mese, 0).getDate();
-  return Array.from({ length: ultimo }, (_, i) => i + 1).filter((g) => g >= daGiorno);
-}
-
-/**
- * Il giorno minimo per un piano di QUESTO mese: oggi, se il mese richiesto e'
- * quello in corso; il primo, se e' un mese futuro (o passato, per rivedere uno
- * storico). Calcolato in ora italiana — stessa regola di ogni altra data qui
- * dentro, vedi `istanteRoma`.
- */
-function daGiornoDiDefault(anno: number, mese: number): number {
-  const [annoOggi, meseOggi, giornoOggi] = giornoRoma(new Date()).split('-').map(Number);
-  return anno === annoOggi && mese === meseOggi ? giornoOggi : 1;
+  const adesso = Date.now();
+  return Array.from({ length: ultimo }, (_, i) => i + 1).filter(
+    (g) => new Date(iso(anno, mese, g, ora)).getTime() > adesso
+  );
 }
 
 /**
  * L'istante in cui il post deve uscire, come stringa ISO completa di fuso.
  *
- * ⚠️ In gbp-autoposter qui si restituiva "2026-08-05T10:00", senza fuso. Quella
- * stringa finiva dritta in un INSERT su una colonna timestamptz senza passare da
- * un oggetto Date: a interpretarla era quindi Postgres, che su Neon lavora in
- * UTC. Le 10:00 pensate come ora italiana venivano salvate come 10:00 UTC, cioè
- * pubblicate alle 12:00 d'estate e alle 11:00 d'inverno — in silenzio, e con
- * uno scarto diverso a seconda dell'ora legale.
+ * ⚠️ STESSO GUASTO, TORNATO IN UNA FORMA PIÙ NASCOSTA (16/09/2026). Il primo
+ * giro (gbp-autoposter) restituiva una stringa senza fuso e la lasciava
+ * interpretare a Postgres. Questa versione sembrava la correzione — c'è un
+ * `Date` e c'è un `.toISOString()` — ma `new Date(anno, mese-1, giorno, ora)`
+ * costruisce l'istante nel fuso orario DI CHI ESEGUE IL CODICE, non in quello
+ * italiano. Sul portatile a Pavia il fuso di chi esegue è già quello giusto, e
+ * il bug non si vedeva mai. Nel container Linux di produzione — che gira in
+ * UTC, nessun `ENV TZ` nel Dockerfile — «ore 10» diventavano 10:00 UTC, cioè
+ * le 12:00 vere in Italia d'estate. Scoperto perché un piano ricostruito il
+ * 16 settembre alle 21:49 aveva prodotto uno slot per oggi «alle 12:00»
+ * mentre l'operatore aveva chiesto le 10 di default.
+ *
+ * La cura e' la stessa già in uso per ogni altra data di questo progetto:
+ * `istanteRoma`, che il fuso lo SCRIVE (+02:00 o +01:00) invece di ereditarlo
+ * da chi esegue. Stringa Rome-locale dentro, istante vero fuori: così
+ * funziona uguale sul portatile e sul container, qualunque sia il loro fuso.
  */
 function iso(anno: number, mese: number, giorno: number, ora: number): string {
-  return new Date(anno, mese - 1, giorno, ora, 0, 0).toISOString();
+  const mm = String(mese).padStart(2, '0');
+  const gg = String(giorno).padStart(2, '0');
+  const hh = String(ora).padStart(2, '0');
+  const d = istanteRoma(`${anno}-${mm}-${gg}T${hh}:00`);
+  // Non puo' mai essere null: il formato e' costruito qui sopra, sempre valido.
+  return (d as Date).toISOString();
 }
 
 /**
@@ -128,7 +135,6 @@ function iso(anno: number, mese: number, giorno: number, ora: number): string {
  */
 export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoPiano {
   const { anno, mese, quantita = postPerMese(anno, mese), ora = 10 } = opzioni;
-  const daGiorno = daGiornoDiDefault(anno, mese);
   const avvisi: string[] = [];
 
   const settori: TagAttivita[] = materia.settore.length ? materia.settore : [];
@@ -147,14 +153,14 @@ export function costruisciPiano(materia: Materia, opzioni: OpzioniPiano): EsitoP
   }
 
   const suoi = new Set<TagAttivita>([...settori, 'tutti']);
-  // Anche le ricorrenze restano dal giorno di oggi in poi: un piano
-  // ricostruito il 16 non deve proporre — e nemmeno mostrare come già
-  // pianificata — una ricorrenza del 5, che e' già passata.
+  // Anche le ricorrenze restano dall'istante di adesso in poi, stessa regola
+  // di `giorniUtili`: un piano ricostruito in serata non deve proporre — e
+  // nemmeno mostrare come già pianificata — una ricorrenza di stamattina.
   const ricorrenze = ricorrenzeDelMese(anno, mese)
     .filter((r) => r.tag.some((t) => suoi.has(t)))
-    .filter((r) => r.giorno[1] >= daGiorno);
+    .filter((r) => new Date(iso(anno, mese, r.giorno[1], ora)).getTime() > Date.now());
 
-  const utili = giorniUtili(anno, mese, daGiorno);
+  const utili = giorniUtili(anno, mese, ora);
   const massimoRicorrenze = Math.floor(quantita / 2);
 
   const presi = new Set<number>();

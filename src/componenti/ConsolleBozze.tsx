@@ -1625,17 +1625,18 @@ Premi «Scrivi il testo» per generarlo.`}
                         (perCampoLocale(selezionata.pubblica_at) || undefined) as
                           ISODateTimeString | undefined
                       }
-                      /* ⚠️ MIN = ADESSO, NON UNA DECORAZIONE (16/09/2026). Una
-                         bozza di MyWebby ferma dal 31/08 aveva ancora «Esce il 2
-                         settembre» con il calendario aperto sul 16: il selettore
-                         lasciava scegliere il 2 come se fosse una data valida
-                         qualunque. Qui si blocca solo la SCELTA di una nuova
-                         data passata — il server rifiuta lo stesso, questo
-                         evita solo di doverlo scoprire dopo il click. Finché
-                         `adesso` non e' arrivato (vedi `useAdesso`) il calendario
-                         resta senza vincolo, per non disegnare due HTML diversi
-                         fra server e browser. */
-                      min={adesso ? (new Date(adesso).toISOString().slice(0, 16) as ISODateTimeString) : undefined}
+                      /* ⚠️ NIENTE `min` QUI, E STAVOLTA E' UNA RETROMARCIA
+                         (16/09/2026). L'avevo messo per impedire di SCEGLIERE
+                         una data passata — giusto in teoria — ma su una bozza
+                         GIÀ ferma nel passato («Esce il 16/09 12:00» con l'orologio
+                         alle 21:50) rompeva esattamente il gesto che serve:
+                         spostarla avanti. Il campo dell'ora smetteva di
+                         accettare quello che ci si scriveva dentro. Il divieto
+                         vero sta già nel server (il PATCH rifiuta una data nel
+                         passato con un messaggio chiaro): qui basta quello,
+                         un vincolo lato client che impedisce di correggere
+                         proprio il caso che deve correggere e' peggio di
+                         nessun vincolo. */
                       onChange={(v) => void cambiaQuando(v ?? '')}
                     />
                   ) : (

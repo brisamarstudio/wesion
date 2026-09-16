@@ -1450,3 +1450,43 @@ Adesso una correzione a mano mette `modello = 'mano'` e conserva il primo autore
 in `contenuto.scritto_prima_da`; in consolle la voce si chiama «Chi l'ha
 scritto». ⚠️ **Resta da correggere la riga della bozza 85**, già pubblicata prima
 della modifica: va fatto con un UPDATE sul database, non dall'interfaccia.
+
+## 21. Il fuso del piano era sbagliato in produzione, e nessuno se n'era accorto (16/09/2026)
+
+Un piano ricostruito il 16 settembre alle 21:49 ha prodotto uno slot per **oggi
+alle 12:00**, quando l'operatore aveva chiesto le 10 di default (e comunque
+un'ora già passata). Due bug distinti, trovati insieme.
+
+**1. `costruisciPiano` costruiva l'istante nel fuso di chi esegue il codice, non
+in quello italiano.** `new Date(anno, mese-1, giorno, ora, 0, 0).toISOString()`
+sembra la correzione del bug di gbp-autoposter (quello raccontato nel commento
+originale della funzione) ma non lo era: sul portatile a Pavia il fuso di chi
+esegue è già quello giusto, e il bug non si vedeva mai. **Nel container Linux di
+produzione, che gira in UTC (nessun `ENV TZ` nel Dockerfile), «ore 10»
+diventavano 10:00 UTC, cioè le 12:00 vere in Italia d'estate.** Ogni post
+generato dal piano da quando esiste questa funzione è uscito 1-2 ore dopo
+l'orario richiesto, in silenzio. Corretto riusando `istanteRoma` (che il fuso
+lo SCRIVE, +02:00/+01:00, invece di ereditarlo dall'ambiente) — la stessa
+regola già in uso ovunque nel progetto, che qui non era stata applicata.
+
+⚠️ **Non toccati i post già usciti**: sono fatti, non si riscrivono. Le bozze
+ancora in coda costruite prima di questa correzione possono avere l'ora storta
+— si svuotano («Svuota la coda», vedi sopra) e si ricostruiscono.
+
+**2. Il filtro «non nel passato» guardava solo il GIORNO, non l'istante.** Un
+primo giro (la stessa sera) filtrava `giorno >= oggi`: corretto a metà. Un piano
+ricostruito alle 21:49 vedeva «oggi» come giorno valido e ci metteva comunque uno
+slot alle 10 — dodici ore nel passato. Corretto confrontando l'istante vero
+(`iso(anno,mese,giorno,ora)` contro `Date.now()`), non solo la data.
+
+**3. Il `min` sul calendario in consolle è stato tolto**, non aggiunto meglio.
+Impediva di scegliere una data passata, giusto in teoria — ma su una bozza GIÀ
+ferma nel passato rompeva la digitazione di un orario nuovo, cioè esattamente
+il gesto che serve per correggerla. Il server rifiuta comunque un PATCH con una
+data passata (§19 non basta più, vedi il nuovo controllo in
+`/api/bozze/[id]/route.ts`): quel vincolo basta, un vincolo lato client non deve
+mai impedire la correzione del caso che deve correggere.
+
+**`piano-social.ts` ha lo stesso bug nell'`iso()` e nel filtro giorni, non
+toccato**: il calendario social si rifa' da capo più avanti, per scelta
+dell'operatore (vedi §18).
