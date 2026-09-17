@@ -1268,38 +1268,64 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     {giroQueryErrore ? <Banner status="error" title="Non è andata" description={giroQueryErrore} /> : null}
 
                     {gruppiGiroQuery ? (
-                      <VStack gap={3}>
-                        {(
-                          [
-                            ['Miniere', 'già cliccate, in posizione recuperabile: più contenuto/interlink qui rende subito', gruppiGiroQuery.miniere],
-                            ['Domande scoperte', 'Google le mostra ma zero clic, senza il nome del locale: manca una pagina che risponda', gruppiGiroQuery.domandeScoperte],
-                            ['Brand sano', 'query col nome del locale che vanno bene: da proteggere, non da toccare', gruppiGiroQuery.brandSano],
-                            ['Brand da guardare', 'CTR sotto la media delle query col nome di questo cliente: guardare title/snippet', gruppiGiroQuery.brandDaGuardare],
-                          ] as const
-                        ).map(([titolo, spiegazione, righeGruppo]) =>
-                          righeGruppo.length ? (
-                            <VStack key={titolo} gap={1}>
-                              <Text type="supporting">
-                                {titolo} · {spiegazione}
-                              </Text>
-                              <List hasDividers density="compact">
-                                {righeGruppo.map((r, i) => (
-                                  <ListItem
-                                    key={i}
-                                    label={r.query}
-                                    description={r.pagina}
-                                    endContent={
-                                      <Text type="supporting" size="xsm">
-                                        {r.clic} clic / {r.impressioni} impr. · CTR {(r.ctr * 100).toFixed(2)}% · pos. {r.posizione.toFixed(1)}
-                                      </Text>
-                                    }
-                                  />
-                                ))}
-                              </List>
-                            </VStack>
-                          ) : null
-                        )}
-                      </VStack>
+                      (() => {
+                        const sezioniGiroQuery = [
+                          ['miniere', 'Miniere', 'già cliccate, in posizione recuperabile: più contenuto/interlink qui rende subito', gruppiGiroQuery.miniere],
+                          ['scoperte', 'Domande scoperte', 'Google le mostra ma zero clic, senza il nome del locale: manca una pagina che risponda', gruppiGiroQuery.domandeScoperte],
+                          ['brand_sano', 'Brand sano', 'query col nome del locale che vanno bene: da proteggere, non da toccare', gruppiGiroQuery.brandSano],
+                          ['brand_guardare', 'Brand da guardare', 'CTR sotto la media delle query col nome di questo cliente: guardare title/snippet', gruppiGiroQuery.brandDaGuardare],
+                        ] as const;
+                        const nonVuote = sezioniGiroQuery.filter(([, , , righe]) => righe.length);
+
+                        // ⚠️ "Nessuna riga" non vuol dire "non ho guardato": il
+                        // giro è girato, e non ha trovato niente da segnalare in
+                        // 90 giorni. Va detto esplicitamente, o sembra che il
+                        // bottone non abbia fatto niente.
+                        if (!nonVuote.length) {
+                          return (
+                            <Banner
+                              status="info"
+                              title="Niente da segnalare"
+                              description="Negli ultimi 90 giorni non ci sono query classificabili in questi mucchi: troppo poco traffico, o va tutto già bene."
+                            />
+                          );
+                        }
+
+                        return (
+                          <CollapsibleGroup type="multiple" defaultValue={nonVuote.map(([id]) => id)} hasDividers density="compact">
+                            {nonVuote.map(([id, titolo, spiegazione, righeGruppo]) => (
+                              <Collapsible
+                                key={id}
+                                value={id}
+                                trigger={
+                                  <HStack gap={2} align="center">
+                                    <Text>{titolo}</Text>
+                                    <Badge variant="neutral" label={String(righeGruppo.length)} />
+                                    <Text type="supporting" color="secondary" size="xsm">
+                                      {spiegazione}
+                                    </Text>
+                                  </HStack>
+                                }
+                              >
+                                <List hasDividers density="compact">
+                                  {righeGruppo.map((r, i) => (
+                                    <ListItem
+                                      key={i}
+                                      label={r.query}
+                                      description={r.pagina}
+                                      endContent={
+                                        <Text type="supporting" size="xsm">
+                                          {r.clic} clic / {r.impressioni} impr. · CTR {(r.ctr * 100).toFixed(2)}% · pos. {r.posizione.toFixed(1)}
+                                        </Text>
+                                      }
+                                    />
+                                  ))}
+                                </List>
+                              </Collapsible>
+                            ))}
+                          </CollapsibleGroup>
+                        );
+                      })()
                     ) : null}
                   </VStack>
                 ) : (
