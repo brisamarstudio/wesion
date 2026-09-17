@@ -148,6 +148,82 @@ export function raggruppaGiroQuery(righe: RigaGiroQuery[]): GruppiGiroQuery {
   };
 }
 
+export interface VerdettoGiroQuery {
+  /** "Vale la pena metterci mano adesso?" — la domanda a cui questa funzione risponde. */
+  valeLaPena: boolean;
+  /** 2-4 frasi, in ordine di priorità: cosa fare prima, cosa ignorare. */
+  righe: string[];
+}
+
+/**
+ * Il pezzo che mancava (chiesto il 17/09/2026): "cazzo me ne faccio di sti
+ * dati, mica sono un analista io, un programmatore. La AI dovrebbe dirmi
+ * guarda che, sulla base di questo potremmo fare questo".
+ *
+ * ⚠️ CODICE PURO, NON UNA CHIAMATA AI. Interpreta le categorie che
+ * `classificaGiroQuery` ha già calcolato — non aggiunge un giudizio nuovo da
+ * inventare, riformula in frasi quello che i numeri già dicono. Se un giorno
+ * queste regole non bastano più (troppi casi limite, troppe eccezioni) allora
+ * ha senso passare a un prompt breve con SOLO i numeri già classificati come
+ * input — non prima, perché ogni pezzo in più è un pezzo da mantenere.
+ *
+ * "Vale la pena" e' vero solo se c'e' qualcosa di CONCRETO e VICINO: una
+ * miniera (gia' clicca, serve solo rinforzo) o una domanda scoperta in prima
+ * pagina (posizione <= 10, manca solo il contenuto). Il resto e' rumore o
+ * lavoro a lungo termine, non la prima cosa da fare lunedi' mattina.
+ */
+export function verdettoGiroQuery(gruppi: GruppiGiroQuery): VerdettoGiroQuery {
+  const righe: string[] = [];
+
+  // Le domande scoperte non sono tutte uguali: una in posizione 6 è a un
+  // paragrafo di distanza dal primo clic, una in posizione 35 è un progetto
+  // di contenuto lungo. Confonderle nello stesso "vale la pena" sarebbe
+  // esattamente il difetto lamentato: dati senza interpretazione.
+  const scoperitePronte = gruppi.domandeScoperte.filter((r) => r.posizione <= 10);
+  const scoperteLontane = gruppi.domandeScoperte.filter((r) => r.posizione > 20);
+
+  if (gruppi.miniere.length) {
+    const prima = gruppi.miniere[0];
+    const altre = gruppi.miniere.length - 1;
+    const compagnia = altre === 0 ? '' : altre === 1 ? ' (e un\'altra simile)' : ` (e altre ${altre} simili)`;
+    righe.push(
+      `Priorità 1 — rinforza quello che già funziona: "${prima.query}"${compagnia} porta già clic in posizione recuperabile. Più contenuto o interlink su ${prima.pagina} rende quasi subito, perché la domanda è già dimostrata.`
+    );
+  }
+
+  if (scoperitePronte.length) {
+    const esempi = scoperitePronte
+      .slice(0, 3)
+      .map((r) => `"${r.query}" (pos. ${r.posizione.toFixed(1)})`)
+      .join(', ');
+    righe.push(
+      `Priorità 2 — ${scoperitePronte.length} domande sono già in prima pagina ma a zero clic: ${esempi}. Manca solo un paragrafo o una pagina dedicata che risponda esplicitamente, non serve ripartire da zero.`
+    );
+  }
+
+  if (gruppi.brandDaGuardare.length) {
+    righe.push(
+      `Da controllare, non da rincorrere: ${gruppi.brandDaGuardare.length} query col nome del cliente hanno un CTR sotto la sua media — guarda come appare lo snippet su Google prima di toccare altro, spesso è un problema di title, non di contenuto.`
+    );
+  }
+
+  if (scoperteLontane.length && !gruppi.miniere.length && !scoperitePronte.length) {
+    righe.push(
+      `${scoperteLontane.length} domande scoperte sono lontane (oltre la posizione 20): interessanti in prospettiva, ma non la priorità di oggi — richiedono lavoro di contenuto a lungo termine, non un ritocco.`
+    );
+  }
+
+  const valeLaPena = gruppi.miniere.length > 0 || scoperitePronte.length > 0;
+
+  if (!righe.length) {
+    righe.push(
+      'Negli ultimi 90 giorni non ci sono segnali abbastanza forti da agire ora: va bene così, ricontrolla fra qualche settimana.'
+    );
+  }
+
+  return { valeLaPena, righe };
+}
+
 /** Un riassunto in italiano, diviso per mucchio — quello che finisce sotto gli occhi di una persona. */
 export function riassumiGiroQuery(righe: RigaGiroQuery[]): string {
   const gruppo = (cat: CategoriaQuery, n: number) =>

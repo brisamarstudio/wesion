@@ -179,11 +179,19 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     brandSano: RigaGiroQuery[];
     brandDaGuardare: RigaGiroQuery[];
   } | null>(null);
+  /**
+   * Il verdetto: 2-4 frasi in italiano su "vale la pena o no", non solo i
+   * dati grezzi — chiesto il 17/09/2026 ("mica sono un analista io"). Vedi
+   * `verdettoGiroQuery` in giro-query.ts per come nasce (codice, non un
+   * prompt: interpreta le categorie già calcolate).
+   */
+  const [verdettoGiroQuery, setVerdettoGiroQuery] = useState<{ valeLaPena: boolean; righe: string[] } | null>(null);
 
   async function aggiornaGiroQuery() {
     setGiroQueryErrore(null);
     setGiroQueryInCorso(true);
     setGruppiGiroQuery(null);
+    setVerdettoGiroQuery(null);
     try {
       const r = await fetch(`/api/aziende/${s.id}/giro-query`);
       const e = await r.json().catch(() => ({}));
@@ -192,6 +200,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         return;
       }
       setGruppiGiroQuery(e.gruppi ?? null);
+      setVerdettoGiroQuery(e.verdetto ?? null);
     } finally {
       setGiroQueryInCorso(false);
     }
@@ -1266,6 +1275,25 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                     </HStack>
 
                     {giroQueryErrore ? <Banner status="error" title="Non è andata" description={giroQueryErrore} /> : null}
+
+                    {/* Il verdetto PRIMA delle liste: "vale la pena o no",
+                        non solo i numeri — è il pezzo di questa mattina, non
+                        buttare via i dati grezzi senza dire cosa farne. */}
+                    {verdettoGiroQuery ? (
+                      <Banner
+                        status={verdettoGiroQuery.valeLaPena ? 'info' : 'success'}
+                        title={verdettoGiroQuery.valeLaPena ? 'Vale la pena metterci mano' : 'Niente di urgente'}
+                        defaultIsExpanded
+                      >
+                        <VStack gap={1}>
+                          {verdettoGiroQuery.righe.map((riga, i) => (
+                            <Text key={i} type="supporting">
+                              {riga}
+                            </Text>
+                          ))}
+                        </VStack>
+                      </Banner>
+                    ) : null}
 
                     {gruppiGiroQuery ? (
                       (() => {

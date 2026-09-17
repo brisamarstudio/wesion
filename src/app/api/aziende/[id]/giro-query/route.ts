@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { rendimentoDettagliato } from '@/lib/search-console';
-import { classificaGiroQuery, raggruppaGiroQuery } from '@/lib/giro-query';
+import { classificaGiroQuery, raggruppaGiroQuery, verdettoGiroQuery } from '@/lib/giro-query';
 
 export async function GET(_richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
@@ -38,7 +38,8 @@ export async function GET(_richiesta: Request, contesto: { params: Promise<{ id:
     }
     const classificate = classificaGiroQuery(azienda.nome, righe);
     const gruppi = raggruppaGiroQuery(classificate);
-    return NextResponse.json({ gruppi, righeTotali: righe.length });
+    const verdetto = verdettoGiroQuery(gruppi);
+    return NextResponse.json({ gruppi, verdetto, righeTotali: righe.length });
   } catch (errore: unknown) {
     const messaggio = errore instanceof Error ? errore.message : String(errore);
     return NextResponse.json({ errore: messaggio }, { status: 500 });
