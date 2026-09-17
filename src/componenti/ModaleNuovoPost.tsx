@@ -234,10 +234,29 @@ export function ModaleNuovoPost({
     }
   }
 
+  /**
+   * ⚠️ IL SELETTORE FILE DEL SISTEMA OPERATIVO CHIUDE QUESTO MODALE (17/09/2026).
+   * Aprendo "Carica una foto" si apre una finestra nativa sopra la pagina: al
+   * suo chiudersi il browser sposta il focus, e il modale lo legge come un
+   * "click fuori" che chiede di chiudersi. Tutto lo stato del modulo vive in
+   * `useState` qui dentro — chiuderlo lo cancella tutto, testo compreso, senza
+   * nessun avviso. Chi lo usava doveva rientrare nella pagina per scoprire se
+   * il post era stato salvato o no.
+   *
+   * La correzione non tocca il selettore file (non è farina nostra): ignora
+   * solo la richiesta di chiusura mentre un caricamento e' in corso, cosi' un
+   * evento del sistema operativo non puo' piu' buttare via un modulo scritto.
+   */
+  function chiediChiusura(vuoleAprire: boolean) {
+    if (vuoleAprire) return;
+    if (caricandoFoto || inInvio) return;
+    onChiudi();
+  }
+
   return (
     <Dialog
       isOpen
-      onOpenChange={(o) => (o ? null : onChiudi())}
+      onOpenChange={chiediChiusura}
       purpose="form"
       width={640}
       maxHeight="85vh"
@@ -247,7 +266,7 @@ export function ModaleNuovoPost({
           <DialogHeader
             title="Nuovo Post al Volo"
             subtitle="Crea e pubblica subito o programma senza vincoli"
-            onOpenChange={(o) => (o ? null : onChiudi())}
+            onOpenChange={chiediChiusura}
           />
         }
         content={
