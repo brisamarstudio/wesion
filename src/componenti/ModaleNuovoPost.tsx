@@ -203,10 +203,18 @@ export function ModaleNuovoPost({
           })}`
         : 'in uscita entro mezzo minuto, al prossimo giro del router';
 
+      // ⚠️ "approvaSubito" non vuol dire "approvato": se il testo ha avvisi
+      // gravi (contatti nel testo, troppe emoji...) il server rifiuta di
+      // saltare la revisione, anche se il bottone premuto era "approva
+      // subito" — vedi la nota in cima a crea-diretto/route.ts. Va detto qui,
+      // o sembra che il click non abbia funzionato.
       setEsito(
-        approvaSubito
-          ? `Post approvato e ${quandoTesto}.`
-          : 'Salvato in bozza: lo trovi in consolle, in attesa di approvazione.'
+        data.bloccataInRevisione
+          ? "Non l'ho approvato subito: il testo ha avvisi gravi (contatti nel testo, troppe emoji…). " +
+            'È salvato in consolle bozze, dove li vedi e decidi tu se "Approva lo stesso".'
+          : approvaSubito
+            ? `Post approvato e ${quandoTesto}.`
+            : 'Salvato in bozza: lo trovi in consolle, in attesa di approvazione.'
       );
 
       // Reset del modulo: cosi' si puo' scriverne subito un altro

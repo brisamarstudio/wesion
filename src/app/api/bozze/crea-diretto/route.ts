@@ -2,9 +2,26 @@
  * Rotta API per la creazione diretta di un post/articolo "al volo" (senza vincolo di Fatti o AI).
  *
  * Supporta testo libero, immagini multiple, CTA personalizzata e approvazione o programmazione diretta.
+ *
+ * ⚠️ IL 16/09/2026 QUESTA ROTTA HA PUBBLICATO UN POST CHE GOOGLE HA RESPINTO
+ * (telefono, sito ed 8 emoji nel testo — lo stesso schema del guasto del
+ * 20/07/2026, vedi controlloTesto.ts). `avvisi` restava `'[]'` per difetto di
+ * colonna: il controllo esiste da mesi, ma su questa rotta non girava mai —
+ * non "ha passato il controllo", non e' MAI STATO CHIAMATO. Chi scriveva un
+ * post "al volo" con «approva subito» pubblicava alla cieca, senza che
+ * l'avviso "Approva lo stesso" (che c'e' ovunque altrove) potesse comparire:
+ * non c'era nessuna consolle di mezzo a mostrarlo.
+ *
+ * La correzione NON aggiunge un blocco che il resto del progetto non ha (la
+ * regola qui e' "segnala, non decide" — vedi schema.sql riga 162): aggiunge
+ * il controllo che gia' esiste, e se trova avvisi GRAVI rifiuta solo di
+ * saltare la revisione umana con «approva subito». La bozza si salva comunque,
+ * finisce in coda con gli avvisi accesi, e il bottone "Approva lo stesso" resta
+ * dell'operatore — esattamente come per un post scritto dall'AI.
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { controllaBozza } from '@/lib/controlloTesto';
 
 export async function POST(richiesta: Request) {
   try {
@@ -33,7 +50,16 @@ export async function POST(richiesta: Request) {
     const immagini = Array.isArray(corpo.immagini) ? corpo.immagini.filter((u) => typeof u === 'string' && u.trim()) : [];
     const foto = immagini[0] || null;
 
-    const stato = corpo.approvaSubito ? 'approvata' : 'attesa_approvazione';
+    const avvisi = controllaBozza(tipo, testo, []);
+    const haAvvisiGravi = avvisi.some((a) => a.gravita === 'grave');
+
+    // "Approva subito" salta la consolle: se ci sono avvisi gravi, saltarla
+    // vuol dire pubblicare senza che nessuno li abbia mai visti. La bozza
+    // resta comunque salvata — finisce in coda, con gli stessi avvisi che
+    // vedrebbe un post scritto dall'AI, e il bottone "Approva lo stesso" lo
+    // preme un operatore, non lo decide il codice.
+    const approvaDavvero = Boolean(corpo.approvaSubito) && !haAvvisiGravi;
+    const stato = approvaDavvero ? 'approvata' : 'attesa_approvazione';
 
     let pubblicaAt: Date | null = null;
     if (corpo.pubblicaAt && corpo.pubblicaAt.trim()) {
@@ -56,20 +82,21 @@ export async function POST(richiesta: Request) {
       ...(corpo.cta?.tipo ? { cta: { tipo: corpo.cta.tipo, url: corpo.cta.url || null } } : {}),
     };
 
-    const approvataAt = corpo.approvaSubito ? new Date() : null;
-    const approvataDa = corpo.approvaSubito ? 'operatore_dashboard' : null;
-    const approvataVia = corpo.approvaSubito ? 'dashboard' : null;
+    const approvataAt = approvaDavvero ? new Date() : null;
+    const approvataDa = approvaDavvero ? 'operatore_dashboard' : null;
+    const approvataVia = approvaDavvero ? 'dashboard' : null;
 
     const [bozza] = await query<{ id: number }>(
       `INSERT INTO wesion.bozza (
-        azienda_id, tipo, origine, stato, contenuto, pubblica_at, approvata_at, approvata_da, approvata_via
-       ) VALUES ($1, $2, 'manuale', $3, $4::jsonb, $5, $6, $7, $8)
+        azienda_id, tipo, origine, stato, contenuto, avvisi, pubblica_at, approvata_at, approvata_da, approvata_via
+       ) VALUES ($1, $2, 'manuale', $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9)
        RETURNING id`,
       [
         aziendaId,
         tipo,
         stato,
         JSON.stringify(contenuto),
+        JSON.stringify(avvisi),
         pubblicaAt,
         approvataAt,
         approvataDa,
@@ -77,7 +104,18 @@ export async function POST(richiesta: Request) {
       ]
     );
 
-    return NextResponse.json({ success: true, bozzaId: bozza.id, stato }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        bozzaId: bozza.id,
+        stato,
+        avvisi,
+        // Così la UI può dire "non l'ho pubblicata subito, guarda perché" invece
+        // di far sembrare che il click su "approva subito" non abbia funzionato.
+        bloccataInRevisione: Boolean(corpo.approvaSubito) && !approvaDavvero,
+      },
+      { status: 201 }
+    );
   } catch (err: any) {
     console.error('Errore creazione post al volo:', err);
     return NextResponse.json({ errore: err?.message || 'Errore interno durante la creazione' }, { status: 500 });
