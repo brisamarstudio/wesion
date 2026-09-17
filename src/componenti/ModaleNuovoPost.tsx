@@ -19,6 +19,7 @@ import { Button } from '@astryxdesign/core/Button';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Selector } from '@astryxdesign/core/Selector';
 import { FileInput } from '@astryxdesign/core/FileInput';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { Thumbnail } from '@astryxdesign/core/Thumbnail';
 import { DateTimeInput, type ISODateTimeString } from '@astryxdesign/core/DateTimeInput';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
@@ -64,6 +65,20 @@ export function ModaleNuovoPost({
   const [quando, setQuando] = useState<string>('');
   const [caricandoFoto, setCaricandoFoto] = useState(false);
   const [inInvio, setInInvio] = useState(false);
+  /**
+   * "Crea anche per il sito": una SECONDA bozza, tipo `articolo`, con la
+   * stessa idea. Non è la stessa riga pubblicata in due posti — lo schema
+   * (`wesion.bozza.tipo`, vincolo CHECK) non lo permette, ed è giusto così:
+   * un post GBP (corto, senza link, max 2 emoji) e un articolo del sito
+   * (può avere link, va più in profondità) sono testi diversi per natura,
+   * non lo stesso testo spedito a due indirizzi.
+   *
+   * Per questo l'articolo nasce SEMPRE in attesa di approvazione, mai
+   * "approva subito" nemmeno se il post GBP lo è: un articolo resta online
+   * a lungo ed è pubblico quanto il sito stesso, merita una rilettura anche
+   * quando il post veloce non la merita.
+   */
+  const [ancheSito, setAncheSito] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   /* Il messaggio che conferma cosa e' successo: senza, si torna alla lista
      senza sapere se il post e' partito, ed e' esattamente cio' che frustra. */
@@ -193,6 +208,33 @@ export function ModaleNuovoPost({
         return;
       }
 
+      // "Crea anche per il sito": una seconda bozza indipendente, tipo
+      // 'articolo', SEMPRE in attesa di approvazione (mai approvaSubito,
+      // anche se il post GBP lo era) — vedi la nota su `ancheSito` più sopra.
+      // Se questa seconda chiamata fallisce, il post GBP è comunque salvato:
+      // lo si dice nell'esito invece di far sparire tutto dietro un errore.
+      let erroreArticolo: string | null = null;
+      if (tipo === 'post_gbp' && ancheSito) {
+        try {
+          const resArt = await fetch('/api/bozze/crea-diretto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              aziendaId: numId,
+              tipo: 'articolo',
+              titolo: titolo.trim() || undefined,
+              testo: testo.trim(),
+              immagini,
+              approvaSubito: false,
+            }),
+          });
+          const dataArt = await resArt.json().catch(() => ({}));
+          if (!resArt.ok) erroreArticolo = dataArt.errore || 'Il post per GBP è salvato, ma l’articolo del sito no.';
+        } catch (e: any) {
+          erroreArticolo = e?.message || 'Il post per GBP è salvato, ma l’articolo del sito no.';
+        }
+      }
+
       const quandoTesto = quando
         ? `programmato per ${new Date(quando).toLocaleString('it-IT', {
             day: '2-digit',
@@ -208,14 +250,20 @@ export function ModaleNuovoPost({
       // saltare la revisione, anche se il bottone premuto era "approva
       // subito" — vedi la nota in cima a crea-diretto/route.ts. Va detto qui,
       // o sembra che il click non abbia funzionato.
-      setEsito(
-        data.bloccataInRevisione
-          ? "Non l'ho approvato subito: il testo ha avvisi gravi (contatti nel testo, troppe emoji…). " +
-            'È salvato in consolle bozze, dove li vedi e decidi tu se "Approva lo stesso".'
-          : approvaSubito
-            ? `Post approvato e ${quandoTesto}.`
-            : 'Salvato in bozza: lo trovi in consolle, in attesa di approvazione.'
-      );
+      const messaggioGbp = data.bloccataInRevisione
+        ? "Non l'ho approvato subito: il testo ha avvisi gravi (contatti nel testo, troppe emoji…). " +
+          'È salvato in consolle bozze, dove li vedi e decidi tu se "Approva lo stesso".'
+        : approvaSubito
+          ? `Post approvato e ${quandoTesto}.`
+          : 'Salvato in bozza: lo trovi in consolle, in attesa di approvazione.';
+
+      const messaggioArticolo = ancheSito
+        ? erroreArticolo
+          ? ` (L'articolo per il sito NON si è salvato: ${erroreArticolo})`
+          : ' Ho salvato anche un abbozzo per il sito, in attesa di approvazione: rivedilo prima di pubblicarlo, il testo è pensato per Google, non per una pagina.'
+        : '';
+
+      setEsito(messaggioGbp + messaggioArticolo);
 
       // Reset del modulo: cosi' si puo' scriverne subito un altro
       setTesto('');
@@ -224,6 +272,7 @@ export function ModaleNuovoPost({
       setCtaTipo('');
       setCtaUrl('');
       setQuando('');
+      setAncheSito(false);
 
       // La lista dietro si aggiorna, ma la modale resta aperta a mostrare l'esito
       if (onCreato) onCreato();
@@ -305,8 +354,26 @@ export function ModaleNuovoPost({
           ]}
         />
 
-        {/* Titolo se articolo o opzionale */}
-        {tipo === 'articolo' ? (
+        {/* Crea anche l'articolo del sito, in parallelo — vedi la nota su
+            `ancheSito` più sopra: sono due bozze indipendenti, non la stessa
+            riga in due posti, perché le regole di un post GBP e di un
+            articolo sono diverse per natura (corto/senza link contro
+            approfondito/con link). Solo per post_gbp: partire da un articolo
+            e proporre "anche un post GBP" andrebbe nella direzione opposta e
+            non è quello che è stato chiesto oggi. */}
+        {tipo === 'post_gbp' ? (
+          <CheckboxInput
+            label="Crea anche un abbozzo per il sito"
+            description="Stessa idea, testo separato: nasce in bozza, mai pubblicato subito — un articolo sta online a lungo e merita una rilettura."
+            value={ancheSito}
+            onChange={setAncheSito}
+          />
+        ) : null}
+
+        {/* Titolo: serve all'articolo, quindi compare sia quando si scrive
+            direttamente un articolo sia quando lo si crea in parallelo a un
+            post GBP con "anche un abbozzo per il sito". */}
+        {tipo === 'articolo' || (tipo === 'post_gbp' && ancheSito) ? (
           <TextInput
             label="Titolo dell’articolo"
             placeholder="es. I segreti del nostro ragù della nonna"
