@@ -1352,6 +1352,41 @@ ripetuti ai clienti come promesse.
 L'obiettivo misurabile è **richieste di preventivo in più al mese** (su Artigiano il Conte
 arrivano in `leads`, con la data: si confrontano con le curve di Search Console).
 
+### 14.3.1 Il ciclo chiuso per la prima volta (17/09/2026) — il metodo, non ancora l'automazione
+
+Il giorno in cui il §14.3 è stato completato per intero su un cliente vero, dall'inizio alla
+fine: Giro query → verdetto in italiano → un fatto mancante confermato dall'operatore →
+pagina "risposta diretta" scritta con SOLO fatti verificati → non in menu (scelta del
+cliente, non regola fissa) → PR aperta per revisione umana. Su Artigiano il Conte, pagina
+`/artigiani-del-legno`, PR #4.
+
+**Tre paletti prima di riproporlo su altri clienti (decisione del 17/09/2026):**
+
+1. **Resta una scelta per cliente, non un default.** Massimo non vuole "vetrine SEO"
+   visibili — un altro cliente potrebbe volerle eccome nel menu. Si chiede sempre, non si
+   applica per abitudine.
+2. **Mai una fabbrica di paginette identiche.** Se il contenuto smette di nascere da fatti
+   veri e specifici di quel cliente e diventa un modello riempito a stampo su N siti, quello
+   è ciò che Google chiama **doorway pages** nelle sue linee guida — rischio di
+   penalizzazione, non solo di scarsa qualità. Il metodo si generalizza (il CICLO), il testo
+   mai (ogni pagina nasce da `wesion.fatto` di QUEL cliente).
+3. **Servono le due precondizioni già viste**: repo + Search Console collegati (oggi 5/16
+   clienti), e una base di fatti verificati raccolta per quel cliente — non un interruttore
+   unico per tutti.
+
+**Un chiarimento importante emerso nella stessa conversazione**: una pagina "non in menu"
+non è una pagina nascosta a Google — sarebbe **cloaking** solo se mostrasse contenuto
+DIVERSO a Google rispetto a un utente vero, ed è esplicitamente vietato dalle linee guida
+di Google (rischio penalizzazione manuale sul dominio). Qui il contenuto è identico per
+chiunque la apra: semplicemente non è nel menu di navigazione. Nessun rischio, pratica
+comune ("pagina non linkata").
+
+**Sulla richiesta d'indicizzazione**: Wesion NON può chiederla via codice per pagine
+normali — l'Indexing API di Google è ammessa solo per JobPosting/BroadcastEvent, usarla
+altrimenti violerebbe i termini di servizio. Il bottone "Richiedi indicizzazione" lo preme
+sempre una persona in Search Console; Wesion può solo verificare se Google ha già visto la
+pagina (`indicizzazione.ts`, già nell'audit SEO) e segnalarlo.
+
 ## 15. Il tono, se devi scrivere codice qui
 
 Come in `gbp-autoposter`: i commenti non dicono *cosa* fa il codice — quello si legge —
