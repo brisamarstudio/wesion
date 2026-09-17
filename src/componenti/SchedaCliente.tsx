@@ -52,6 +52,7 @@ import { ModaleNuovoPost } from './ModaleNuovoPost';
 import { Plancia } from './Plancia';
 import { canali, COLORE_STATO, PAROLA_STATO } from '@/lib/plancia';
 import type { Scheda } from '@/lib/scheda';
+import type { RigaGiroQuery } from '@/lib/giro-query';
 
 const SETTORI: Array<{ id: string; nome: string }> = [
   { id: 'ristorazione', nome: 'Ristorazione' },
@@ -164,6 +165,37 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     riepilogo: string;
     scartati: string[];
   } | null>(null);
+
+  /**
+   * Il giro sulle query — vedi /api/aziende/[id]/giro-query. Volutamente
+   * separato dall'audit SEO sopra: legge e basta, niente PR, niente proposta.
+   * STATO.md §14.3.
+   */
+  const [giroQueryInCorso, setGiroQueryInCorso] = useState(false);
+  const [giroQueryErrore, setGiroQueryErrore] = useState<string | null>(null);
+  const [gruppiGiroQuery, setGruppiGiroQuery] = useState<{
+    miniere: RigaGiroQuery[];
+    domandeScoperte: RigaGiroQuery[];
+    brandSano: RigaGiroQuery[];
+    brandDaGuardare: RigaGiroQuery[];
+  } | null>(null);
+
+  async function aggiornaGiroQuery() {
+    setGiroQueryErrore(null);
+    setGiroQueryInCorso(true);
+    setGruppiGiroQuery(null);
+    try {
+      const r = await fetch(`/api/aziende/${s.id}/giro-query`);
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok || e.errore) {
+        setGiroQueryErrore(e?.errore ?? 'Non sono riuscito a leggere Search Console.');
+        return;
+      }
+      setGruppiGiroQuery(e.gruppi ?? null);
+    } finally {
+      setGiroQueryInCorso(false);
+    }
+  }
 
   /**
    * La proposta letta da GitHub, per mostrarla QUI.
@@ -1206,6 +1238,73 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                 ) : (
                   <Text type="supporting" color="secondary">
                     Manca il repository del sito — aggiungilo da «Modifica anagrafica» per abilitare l’audit.
+                  </Text>
+                )}
+              </VStack>
+
+              <Divider />
+
+              {/* Il giro sulle query — vedi /api/aziende/[id]/giro-query.
+                  VOLUTAMENTE SEPARATO dall'audit sopra: legge Search Console e
+                  classifica, non tocca niente. Nato il 17/09/2026, in prova su
+                  più clienti prima di decidere se entra nell'audit che scrive. */}
+              <VStack gap={2}>
+                <Text type="supporting">Giro sulle query</Text>
+                {s.sito_gsc_proprieta ? (
+                  <VStack gap={2}>
+                    <HStack gap={2} align="center" wrap="wrap">
+                      <Button
+                        label="Giro query"
+                        size="sm"
+                        variant="secondary"
+                        isLoading={giroQueryInCorso}
+                        clickAction={aggiornaGiroQuery}
+                      />
+                      <Text type="supporting" color="secondary">
+                        Segnala, non decide. Verifica la pagina e la SERP prima di modificare il sito.
+                      </Text>
+                    </HStack>
+
+                    {giroQueryErrore ? <Banner status="error" title="Non è andata" description={giroQueryErrore} /> : null}
+
+                    {gruppiGiroQuery ? (
+                      <VStack gap={3}>
+                        {(
+                          [
+                            ['Miniere', 'già cliccate, in posizione recuperabile: più contenuto/interlink qui rende subito', gruppiGiroQuery.miniere],
+                            ['Domande scoperte', 'Google le mostra ma zero clic, senza il nome del locale: manca una pagina che risponda', gruppiGiroQuery.domandeScoperte],
+                            ['Brand sano', 'query col nome del locale che vanno bene: da proteggere, non da toccare', gruppiGiroQuery.brandSano],
+                            ['Brand da guardare', 'CTR sotto la media delle query col nome di questo cliente: guardare title/snippet', gruppiGiroQuery.brandDaGuardare],
+                          ] as const
+                        ).map(([titolo, spiegazione, righeGruppo]) =>
+                          righeGruppo.length ? (
+                            <VStack key={titolo} gap={1}>
+                              <Text type="supporting">
+                                {titolo} · {spiegazione}
+                              </Text>
+                              <List hasDividers density="compact">
+                                {righeGruppo.map((r, i) => (
+                                  <ListItem
+                                    key={i}
+                                    label={r.query}
+                                    description={r.pagina}
+                                    endContent={
+                                      <Text type="supporting" size="xsm">
+                                        {r.clic} clic / {r.impressioni} impr. · CTR {(r.ctr * 100).toFixed(2)}% · pos. {r.posizione.toFixed(1)}
+                                      </Text>
+                                    }
+                                  />
+                                ))}
+                              </List>
+                            </VStack>
+                          ) : null
+                        )}
+                      </VStack>
+                    ) : null}
+                  </VStack>
+                ) : (
+                  <Text type="supporting" color="secondary">
+                    Manca la Property Search Console — aggiungila da «Modifica anagrafica».
                   </Text>
                 )}
               </VStack>

@@ -156,6 +156,56 @@ export async function rendimento(
   }));
 }
 
+/**
+ * Come `rendimento()`, ma con più dimensioni insieme nella stessa riga —
+ * query E pagina E dispositivo, non tre chiamate separate da poi riaccoppiare
+ * a mano. Serve al giro sulle query (STATO.md §14.3): senza `page` non si sa
+ * se una query scoperta ha già una pagina che le risponde, senza `device` non
+ * si vede se una query "perde" solo su mobile.
+ *
+ * `chiavi` in `RigaRendimento` torna con un valore per ogni dimensione
+ * richiesta, nello stesso ordine passato in `dimensioni`.
+ */
+export async function rendimentoDettagliato(
+  proprieta: string,
+  giorni = 90,
+  dimensioni: Array<'query' | 'page' | 'device' | 'country'> = ['query', 'page', 'device'],
+  righe = 5000
+): Promise<RigaRendimento[]> {
+  const token = await tokenAccessoGSC();
+  const fine = new Date();
+  const inizio = new Date(fine.getTime() - giorni * 86400000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  const risposta = await fetch(
+    `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(proprieta)}/searchAnalytics/query`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startDate: fmt(inizio),
+        endDate: fmt(fine),
+        dimensions: dimensioni,
+        rowLimit: righe,
+      }),
+    }
+  );
+
+  if (!risposta.ok) throw new Error(`Search Console: ${(await risposta.text()).slice(0, 300)}`);
+
+  const dati = (await risposta.json()) as {
+    rows?: Array<{ keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }>;
+  };
+
+  return (dati.rows ?? []).map((r) => ({
+    chiavi: r.keys ?? [],
+    clic: r.clicks ?? 0,
+    impressioni: r.impressions ?? 0,
+    ctr: r.ctr ?? 0,
+    posizione: r.position ?? 0,
+  }));
+}
+
 /** Un riassunto leggibile da un prompt, non l'export completo. */
 export function riassumiRendimento(perQuery: RigaRendimento[], perPagina: RigaRendimento[]): string {
   const top = (righe: RigaRendimento[], n: number) =>
