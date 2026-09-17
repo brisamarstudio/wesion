@@ -1223,7 +1223,49 @@ Si clona così:
 GIT_SSH_COMMAND="ssh -i '<percorso>/.ssh/id_ed25519' -o IdentitiesOnly=yes" git clone git@github.com:...
 ```
 
-## 14.3 Il giro sulle query: da Search Console ai contenuti (idea del 14/09/2026) — **da costruire**
+## 14.3 Il giro sulle query: da Search Console ai contenuti (idea del 14/09/2026) — **passo 1 fatto, 17/09/2026**
+
+⚠️ **Cosa esiste già, per non ripartire da zero in una sessione futura:**
+
+- `src/lib/search-console.ts` → `rendimentoDettagliato(proprieta, giorni, ['query','page'])`: query+pagina
+  insieme, non tre chiamate separate. `GSC_REFRESH_TOKEN` sta nel `.env` del server (Contabo), non nel
+  repo — se manca in locale, copiarlo da lì (vedi commento in cima al file per il perché è un token
+  separato da GBP).
+- `src/lib/giro-query.ts` → `classificaGiroQuery()` + `raggruppaGiroQuery()`: **miniera**, **domanda
+  scoperta**, **brand sano**, **brand da guardare**. Il CTR per il brand è confrontato contro una
+  **baseline pesata per cliente** (Σclic/Σimpressioni delle query col nome), MAI una soglia fissa —
+  la prima versione usava "CTR < 5%" ed era sbagliata: "brace mia" (15 clic su 2948 impressioni, CTR
+  0,51%) è la seconda query per clic del sito, non una query debole. Due casi limite gestiti apposta:
+  una query sotto la media ma fra i maggiori contributori di clic resta "sana" (non doppia condizione
+  → non si segnala); e se la baseline stessa è piatta a zero (nessuna query col nome converte mai,
+  caso Artigiano il Conte) si segnala comunque, perché lì il problema non è "una query sotto la media"
+  ma "il brand intero non converte".
+- `GET /api/aziende/[id]/giro-query` → **volutamente read-only**: legge, classifica, risponde. Niente
+  PR, niente proposta, niente scrittura. Separato di proposito dall'audit del §14.2.
+- Bottone **"Giro query"** nella scheda cliente (tab "Chi è", sotto l'Audit SEO/GEO/AEO): accordion
+  richiudibile per mucchio, badge col conteggio, banner "niente da segnalare" se il giro è girato ma
+  non ha trovato pattern (per non sembrare che il bottone non abbia fatto niente).
+
+Verificato sui dati veri di Brace Mia e Artigiano il Conte (90 giorni): i numeri coincidono con quelli
+letti a mano il 14-16/09 ("armadi su misura" 56 impr/0 clic, "lo conte binasco" 50 impr/0 clic,
+"falegname buccinasco" 2 clic/21 impr).
+
+**Deciso il 17/09/2026, e va rispettato prima di espandere:** NON collegarlo all'audit che scrive PR
+finché non è stato guardato su almeno 4-6 clienti diversi (oltre Brace Mia e Artigiano il Conte).
+Non aggiungere: tassonomia a 7 categorie, `priorityScore`, motore confidence/businessValue/
+actionability, storico/checkpoint delle modifiche, filtro per dispositivo. Sono idee valide (discusse
+in sessione, vedi il ragionamento su CTR/baseline/priorità) ma premature — il progetto ha già pagato
+il prezzo di costruire prima di provare (vedi `rendimento-storico.ts`). Solo dopo aver visto il giro
+reggere su più clienti si decide se e come farlo scrivere.
+
+**Solo 5 clienti su 16 controllati il 17/09 hanno la property GSC collegata** (Artigiano il Conte,
+Brace Mia, M Hotel Don Carlo, Trattoria La Fenice, MyWebby). Per collegarne altri: aprire "Modifica"
+sulla scheda del cliente, compilare "Repository del sito" (obbligatorio, altrimenti la property non
+si salva — vedi `ModuloAzienda.tsx`), premere "Trova su Search Console", poi "Salva". Non tutti i
+clienti aderiscono al bundle sito+GBP: è normale che molti restino senza, non è un guasto da inseguire.
+
+Il resto di questa sezione (§14.3 originale) resta com'era: il contesto di come è nata l'idea non è
+superato da quello che è stato costruito sopra.
 
 L'audit del §14.2 sistema la **tecnica** (schema, `llms.txt`, `robots.txt`). Non guarda
 **cosa cerca la gente**: quali query portano impressioni ma zero clic, quali domande non
