@@ -1341,6 +1341,20 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                                       key={i}
                                       label={r.query}
                                       description={r.pagina}
+                                      /* ⚠️ SOLO SU "domande scoperte", ed è apposta (17/09/2026):
+                                         è l'unico mucchio dove il verdetto sopra distingue tre
+                                         fasce per posizione (pronta/da tenere d'occhio/lontana).
+                                         Senza un'etichetta qui, bisognava rileggere il verdetto e
+                                         incrociarlo a mente con ogni riga della lista sotto —
+                                         esattamente il difetto segnalato: dati senza risposta. */
+                                      startContent={
+                                        id === 'scoperte' ? (
+                                          <Badge
+                                            variant={r.posizione <= 10 ? 'success' : r.posizione <= 20 ? 'warning' : 'neutral'}
+                                            label={r.posizione <= 10 ? 'pronta' : r.posizione <= 20 ? 'da tenere d\'occhio' : 'lontana'}
+                                          />
+                                        ) : undefined
+                                      }
                                       endContent={
                                         <Text type="supporting" size="xsm">
                                           {r.clic} clic / {r.impressioni} impr. · CTR {(r.ctr * 100).toFixed(2)}% · pos. {r.posizione.toFixed(1)}

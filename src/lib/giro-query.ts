@@ -179,7 +179,17 @@ export function verdettoGiroQuery(gruppi: GruppiGiroQuery): VerdettoGiroQuery {
   // paragrafo di distanza dal primo clic, una in posizione 35 è un progetto
   // di contenuto lungo. Confonderle nello stesso "vale la pena" sarebbe
   // esattamente il difetto lamentato: dati senza interpretazione.
+  //
+  // ⚠️ TRE FASCE, NON DUE, E DEVONO COPRIRE TUTTE LE RIGHE SENZA BUCHI
+  // (17/09/2026). La prima versione aveva "pronte" (≤10) e "lontane" (>20):
+  // una query in posizione 15-20 non finiva in NESSUNA delle due, spariva dal
+  // verdetto senza che nessuno lo dicesse — l'utente la vedeva nella lista
+  // sotto e si chiedeva perché il testo sopra non ne parlasse. Ogni riga di
+  // `domandeScoperte` deve finire in una fascia che il verdetto NOMINA, anche
+  // quando la fascia non è una priorità: il silenzio è il difetto, non il
+  // "non è urgente".
   const scoperitePronte = gruppi.domandeScoperte.filter((r) => r.posizione <= 10);
+  const scoperteVicine = gruppi.domandeScoperte.filter((r) => r.posizione > 10 && r.posizione <= 20);
   const scoperteLontane = gruppi.domandeScoperte.filter((r) => r.posizione > 20);
 
   if (gruppi.miniere.length) {
@@ -207,7 +217,17 @@ export function verdettoGiroQuery(gruppi: GruppiGiroQuery): VerdettoGiroQuery {
     );
   }
 
-  if (scoperteLontane.length && !gruppi.miniere.length && !scoperitePronte.length) {
+  if (scoperteVicine.length) {
+    const esempi = scoperteVicine
+      .slice(0, 3)
+      .map((r) => `"${r.query}" (pos. ${r.posizione.toFixed(1)})`)
+      .join(', ');
+    righe.push(
+      `Da tenere d'occhio: ${scoperteVicine.length} domande sono appena fuori dalla prima pagina (posizione 11-20) — ${esempi}. Non sono la priorità di oggi, ma con lo stesso intervento della Priorità 2 potrebbero entrarci fra qualche settimana.`
+    );
+  }
+
+  if (scoperteLontane.length) {
     righe.push(
       `${scoperteLontane.length} domande scoperte sono lontane (oltre la posizione 20): interessanti in prospettiva, ma non la priorità di oggi — richiedono lavoro di contenuto a lungo termine, non un ritocco.`
     );
