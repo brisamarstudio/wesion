@@ -142,14 +142,36 @@ function elencaPiatti(piatti: Array<{ name: string; price?: string }>): string {
     .join('\n');
 }
 
-/** L'URL del media dentro un payload di WAHA, che cambia posto a ogni motore. */
-function urlMedia(payload: Record<string, unknown>): string | null {
+/** L'URL del media DICHIARATO nel payload di WAHA, che cambia posto a ogni motore. */
+function urlDichiarato(payload: Record<string, unknown>): string | null {
   const dati = (payload._data ?? {}) as Record<string, unknown>;
   const media = (payload.media ?? {}) as Record<string, unknown>;
   const url =
     payload.mediaUrl ?? media.url ?? payload.url ?? dati.mediaUrl ?? dati.directPath ?? null;
-  if (url) return String(url);
-  // Ultima spiaggia: WAHA serve il file per id del messaggio.
+  return url ? String(url) : null;
+}
+
+/**
+ * Il messaggio porta davvero una foto?
+ *
+ * ⚠️ NON SI DECIDE DALL'URL DI RISERVA (26/09/2026). `urlMedia` qui sotto, se
+ * non trova l'URL, lo costruisce dall'id del messaggio — e l'id ce l'hanno
+ * TUTTI i messaggi. Usato per decidere "c'è una foto?", rendeva foto anche un
+ * «1»: la scelta della sezione non arrivava mai a `scegliSezione`, il router
+ * rileggeva un menù inesistente e rispondeva "Non ho letto nessun piatto".
+ * Visto dal vivo su La Fenice; valeva per chiunque avesse più sezioni, e per
+ * chi scrive i piatti a mano invece di fotografarli.
+ */
+function haFoto(payload: Record<string, unknown>): boolean {
+  return payload.hasMedia === true || Boolean(urlDichiarato(payload));
+}
+
+/** Dove scaricare la foto: l'URL dichiarato o, in mancanza, quello per id. */
+function urlMedia(payload: Record<string, unknown>): string | null {
+  const url = urlDichiarato(payload);
+  if (url) return url;
+  // Ultima spiaggia: WAHA serve il file per id del messaggio. Solo per chi
+  // ha gia' deciso con `haFoto` che una foto c'e'.
   if (payload.id) return `${process.env.WAHA_BASE || 'http://127.0.0.1:3006'}/api/files/${payload.id}`;
   return null;
 }
@@ -310,7 +332,8 @@ async function nuovoMenu(a: Mittente, testo: string, payload: Record<string, unk
   let immagineDataUrl: string | null = null;
   let foto: string | null = null;
 
-  const url = urlMedia(payload);
+  // I piatti scritti a mano non hanno foto: niente download di un file che non esiste.
+  const url = haFoto(payload) ? urlMedia(payload) : null;
   if (url) {
     try {
       const { dati, mime } = await scaricaMedia(url);
@@ -594,7 +617,7 @@ async function gestisciMessaggio(payload: Record<string, unknown>): Promise<stri
   if (CONFERMA.test(testo)) return conferma(a);
   if (ANNULLA.test(testo)) return annulla(a);
 
-  const conFoto = Boolean(payload.hasMedia || urlMedia(payload));
+  const conFoto = haFoto(payload);
 
   /**
    * «2» — la risposta alla domanda su quale menù.
