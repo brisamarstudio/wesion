@@ -38,9 +38,13 @@ export async function mandaTesto(telefono: string, testo: string): Promise<boole
   const testa: Record<string, string> = eGateway
     ? { 'Content-Type': 'application/json', 'x-internal-key': API_KEY }
     : { 'Content-Type': 'application/json', 'X-Api-Key': API_KEY };
+  // ⚠️ Un id di chat completo (`...@lid`) si usa COSI' COM'E'. Il 26/09/2026 il
+  // router rispondeva a un LID trattandolo da numero (`57449616797942@c.us`):
+  // WAHA rifiuta con "no LID found" e il titolare resta senza risposta.
+  const chatId = String(telefono).includes('@') ? String(telefono) : `${numero}@c.us`;
   const corpo = eGateway
     ? { client_id: SESSIONE, phone: numero, message: testo }
-    : { session: SESSIONE, chatId: `${numero}@c.us`, text: testo };
+    : { session: SESSIONE, chatId, text: testo };
 
   try {
     const risposta = await fetch(url, { method: 'POST', headers: testa, body: JSON.stringify(corpo) });

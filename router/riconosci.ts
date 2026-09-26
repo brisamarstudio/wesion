@@ -78,6 +78,26 @@ export function candidati(payload: Record<string, unknown>): string[] {
   return [...fuori];
 }
 
+/**
+ * A chi rispondere, quando il contatto trovato è quello del mittente.
+ *
+ * ⚠️ UN LID NON È UN NUMERO (26/09/2026). Un contatto di tipo `lid` — imparato
+ * dal router alla prima foto (`imparaLid`) o censito a mano — ha come valore il
+ * LID, e trattarlo da telefono vuol dire mandare la risposta a `<lid>@c.us`:
+ * WAHA rifiuta ("no LID found") e il titolare resta senza risposta. Succedeva
+ * dal SECONDO messaggio in poi a chiunque scrivesse da un LID: il primo passava
+ * da `risolviLid` qui sotto, il secondo trovava il LID imparato e si inceppava.
+ * Si risponde al numero vero, chiesto a WAHA; se WAHA non lo sa, alla chat LID.
+ */
+async function indirizzoRisposta(riga: { tipo: string; valore: string; normalizzato: string }): Promise<string> {
+  if (riga.tipo === 'lid') {
+    const numero = await risolviLid(riga.normalizzato);
+    if (numero) return normalizzaTelefono(numero) ?? numero;
+    return `${riga.normalizzato}@lid`;
+  }
+  return normalizzaTelefono(riga.valore) ?? riga.valore;
+}
+
 /** Cerca fra i contatti registrati, titolari e non. */
 async function cerca(identificativi: string[]) {
   const [riga] = await query<{
@@ -85,9 +105,11 @@ async function cerca(identificativi: string[]) {
     nome: string;
     contatto_id: number;
     valore: string;
+    tipo: string;
+    normalizzato: string;
     e_titolare: boolean;
   }>(
-    `SELECT c.azienda_id, a.nome, c.id AS contatto_id, c.valore, c.e_titolare
+    `SELECT c.azienda_id, a.nome, c.id AS contatto_id, c.valore, c.tipo, c.normalizzato, c.e_titolare
        FROM wesion.contatto c
        JOIN wesion.azienda a ON a.id = c.azienda_id
       WHERE c.tipo IN ('whatsapp', 'lid', 'telefono')
@@ -182,7 +204,7 @@ export async function riconosci(payload: Record<string, unknown>): Promise<Esito
         aziendaId: diretto.azienda_id,
         nome: diretto.nome,
         contattoId: diretto.contatto_id,
-        telefono: normalizzaTelefono(diretto.valore) ?? diretto.valore,
+        telefono: await indirizzoRisposta(diretto),
       },
       motivo: 'trovato',
       identificativo: identificativi[0] ?? '',
