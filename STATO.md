@@ -58,9 +58,10 @@ La migrazione "tenant per tenant" di cui parla il §14.1 non era mai stata finit
   bot che rispondono allo stesso messaggio. Si riaccende con `pm2 start mywebby-automations`
   solo sapendo perché.
 
-⚠️ **Il webhook 3010 è ancora nella configurazione di `waha-weareqr-bot`.** Toglierlo vuol
-dire aggiornare la sessione WAHA, che la riavvia: lasciato apposta, WAHA riprova e rinuncia
-nei suoi log. Da togliere in un momento tranquillo.
+Stesso giorno, dopo: **tolto anche il webhook 3010** dalla sessione di `waha-weareqr-bot`
+(PUT della config senza quella voce; la sessione si è riavviata ed è tornata `WORKING` da
+sola, niente QR). Restano `wapp.mywebby.it` (assistente WeAreQR) e 3011 (Wesion). Copia
+della config di prima: `~/waha-weareqr-bot-sessione-20260926.json` su Oracle (permessi 600).
 
 **Cliente nuovo, da oggi, in un posto solo (dashboard Wesion, scheda cliente):**
 1. servizio `menu_del_giorno` attivo, con indirizzo `/api/menu/replace` del sito e segreto;
