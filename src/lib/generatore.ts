@@ -45,6 +45,13 @@ export interface Modello {
   extra?: Record<string, unknown>;
   /** Quanto aspettarlo prima di passare al prossimo. Default 60s. */
   timeoutMs?: number;
+  /**
+   * La variabile in `chiaveEnv` contiene PIU' chiavi separate da virgola, da
+   * usare a rotazione. Serve per i piani gratuiti a quota per chiave: quando
+   * una ha finito la sua quota (429) si passa subito alla successiva, senza
+   * aspettare — la quota torna dopo giorni, non dopo secondi.
+   */
+  chiaviMultiple?: boolean;
 }
 
 /**
@@ -95,6 +102,29 @@ export const CATENA: Modello[] = [
     modello: 'deepseek/deepseek-v4.1-flash:free',
     costa: false,
     timeoutMs: 180_000,
+  },
+  /**
+   * Token Harbor, terzo — aggregatore compatibile OpenAI, modelli `:free`.
+   *
+   * La quota gratuita e' PER CHIAVE e dura una finestra mobile di 7 giorni:
+   * finita quella, la chiave risponde 429 "You've used this period's free
+   * allowance" fino alla data che scrive nel messaggio. Per questo le chiavi
+   * sono piu' d'una in TOKENHARBOR_API_KEYS (separate da virgola) e si usano a
+   * rotazione: provato il 26/09/2026 con cinque chiavi, tutte valide, due con
+   * quota libera, `deepseek-v4-flash:free` ha risposto in 0-3 secondi.
+   *
+   * ⚠️ L'indirizzo e' tokenharbor.ai/v1. Non "tokenharber": un riassunto
+   * automatico della loro documentazione l'ha scritto cosi', e mandarci le
+   * chiavi vorrebbe dire regalarle a chi possiede quel dominio.
+   */
+  {
+    nome: 'tokenharbor/deepseek-v4-flash:free',
+    url: 'https://tokenharbor.ai/v1/chat/completions',
+    chiaveEnv: 'TOKENHARBOR_API_KEYS',
+    modello: 'deepseek-v4-flash:free',
+    costa: false,
+    timeoutMs: 180_000,
+    chiaviMultiple: true,
   },
   {
     nome: 'groq/openai/gpt-oss-120b',
@@ -254,15 +284,47 @@ export interface OpzioniGenerazione {
   timeoutMs?: number;
 }
 
+/**
+ * Le chiavi a quota finita, con l'ora in cui riprovarle.
+ *
+ * Sei ore e non la data esatta del messaggio: il formato del testo non e' un
+ * contratto, e rileggerlo male vorrebbe dire scartare una chiave buona per una
+ * settimana. Riprovarla ogni sei ore costa una chiamata che risponde 429 in un
+ * secondo. Vive in memoria: a ogni riavvio si riparte provandole tutte.
+ */
+const chiaviEsauste = new Map<string, number>();
+const PAUSA_CHIAVE_ESAUSTA_MS = 6 * 60 * 60 * 1000;
+
+function chiaviDisponibili(m: Modello): string[] {
+  const adesso = Date.now();
+  return String(process.env[m.chiaveEnv] || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter((k) => k && (chiaviEsauste.get(k) ?? 0) <= adesso);
+}
+
 async function chiedi(
   m: Modello,
   sistema: string,
   utente: string,
   secondoGiro = false,
-  opzioni: OpzioniGenerazione = {}
+  opzioni: OpzioniGenerazione = {},
+  chiaveScelta?: string
 ): Promise<string | null> {
   const { maxTokens = 1600, grezzo = false } = opzioni;
-  const chiave = process.env[m.chiaveEnv];
+
+  if (m.chiaviMultiple && chiaveScelta === undefined) {
+    for (const k of chiaviDisponibili(m)) {
+      const testo = await chiedi(m, sistema, utente, false, opzioni, k);
+      if (testo !== null) return testo;
+      // Solo la quota finita giustifica la chiave successiva: un 500 o un testo
+      // vuoto li darebbe uguali anche le altre, ed e' tempo perso.
+      if (!chiaviEsauste.has(k)) return null;
+    }
+    return null;
+  }
+
+  const chiave = chiaveScelta ?? process.env[m.chiaveEnv];
   if (!chiave) return null;
 
   try {
@@ -309,11 +371,17 @@ async function chiedi(
        * si ascolta — ma con un tetto, o un `retry-after` di due minuti
        * bloccherebbe la generazione dell'intero mese.
        */
+      if (risposta.status === 429 && m.chiaviMultiple) {
+        // Quota della chiave finita: aspettare non serve, si cambia chiave.
+        chiaviEsauste.set(chiave, Date.now() + PAUSA_CHIAVE_ESAUSTA_MS);
+        console.warn(`[generatore] ${m.nome} chiave …${chiave.slice(-4)} a quota finita: provo la prossima`);
+        return null;
+      }
       if (risposta.status === 429 && !secondoGiro) {
         const attesa = Math.min(Number(risposta.headers.get('retry-after')) || 3, 12);
         console.warn(`[generatore] ${m.nome} a tetto: aspetto ${attesa}s e riprovo`);
         await new Promise((r) => setTimeout(r, attesa * 1000));
-        return chiedi(m, sistema, utente, true, opzioni);
+        return chiedi(m, sistema, utente, true, opzioni, chiaveScelta);
       }
       const dettaglio = (await risposta.text()).slice(0, 200);
       console.warn(`[generatore] ${m.nome} ha risposto ${risposta.status}: ${dettaglio}`);
