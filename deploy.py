@@ -176,6 +176,14 @@ def main():
              "        il sito e' su, con il codice di prima. Non hai rotto niente.")
     print("[srv] build finito in " + str(int(time.time() - inizio)) + "s")
 
+    # ⚠️ LA CACHE DEI BUILD NON SI SVUOTA DA SOLA (26/09/2026). Contabo e' lo stesso
+    # server di WeAreQR, PuntiPlus e mywebby: quel giorno la cache di Docker era a
+    # 178 GB su un disco da 243. Si tengono 10 GB (build veloci), il resto va via.
+    # Non tocca container, immagini in uso, volumi. Se non riesce, il deploy e'
+    # comunque fatto.
+    stato_pulizia, _ = sul_server("docker builder prune -f --max-used-space 10gb", timeout=240, mostra=False)
+    print("[srv] cache dei build " + ("riportata sotto i 10 GB" if stato_pulizia == 0 else "NON pulita (il deploy e' fatto lo stesso)"))
+
     # ── 4. Sano davvero, non solo acceso ─────────────────────────────────────
     print("[srv] aspetto che diventi healthy", end="", flush=True)
     scadenza = time.time() + ATTESA_HEALTHY
