@@ -35,6 +35,39 @@ npm run cliente  ->  prepara un cliente da riga di comando
 npm run utente   ->  crea un accesso alla dashboard
 ```
 
+## 0.5 Router vecchio spento: il menu via WhatsApp passa SOLO da Wesion (26/09/2026)
+
+**Cosa è successo.** Maria (Trattoria La Fenice) ha mandato la foto del menu al bot
+`+39 376 044 4283` (`waha-weareqr-bot` su Oracle) e non è successo niente. Il bot manda
+ogni messaggio a DUE router (webhook 3010 = `mywebby-automations`, 3011 = `wesion-router`):
+- il **vecchio** aveva i numeri della famiglia ma era rotto da tempo senza che nessuno se ne
+  accorgesse: chiave WAHA non più valida (401 su download media, `sendText`, risoluzione
+  LID), modello OCR `google/gemini-2.0-flash-001` ritirato da OpenRouter;
+- **Wesion** funzionava ma per La Fenice abilitava solo il `+39 388 480 6799` del test del
+  05/09: la famiglia per lui era "non è di nessun cliente".
+
+La migrazione "tenant per tenant" di cui parla il §14.1 non era mai stata finita.
+
+**Cosa è stato fatto:**
+- i numeri della famiglia (Deborah 366 258 7872, fratello 349 198 5045, Maria 349 317 8210)
+  e i loro LID sono in `wesion.contatto` di La Fenice (azienda 51), `e_titolare = true`,
+  nota "migrato dal router vecchio";
+- nel router vecchio `automation_clients.active = false` per TUTTI (c'era solo La Fenice);
+- `pm2 stop mywebby-automations` + `pm2 save` su Oracle: non riparte al riavvio. Faceva
+  anche il `lead_bot` che risponde DA SOLO ai lead: rimetterlo in piedi vorrebbe dire due
+  bot che rispondono allo stesso messaggio. Si riaccende con `pm2 start mywebby-automations`
+  solo sapendo perché.
+
+⚠️ **Il webhook 3010 è ancora nella configurazione di `waha-weareqr-bot`.** Toglierlo vuol
+dire aggiornare la sessione WAHA, che la riavvia: lasciato apposta, WAHA riprova e rinuncia
+nei suoi log. Da togliere in un momento tranquillo.
+
+**Cliente nuovo, da oggi, in un posto solo (dashboard Wesion, scheda cliente):**
+1. servizio `menu_del_giorno` attivo, con indirizzo `/api/menu/replace` del sito e segreto;
+2. i numeri di chi manda le foto come contatti WhatsApp **spuntati "titolare"**. Il LID lo
+   impara il router alla prima foto (`impara` in `router/riconosci.ts`): non va cercato a mano.
+Niente più righe in `automation_clients`: quella tabella non la legge più nessuno.
+
 ## 0.4 Il terzo cliente, e i due difetti che ha scoperto (07/09/2026)
 
 **M Hotel Don Carlo** (Broni, PV) è il primo cliente che non è un ristorante: hotel,
