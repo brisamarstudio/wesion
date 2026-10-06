@@ -16,3 +16,4 @@ dist/
 wesion-admin-credenziali.txt
 *credenziali*.txt
 .env.bak*
+geo/risultati-*.json
