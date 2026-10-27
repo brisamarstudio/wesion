@@ -46,7 +46,7 @@ import { quandoBreve } from '@/lib/quando';
 import { AZIONI_BOTTONE, VUOLE_URL } from '@/lib/gbp';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { DateInput } from '@astryxdesign/core/DateInput';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Sparkles } from 'lucide-react';
 import { ModuloAzienda, type AziendaModulo } from './ModuloAzienda';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
 import { Plancia } from './Plancia';
@@ -203,6 +203,56 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
       setVerdettoGiroQuery(e.verdetto ?? null);
     } finally {
       setGiroQueryInCorso(false);
+    }
+  }
+
+  /**
+   * Analisi automatica del sito web del cliente per impostare il blog
+   * (CMS, pagina del blog, e categorie pertinenti rilevate o generate con AI).
+   */
+  const [analizzandoSito, setAnalizzandoSito] = useState(false);
+  const [esitoAnalisiSito, setEsitoAnalisiSito] = useState<{
+    tipo: 'success' | 'error';
+    messaggio: string;
+  } | null>(null);
+
+  async function analizzaSitoBlog() {
+    setAnalizzandoSito(true);
+    setEsitoAnalisiSito(null);
+    try {
+      const risp = await fetch(`/api/aziende/${s.id}/analizza-sito`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: config('blog').wp_base || config('blog').site_blog_page || undefined,
+        }),
+      });
+      const dati = await risp.json();
+      if (!risp.ok || !dati.ok) {
+        setEsitoAnalisiSito({
+          tipo: 'error',
+          messaggio: dati?.errore || 'Non sono riuscito ad analizzare il sito.',
+        });
+        return;
+      }
+
+      cambiaServizio('blog', {
+        tipo: dati.tipo,
+        site_blog_page: dati.site_blog_page || '',
+        categorie: dati.categorie || '',
+        ...(dati.wp_base ? { wp_base: dati.wp_base } : {}),
+        ...(dati.site_blog_url ? { site_blog_url: dati.site_blog_url } : {}),
+      });
+
+      setEsitoAnalisiSito({
+        tipo: 'success',
+        messaggio: dati.dettagli || 'Campi compilati con successo!',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEsitoAnalisiSito({ tipo: 'error', messaggio: msg });
+    } finally {
+      setAnalizzandoSito(false);
     }
   }
 
@@ -1679,6 +1729,30 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
 
                     {attivo('blog') ? (
                       <VStack gap={2}>
+                        <VStack gap={2} padding={2} style={{ background: 'var(--color-bg-secondary, rgba(255,255,255,0.03))', borderRadius: 'var(--radius-md, 8px)' }}>
+                          <HStack gap={2} align="center">
+                            <Button
+                              label={analizzandoSito ? 'Analisi del sito con AI...' : 'Rileva e compila dal sito con AI'}
+                              icon={<Sparkles size={16} />}
+                              size="sm"
+                              variant="secondary"
+                              isLoading={analizzandoSito}
+                              clickAction={analizzaSitoBlog}
+                            />
+                            <Text type="supporting" color="secondary">
+                              Scansiona il sito: rileva WordPress vs Astro, individua la pagina del blog ed estrae o genera le categorie reali.
+                            </Text>
+                          </HStack>
+                          {esitoAnalisiSito ? (
+                            <Banner
+                              status={esitoAnalisiSito.tipo === 'success' ? 'success' : 'error'}
+                              title={esitoAnalisiSito.tipo === 'success' ? 'Sito analizzato con successo' : 'Analisi non riuscita'}
+                              description={esitoAnalisiSito.messaggio}
+                              defaultIsExpanded
+                            />
+                          ) : null}
+                        </VStack>
+
                         {/* La scelta viene PRIMA dei campi: cambia quali campi
                             hanno senso, e mostrarli tutti insieme vorrebbe dire
                             chiedere un segreto a chi ha un WordPress e non ce
@@ -1697,14 +1771,14 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                         <TextInput
                           label="Pagina del blog"
                           description="Dove finiscono gli articoli, vista dal cliente."
-                          placeholder="https://ilcliente.it/blog"
+                          placeholder="https://dominio.it/blog"
                           value={config('blog').site_blog_page ?? ''}
                           onChange={(v) => cambiaServizio('blog', { site_blog_page: v })}
                         />
                         <TextInput
                           label="Categorie"
                           description="Separate da virgola. Il generatore sceglie fra queste."
-                          placeholder="Ristorazione, SEO, Prezzi & Budget, Consigli"
+                          placeholder="Separate da virgola: usa il pulsante sopra per compilarle in automatico"
                           value={config('blog').categorie ?? ''}
                           onChange={(v) => cambiaServizio('blog', { categorie: v })}
                         />

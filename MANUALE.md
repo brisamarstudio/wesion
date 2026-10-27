@@ -176,6 +176,21 @@ di solito in Impostazioni, sul blocco giusto già aperto.
 > servono quando hai qualcuno alle spalle o stai condividendo lo schermo. Chi apre
 > la dashboard resta uno che può tutto: vedi «Chi entra può fare tutto».
 
+### Configurazione del blog: «Rileva e compila dal sito con AI»
+
+Nel blocco **Sito e blog** non devi andare a vedere il codice del cliente per capire se
+ha WordPress o un sito nostro, né indovinare se la pagina è `/blog`, `/news` o `/articoli`,
+né inventarti le categorie (che altrimenti rischiano di restare generiche da ristorante o agenzia).
+
+Il bottone **«Rileva e compila dal sito con AI»**:
+1. Prende l'indirizzo dai contatti della scheda;
+2. Scansiona il sito e riconosce in automatico la piattaforma (WordPress vs Sito nostro);
+3. Trova l'indirizzo esatto della sezione articoli;
+4. Se è WordPress estrae le categorie native dalla sua REST API; se non lo è (o non ne ha)
+   l'AI analizza i servizi reali e genera 4-6 categorie editoriali perfette per la sua attività.
+
+Tu devi solo controllare e premere **Salva la scheda**.
+
 ### Non ricopiare mai Place ID e URL di Maps
 
 Nel modulo «Modifica» c'è **«Leggi dalla scheda Google»**. Se il cliente ha la
