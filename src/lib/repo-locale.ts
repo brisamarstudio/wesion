@@ -101,7 +101,7 @@ export async function cercaRepoLocale(
   sitoUrl?: string
 ): Promise<EsitoRicercaRepo> {
   const basePath = process.env.SITI_LOCAL_PATH;
-  const githubToken = process.env.GITHUB_TOKEN_BRISAMAR;
+  const githubToken = process.env.GITHUB_TOKEN_BRISAMAR || process.env.GITHUB_TOKEN;
 
   let tutti: CandidatoRepo[] = [];
 
