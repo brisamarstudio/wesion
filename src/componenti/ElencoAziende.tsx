@@ -26,7 +26,8 @@
  */
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Layout, LayoutContent, LayoutHeader, LayoutPanel } from '@astryxdesign/core/Layout';
+import { Layout, LayoutContent, LayoutHeader, LayoutPanel, LayoutFooter } from '@astryxdesign/core/Layout';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { Heading } from '@astryxdesign/core/Heading';
@@ -264,6 +265,8 @@ export function ElencoAziende({
   const [spuntate, setSpuntate] = useState<Set<string | number>>(new Set());
   /** La domanda prima di cancellare le spuntate: null = nessuna in corso. */
   const [confermaBlocco, setConfermaBlocco] = useState(false);
+  const [dialogCampagneAperto, setDialogCampagneAperto] = useState(false);
+  const [tabGestione, setTabGestione] = useState('campagne');
 
   function spunta(id: string | number, dentro: boolean) {
     setSpuntate((s) => {
@@ -572,27 +575,66 @@ export function ElencoAziende({
         /* I comandi stanno QUI e non sopra la lista: è verticale guadagnato,
            ed è quello che mancava per non dover scorrere prima di decidere. */
         <LayoutHeader hasDivider>
-          <HStack gap={3} align="center" wrap="wrap">
-            <Heading level={2}>Da chiamare</Heading>
-            <Text color="secondary">
-              {quante}
-              {totalePagine > 1 ? ` · pagina ${pagina} di ${totalePagine}` : ''}
-            </Text>
+          <HStack justify="between" align="center" wrap="wrap" gap={3}>
+            <HStack gap={3} align="center" wrap="wrap">
+              <Heading level={2}>Da chiamare</Heading>
+              <Badge variant="neutral" label={`${quante} lead`} />
+              {totalePagine > 1 ? (
+                <Text type="supporting" color="secondary">
+                  pag. {pagina}/{totalePagine}
+                </Text>
+              ) : null}
 
-            <SegmentedControl
-              label="Stato"
-              size="sm"
-              value={vista.stato}
-              onChange={(v) => vaiA({ stato: v, pagina: 1 })}
-            >
-              <SegmentedControlItem
-                value="tutti"
-                label={`Tutte (${Object.values(conteggi).reduce((a, b) => a + b, 0)})`}
+              <SegmentedControl
+                label="Stato lead"
+                size="sm"
+                value={vista.stato}
+                onChange={(v) => vaiA({ stato: v, pagina: 1 })}
+              >
+                <SegmentedControlItem
+                  value="tutti"
+                  label={`Tutte (${Object.values(conteggi).reduce((a, b) => a + b, 0)})`}
+                />
+                {STATI_ELENCO.filter((s) => conteggi[s]).map((s) => (
+                  <SegmentedControlItem key={s} value={s} label={`${ETICHETTA[s]} (${conteggi[s]})`} />
+                ))}
+              </SegmentedControl>
+            </HStack>
+
+            <HStack gap={2} align="center" wrap="wrap">
+              {daAnalizzare > 0 ? (
+                <Button
+                  label={`Controlla siti (${daAnalizzare})`}
+                  size="sm"
+                  variant="ghost"
+                  isLoading={analisiInCorso}
+                  tooltip="Scarica il sito di ogni azienda senza punteggio e lo fa leggere all’AI."
+                  clickAction={analizzaMancanti}
+                />
+              ) : null}
+              <Button
+                label="Pulisci / Elimina Campagne"
+                size="sm"
+                variant="ghost"
+                icon={<Trash2 size={15} />}
+                onClick={() => setDialogCampagneAperto(true)}
               />
-              {STATI_ELENCO.filter((s) => conteggi[s]).map((s) => (
-                <SegmentedControlItem key={s} value={s} label={`${ETICHETTA[s]} (${conteggi[s]})`} />
-              ))}
-            </SegmentedControl>
+              <Button
+                label="Esporta CSV"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  window.location.href = `/api/aziende/esporta${vista.stato !== 'tutti' ? `?stato=${vista.stato}` : ''}`;
+                }}
+              />
+              <Button
+                label="Nuova azienda"
+                size="sm"
+                variant="primary"
+                icon={<Plus size={16} />}
+                onClick={() => setModulo({ ...AZIENDA_VUOTA })}
+              />
+            </HStack>
           </HStack>
         </LayoutHeader>
       }
@@ -600,40 +642,27 @@ export function ElencoAziende({
         <LayoutContent padding={0}>
           <VStack gap={0}>
             <VStack padding={3} gap={3}>
-              {/* ── LA LEGENDA ────────────────────────────────────────────────
-                  ⚠️ SCRITTA PER CHI ARRIVA OGGI (01/09/2026). Detto da chi la
-                  usa, guardando questa pagina: «noi umani se guardiamo sta
-                  pagina non ci capiamo nulla». Aveva ragione: la riga dice
-                  «95», «★ 4.9 · 10», «senza sito» e nessuna delle tre e'
-                  spiegata da nessuna parte. Erano leggibili solo per chi le
-                  aveva costruite.
-
-                  Sta CHIUSA di serie: chi lavora qui tutti i giorni non deve
-                  scavalcarla ogni volta. Ma sta in cima, dove chi non sa
-                  guarda per primo, e non in una pagina di aiuto che bisogna
-                  sapere di dover cercare. */}
+              {/* ── GUIDA RAPIDA PUNTEGGI ───────────────────────────────── */}
               <Banner
                 status="info"
                 container="card"
                 defaultIsExpanded={false}
                 title="Chi chiamo per primo?"
-                description="Punteggio alto e «senza sito»: sono quelli a cui serve di più. Apri una riga per il numero e per cosa dirgli."
-                endContent={<Text type="supporting">cosa vuol dire?</Text>}
+                description="Punteggio alto e «senza sito»: sono quelli a cui serve di più. Clicca per visualizzare la legenda."
+                endContent={<Text type="supporting">Guida</Text>}
               >
                 <MetadataList>
                   <MetadataListItem label="95 (giallo)">
                     Il voto dell’audit: quanto è messo male il sito che ha adesso. Più è alto,
                     più ha bisogno di noi. «—» vuol dire che non l’abbiamo ancora guardato:
-                    lo fai con «Controlla i siti mai visti», il bottone qui sopra: ci mette un paio di
-                    minuti perché guarda un sito per volta.
+                    lo fai con «Controlla siti», il bottone in alto.
                   </MetadataListItem>
                   <MetadataListItem label="★ 4.9 · 10">
                     Le recensioni su Google: prima il voto, poi quante ne ha. Dieci recensioni
                     e cinque stelle non sono la stessa cosa di seicento.
                   </MetadataListItem>
                   <MetadataListItem label="senza sito (rosso)">
-                    Non ha un sito. Il rosso non è un problema tuo: è il motivo per cui lo
-                    chiami.
+                    Non ha un sito web. È il motivo commerciale principale per cui lo chiami per proporre una vetrina.
                   </MetadataListItem>
                   <MetadataListItem label="occasione (verde)">
                     Nessun sito, ma già tante recensioni buone: ha i clienti e non ha la
@@ -641,53 +670,46 @@ export function ElencoAziende({
                   </MetadataListItem>
                   <MetadataListItem label="scheda di nessuno (giallo)">
                     La scheda Google esiste — con foto, orari e recensioni — ma nessuno l’ha
-                    mai rivendicata. Non vuol dire «non ce l’ha»: vuol dire che non è sua.
-                    Non può rispondere a una recensione, non può pubblicare un post, e
-                    chiunque può farle modificare gli orari. Finché resta così non può
-                    comprare Wesion nemmeno volendo: è la telefonata più facile che hai.
-                  </MetadataListItem>
-                  <MetadataListItem label="Da contattare">
-                    A che punto sei con lui. Dopo la telefonata lo cambi tu, dalla riga.
-                  </MetadataListItem>
-                  <MetadataListItem label="Dividi per">
-                    Raggruppa l’elenco: per campagna, per città o per categoria. Non cambia
-                    cosa vedi, cambia come è impilato.
+                    mai rivendicata. Non può rispondere alle recensioni né pubblicare post.
                   </MetadataListItem>
                 </MetadataList>
               </Banner>
 
-              {/* ── I FILTRI, TUTTI IN UNA RIGA ──────────────────────────────
-                  ⚠️ ETICHETTE NASCOSTE (01/09/2026). Ogni filtro aveva la sua
-                  scritta sopra — «Categoria», «Città», «Campagna», «Sito» — e
-                  quelle scritte alzavano ogni controllo di una riga: i primi
-                  quattro entravano, il quinto («Sito») finiva a capo da solo e
-                  sembrava un pezzo staccato di un'altra cosa.
+              {/* ── BARRA RICERCA E FILTRI UNIFICATA ──────────────────────── */}
+              <HStack gap={2} align="center" wrap="wrap">
+                <HStack gap={1} align="center">
+                  <TextInput
+                    label="Cerca"
+                    isLabelHidden
+                    placeholder="Nome, città, categoria, tel..."
+                    value={cerca}
+                    onChange={setCerca}
+                    size="sm"
+                    startIcon="search"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') vaiA({ q: cerca, pagina: 1 });
+                    }}
+                  />
+                  <Button
+                    label="Cerca"
+                    size="sm"
+                    variant="secondary"
+                    isLoading={inCorso}
+                    onClick={() => vaiA({ q: cerca, pagina: 1 })}
+                  />
+                </HStack>
 
-                  Si possono togliere perché il placeholder dice già la stessa
-                  parola: «Tutte le categorie», «Tutte le città». Restano per chi
-                  legge con lo screen reader, che l'etichetta ce l'ha comunque.
-
-                  Il prezzo, detto: quando un filtro è scelto, il suo valore
-                  sostituisce il placeholder e si perde la parola che diceva di
-                  che filtro si tratta. Lo si accetta perché i valori qui sono
-                  espliciti da soli («dentisti · abbiategrasso»), e perché
-                  «Togli i filtri (N)» dice comunque che qualcosa è acceso. */}
-              <HStack gap={2} align="end" wrap="wrap">
-                <TextInput
-                  label="Cerca"
+                <Selector
+                  label="Campagna"
                   isLabelHidden
-                  placeholder="Nome, città, categoria, telefono…"
-                  value={cerca}
-                  onChange={setCerca}
                   size="sm"
-                  startIcon="search"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') vaiA({ q: cerca, pagina: 1 });
-                  }}
+                  hasClear
+                  hasSearch={opzioni.campagne.length > 5}
+                  placeholder="Tutte le campagne"
+                  value={vista.campagna}
+                  onChange={(v) => vaiA({ campagna: v ?? '', pagina: 1 })}
+                  options={opzioni.campagne.map((c) => ({ value: String(c.id), label: `${c.nome} (${c.quanti})` }))}
                 />
-
-                {/* I filtri portano il loro numero: si sceglie sapendo quanto
-                    c'è dietro, invece di aprire e trovare tre righe. */}
                 <Selector
                   label="Categoria"
                   isLabelHidden
@@ -711,71 +733,36 @@ export function ElencoAziende({
                   options={opzioni.citte.map((c) => ({ value: c.valore, label: `${c.valore} (${c.quanti})` }))}
                 />
                 <Selector
-                  label="Campagna"
+                  label="Presenza online"
                   isLabelHidden
                   size="sm"
                   hasClear
-                  placeholder="Tutte le campagne"
-                  value={vista.campagna}
-                  onChange={(v) => vaiA({ campagna: v ?? '', pagina: 1 })}
-                  options={opzioni.campagne.map((c) => ({ value: String(c.id), label: `${c.nome} (${c.quanti})` }))}
-                />
-                <Selector
-                  label="Sito"
-                  isLabelHidden
-                  size="sm"
-                  hasClear
-                  placeholder="Con e senza sito"
-                  value={vista.sito}
-                  onChange={(v) => vaiA({ sito: v ?? '', pagina: 1 })}
+                  placeholder="Presenza online"
+                  value={
+                    vista.sito === 'no'
+                      ? 'senza_sito'
+                      : vista.sito === 'si'
+                        ? 'con_sito'
+                        : vista.scheda === 'nessuno'
+                          ? 'scheda_nessuno'
+                          : ''
+                  }
+                  onChange={(v) => {
+                    if (v === 'senza_sito') vaiA({ sito: 'no', scheda: '', pagina: 1 });
+                    else if (v === 'con_sito') vaiA({ sito: 'si', scheda: '', pagina: 1 });
+                    else if (v === 'scheda_nessuno') vaiA({ scheda: 'nessuno', sito: '', pagina: 1 });
+                    else vaiA({ sito: '', scheda: '', pagina: 1 });
+                  }}
                   options={[
-                    { value: 'no', label: 'Senza sito' },
-                    { value: 'si', label: 'Con un sito' },
+                    { value: 'senza_sito', label: '🔴 Solo senza sito' },
+                    { value: 'con_sito', label: '🟢 Solo con un sito' },
+                    { value: 'scheda_nessuno', label: '⚠️ Scheda di nessuno' },
                   ]}
                 />
-                {/* Filtro a sé e non una spunta dentro «Sito»: è un'altra
-                    vendita, con un'altra telefonata. */}
-                <Selector
-                  label="Scheda Google"
-                  isLabelHidden
-                  size="sm"
-                  hasClear
-                  placeholder="Tutte le schede"
-                  value={vista.scheda}
-                  onChange={(v) => vaiA({ scheda: v ?? '', pagina: 1 })}
-                  options={[{ value: 'nessuno', label: 'Scheda di nessuno' }]}
-                />
-              </HStack>
 
-              <HStack gap={2} align="center" wrap="wrap">
-                <Text type="supporting">Dividi per</Text>
-                <SegmentedControl label="Dividi per" size="sm" value={gruppo} onChange={(v) => vaiA({ gruppo: v, campagna: '', citta: '', categoria: '', pagina: 1 })}>
-                  <SegmentedControlItem value="campagna" label="Campagna" />
-                  <SegmentedControlItem value="citta" label="Città" />
-                  <SegmentedControlItem value="categoria" label="Categoria" />
-                  <SegmentedControlItem value="nessuno" label="Niente" />
-                </SegmentedControl>
-
-                <Button
-                  label="Cerca"
-                  size="sm"
-                  variant="primary"
-                  isLoading={inCorso}
-                  onClick={() => vaiA({ q: cerca, pagina: 1 })}
-                />
-                {/* Sta fra i comandi e non in fondo alla lista: chi aggiunge
-                    un'azienda a mano di solito ha appena riagganciato il
-                    telefono, e non deve cercare il bottone. */}
-                <Button
-                  label="Nuova azienda"
-                  size="sm"
-                  variant="secondary"
-                  icon={<Plus size={16} />}
-                  onClick={() => setModulo({ ...AZIENDA_VUOTA })}
-                />
                 {filtriAttivi > 0 ? (
                   <Button
-                    label={`Togli i filtri (${filtriAttivi})`}
+                    label={`Azzera filtri (${filtriAttivi})`}
                     size="sm"
                     variant="ghost"
                     onClick={() =>
@@ -783,109 +770,109 @@ export function ElencoAziende({
                     }
                   />
                 ) : null}
-                {/* ⚠️ "Analizza le mancanti" NON SI CAPIVA (01/09/2026):
-                    mancanti cosa? E si cliccava alla cieca, aspettando minuti
-                    senza sapere se stesse lavorando su tre aziende o trenta.
-                    Adesso dice il mestiere e il numero — e sparisce quando non
-                    c'e' niente da analizzare, invece di restare li' a far
-                    premere un bottone che non fa niente. */}
-                {daAnalizzare > 0 ? (
-                  <Button
-                    label={`Controlla i siti mai visti (${daAnalizzare})`}
-                    size="sm"
-                    variant="ghost"
-                    isLoading={analisiInCorso}
-                    tooltip="Scarica il sito di ogni azienda senza punteggio e lo fa leggere all’AI. Ci vuole qualche secondo per azienda, 25 per volta."
-                    clickAction={analizzaMancanti}
-                  />
-                ) : null}
-                <Button
-                  label="Esporta CSV"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    window.location.href = `/api/aziende/esporta${vista.stato !== 'tutti' ? `?stato=${vista.stato}` : ''}`;
-                  }}
-                />
               </HStack>
 
-              {/* ── LE LINGUETTE DEI GRUPPI ──────────────────────────────────
-                  ⚠️ PERCHE' NON UN ACCORDION, provato e buttato il 31/08/2026.
-                  I gruppi erano richiudibili dentro la lista, ma la lista e'
-                  PAGINATA: «dentisti» comincia a pagina 1 e finisce a pagina 2,
-                  quindi chiudere il gruppo non toglieva di mezzo i dentisti di
-                  la'. Un accordion ha senso su un elenco intero, non su una
-                  finestra di venticinque righe.
-                  Le linguette invece FILTRANO: una linguetta e' un gruppo, e si
-                  porta dietro la sua paginazione. E i gruppi troppi — con la
-                  categoria sono ventiquattro — finiscono nel menu «altro» che
-                  TabList ha gia' dentro. */}
-              {gruppo !== 'nessuno' && opzioniGruppo.length > 0 ? (
-                <HStack gap={3} align="center" wrap="wrap">
-                  {/* `lg` e la riga sotto: alla prima prova erano `md` e senza
-                      divisore, e chi le usava non le ha viste — «ma ste tab
-                      dove sono?». Un comando che sceglie cosa vedi non puo'
-                      pesare meno di un'etichetta di campo. */}
-                  <TabList
-                    size="lg"
-                    hasDivider
-                    value={gruppoScelto}
-                    onChange={(v) => vaiA({ [campoGruppo]: v === 'tutti' ? '' : v, pagina: 1 })}
+              {/* ── BARRA RAGGRUPPAMENTO E TABS ───────────────────────────── */}
+              <HStack justify="between" align="center" wrap="wrap" gap={2}>
+                <HStack gap={2} align="center">
+                  <Text type="supporting">Raggruppa per:</Text>
+                  <SegmentedControl
+                    label="Raggruppa per"
+                    size="sm"
+                    value={gruppo}
+                    onChange={(v) => vaiA({ gruppo: v, campagna: '', citta: '', categoria: '', pagina: 1 })}
                   >
-                    <Tab value="tutti" label="Tutti" endContent={<Badge variant="neutral" label={String(quante)} />} />
-                    {opzioniGruppo.map((o) => (
-                      <Tab
-                        key={o.valore}
-                        value={o.valore}
-                        label={titoloLeggibile(o.etichetta)}
-                        endContent={<Badge variant="neutral" label={String(o.quanti)} />}
-                      />
-                    ))}
-                  </TabList>
-
-                  {/* Si cancella il gruppo APERTO, mai «tutti»: buttare l'intero
-                      elenco non e' un gesto che deve stare a un click da qui. */}
-                  {gruppoScelto !== 'tutti' ? (
-                    <Button
-                      label="Elimina il gruppo"
-                      size="sm"
-                      variant="destructive"
-                      icon={<Trash2 size={16} />}
-                      onClick={() => {
-                        const scelto = opzioniGruppo.find((o) => o.valore === gruppoScelto);
-                        if (scelto)
-                          setGruppoDaButtare({
-                            campo: campoGruppo,
-                            valore: scelto.valore,
-                            etichetta: titoloLeggibile(scelto.etichetta),
-                            quante: scelto.quanti,
-                          });
-                      }}
-                    />
-                  ) : null}
+                    <SegmentedControlItem value="campagna" label="Campagna" />
+                    <SegmentedControlItem value="citta" label="Città" />
+                    <SegmentedControlItem value="categoria" label="Categoria" />
+                    <SegmentedControlItem value="nessuno" label="Nessuno" />
+                  </SegmentedControl>
                 </HStack>
-              ) : null}
 
-              {/* La barra c'e' solo quando serve: una riga di comandi sempre
-                  accesa su una lista che non hai ancora toccato e' rumore, e i
-                  due bottoni pericolosi starebbero li' a portata di distrazione. */}
-              {spuntate.size > 0 ? (
-                <HStack gap={3} align="center" wrap="wrap">
-                  <Badge variant="info" label={`${spuntate.size} scelte`} />
-                  {/* «Archivia» PRIMA di «Elimina», ed e' voluto: nove volte su
-                      dieci il rumore e' un'azienda vera che non serve adesso,
-                      e archiviarla la toglie dai filtri senza perderla. */}
-                  <Button label="Archivia" size="sm" clickAction={() => azioneSuSpuntate('archivia')} />
+                {gruppo !== 'nessuno' && gruppoScelto !== 'tutti' ? (
                   <Button
-                    label="Elimina"
+                    label="Elimina questo gruppo"
                     size="sm"
                     variant="destructive"
                     icon={<Trash2 size={16} />}
-                    onClick={() => setConfermaBlocco(true)}
+                    onClick={() => {
+                      const scelto = opzioniGruppo.find((o) => o.valore === gruppoScelto);
+                      if (scelto)
+                        setGruppoDaButtare({
+                          campo: campoGruppo,
+                          valore: scelto.valore,
+                          etichetta: titoloLeggibile(scelto.etichetta),
+                          quante: scelto.quanti,
+                        });
+                    }}
                   />
-                  <Button label="Togli la selezione" size="sm" variant="ghost" onClick={() => setSpuntate(new Set())} />
-                </HStack>
+                ) : null}
+              </HStack>
+
+              {/* ── LE LINGUETTE DEI GRUPPI ────────────────────────────────── */}
+              {gruppo !== 'nessuno' && opzioniGruppo.length > 0 ? (
+                <TabList
+                  size="lg"
+                  hasDivider
+                  value={gruppoScelto}
+                  onChange={(v) => vaiA({ [campoGruppo]: v === 'tutti' ? '' : v, pagina: 1 })}
+                >
+                  <Tab value="tutti" label="Tutti" endContent={<Badge variant="neutral" label={String(quante)} />} />
+                  {opzioniGruppo.map((o) => (
+                    <Tab
+                      key={o.valore}
+                      value={o.valore}
+                      label={titoloLeggibile(o.etichetta)}
+                      endContent={<Badge variant="neutral" label={String(o.quanti)} />}
+                    />
+                  ))}
+                </TabList>
               ) : null}
+
+              {/* ── BARRA AZIONI MASSIVE / SELEZIONA TUTTI ────────────────── */}
+              <HStack justify="between" align="center" padding={2} wrap="wrap" gap={2}>
+                <HStack gap={3} align="center">
+                  <CheckboxInput
+                    label="Seleziona tutte"
+                    isLabelHidden
+                    value={aziende.length > 0 && aziende.every((a) => spuntate.has(a.id))}
+                    onChange={(tutti) => {
+                      if (tutti) {
+                        setSpuntate(new Set(aziende.map((a) => a.id)));
+                      } else {
+                        setSpuntate(new Set());
+                      }
+                    }}
+                  />
+                  <Text type="supporting">
+                    {spuntate.size > 0
+                      ? `${spuntate.size} selezionate su questa pagina`
+                      : `Seleziona tutte (${aziende.length} visibili)`}
+                  </Text>
+                </HStack>
+
+                {spuntate.size > 0 ? (
+                  <HStack gap={2} align="center">
+                    <Button label="Archivia" size="sm" variant="secondary" clickAction={() => azioneSuSpuntate('archivia')} />
+                    <Button
+                      label={`Elimina selezionate (${spuntate.size})`}
+                      size="sm"
+                      variant="destructive"
+                      icon={<Trash2 size={16} />}
+                      onClick={() => setConfermaBlocco(true)}
+                    />
+                    <Button label="Deseleziona" size="sm" variant="ghost" onClick={() => setSpuntate(new Set())} />
+                  </HStack>
+                ) : (
+                  <Button
+                    label="Pulisci / Elimina Campagne"
+                    size="sm"
+                    variant="ghost"
+                    icon={<Trash2 size={14} />}
+                    onClick={() => setDialogCampagneAperto(true)}
+                  />
+                )}
+              </HStack>
 
               {messaggio ? (
                 <Banner
@@ -1382,6 +1369,142 @@ export function ElencoAziende({
           }}
         />
       ) : null}
+      {/* Dialog per eliminare e gestire intere campagne/gruppi in un click */}
+      {dialogCampagneAperto ? (
+        <Dialog
+          isOpen
+          onOpenChange={(aperto) => setDialogCampagneAperto(aperto)}
+          width={640}
+          maxHeight="80vh"
+        >
+          <DialogHeader
+            title="Pulisci ed elimina campagne scraper"
+            subtitle="Elimina in un click tutti i contatti importati da Google Maps che non ti servono. I clienti e le trattative restano sempre protetti."
+            onOpenChange={() => setDialogCampagneAperto(false)}
+          />
+          <LayoutContent padding={4}>
+            <VStack gap={4}>
+              <TabList value={tabGestione} onChange={setTabGestione} hasDivider>
+                <Tab value="campagne" label={`Campagne (${opzioni.campagne.length})`} />
+                <Tab value="citta" label={`Città (${opzioni.citte.length})`} />
+                <Tab value="categorie" label={`Categorie (${opzioni.categorie.length})`} />
+              </TabList>
+
+              {tabGestione === 'campagne' ? (
+                opzioni.campagne.length === 0 ? (
+                  <EmptyState title="Nessuna campagna" description="Non ci sono campagne con lead registrate." isCompact />
+                ) : (
+                  <List hasDividers density="balanced">
+                    {opzioni.campagne.map((camp) => (
+                      <ListItem
+                        key={camp.id}
+                        label={titoloLeggibile(camp.nome)}
+                        description={`Nome grezzo: ${camp.nome}`}
+                        endContent={
+                          <HStack gap={3} align="center">
+                            <Badge variant="neutral" label={`${camp.quanti} lead`} />
+                            <Button
+                              label="Elimina"
+                              size="sm"
+                              variant="destructive"
+                              icon={<Trash2 size={15} />}
+                              onClick={() => {
+                                setDialogCampagneAperto(false);
+                                setGruppoDaButtare({
+                                  campo: 'campagna',
+                                  valore: String(camp.id),
+                                  etichetta: camp.nome,
+                                  quante: camp.quanti,
+                                });
+                              }}
+                            />
+                          </HStack>
+                        }
+                      />
+                    ))}
+                  </List>
+                )
+              ) : null}
+
+              {tabGestione === 'citta' ? (
+                opzioni.citte.length === 0 ? (
+                  <EmptyState title="Nessuna città" description="Non ci sono città con lead registrate." isCompact />
+                ) : (
+                  <List hasDividers density="balanced">
+                    {opzioni.citte.map((c) => (
+                      <ListItem
+                        key={c.valore}
+                        label={c.valore}
+                        endContent={
+                          <HStack gap={3} align="center">
+                            <Badge variant="neutral" label={`${c.quanti} lead`} />
+                            <Button
+                              label="Elimina"
+                              size="sm"
+                              variant="destructive"
+                              icon={<Trash2 size={15} />}
+                              onClick={() => {
+                                setDialogCampagneAperto(false);
+                                setGruppoDaButtare({
+                                  campo: 'citta',
+                                  valore: c.valore,
+                                  etichetta: c.valore,
+                                  quante: c.quanti,
+                                });
+                              }}
+                            />
+                          </HStack>
+                        }
+                      />
+                    ))}
+                  </List>
+                )
+              ) : null}
+
+              {tabGestione === 'categorie' ? (
+                opzioni.categorie.length === 0 ? (
+                  <EmptyState title="Nessuna categoria" description="Non ci sono categorie con lead registrate." isCompact />
+                ) : (
+                  <List hasDividers density="balanced">
+                    {opzioni.categorie.map((c) => (
+                      <ListItem
+                        key={c.valore}
+                        label={c.valore}
+                        endContent={
+                          <HStack gap={3} align="center">
+                            <Badge variant="neutral" label={`${c.quanti} lead`} />
+                            <Button
+                              label="Elimina"
+                              size="sm"
+                              variant="destructive"
+                              icon={<Trash2 size={15} />}
+                              onClick={() => {
+                                setDialogCampagneAperto(false);
+                                setGruppoDaButtare({
+                                  campo: 'categoria',
+                                  valore: c.valore,
+                                  etichetta: c.valore,
+                                  quante: c.quanti,
+                                });
+                              }}
+                            />
+                          </HStack>
+                        }
+                      />
+                    ))}
+                  </List>
+                )
+              ) : null}
+            </VStack>
+          </LayoutContent>
+          <LayoutFooter hasDivider>
+            <HStack justify="end">
+              <Button label="Chiudi" variant="secondary" onClick={() => setDialogCampagneAperto(false)} />
+            </HStack>
+          </LayoutFooter>
+        </Dialog>
+      ) : null}
+
     </>
   );
 }
