@@ -200,7 +200,7 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
     }
     await query(
       `UPDATE wesion.bozza SET pubblica_at = $2 WHERE id = $1 AND stato = ANY($3)`,
-      [idBozza, quando, DECIDIBILI]
+      [idBozza, quando, [...DECIDIBILI, 'approvata']]
     );
   }
 

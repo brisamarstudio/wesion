@@ -2324,7 +2324,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
         onChiudi={() => setModuloAnagrafica(null)}
         onSalvata={() => {
           setModuloAnagrafica(null);
-          router.refresh();
+          window.location.reload();
         }}
       />
     ) : null}

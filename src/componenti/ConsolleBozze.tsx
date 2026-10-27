@@ -62,7 +62,7 @@ import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
 import { useAdesso } from './useAdesso';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { ModaleNuovoPost } from './ModaleNuovoPost';
-import { Plus, Copy, Check } from 'lucide-react';
+import { Plus, Copy, Check, Send } from 'lucide-react';
 
 /** Il colore dice a colpo d'occhio se la riga aspetta una persona o no. */
 const COLORE_STATO: Record<string, 'success' | 'warning' | 'error' | 'accent' | 'neutral'> = {
@@ -448,6 +448,28 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
    * uscire un altro giorno bisognava cancellarla e rifarla — cioe' buttare via
    * un testo gia' scritto, gia' letto e gia' corretto per spostare un'ora.
    */
+  /**
+   * Forza l'uscita immediata: scavalca il calendario e fa uscire il post
+   * al prossimo giro del router (entro 30s).
+   */
+  async function pubblicaSubito(bersaglio?: Bozza) {
+    const b = bersaglio ?? selezionata;
+    if (!b) return;
+    setErrore(null);
+    const risposta = await fetch(`/api/bozze/${b.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ azione: 'approva', pubblica_at: null }),
+    });
+    const esito = await risposta.json().catch(() => ({}));
+    if (!risposta.ok) {
+      setErrore(perche(risposta, esito));
+      return;
+    }
+    setUltimaDecisa({ bozza: b, azione: 'approva' });
+    router.refresh();
+  }
+
   async function cambiaQuando(valore: string) {
     if (!selezionata) return;
     setErrore(null);
@@ -1144,6 +1166,13 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                         ? 'Ci sono avvisi gravi. Puoi approvare comunque: decidi tu.'
                         : undefined
                     }
+                  />
+                  <Button
+                    label="🚀 Pubblica adesso"
+                    variant="secondary"
+                    isDisabled={destinazione ? !destinazione.pronta : false}
+                    clickAction={() => pubblicaSubito(selezionata)}
+                    tooltip="Azzera la data programmata: esce subito al primo giro del router."
                   />
                   <Button label="Rifiuta" variant="secondary" clickAction={() => decidi('rifiuta')} />
                   <Button label="Cancella" variant="ghost" clickAction={() => setDaCancellare(true)} />

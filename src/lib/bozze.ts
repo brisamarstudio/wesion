@@ -364,8 +364,9 @@ export const SQL_BOZZE = `
     -- da scorrere per arrivare all'unica che chiedeva qualcosa. Chi apre questa
     -- pagina ha poco tempo e la prima riga dev'essere quella che costa di piu'
     -- ignorare — la stessa regola gia' applicata alle spie.
-    CASE WHEN b.stato = 'attesa_approvazione'
-         THEN COALESCE(b.pubblica_at, '-infinity'::timestamptz) END ASC NULLS LAST,
+    -- Ordine cronologico naturale per le bozze da decidere: prima cio che tocca prima!
+    CASE WHEN b.stato IN ('attesa_approvazione', 'generata', 'vuota')
+         THEN COALESCE(b.pubblica_at, b.creata_at) END ASC NULLS LAST,
     b.creata_at DESC
   LIMIT 300
 `;
