@@ -1,20 +1,16 @@
 /**
- * Propone il `repo_url` di un cliente guardando dentro `SITI/`, invece di
- * farselo digitare a mano.
+ * Propone il `repo_url` di un cliente guardando:
+ * 1. Nelle cartelle di `SITI/` in locale.
+ * 2. Tramite l'API di GitHub (con GITHUB_TOKEN_BRISAMAR) se online o se non presente in locale.
  *
- * Stessa forma di `/google`: legge e basta, non scrive in tabella — il
- * salvataggio resta al bottone «Salva» di sempre. Disponibile solo dove
- * `SITI_LOCAL_PATH` esiste (il PC di sviluppo): su Contabo la funzione lo dice
- * invece di rompersi, vedi `src/lib/repo-locale.ts`.
+ * Utilizza sia nome/slug, sia il dominio del sito web del cliente per fare il match esatto.
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { cercaRepoLocale } from '@/lib/repo-locale';
 
-export async function GET(_r: Request, contesto: { params: Promise<{ id: string }> }) {
+export async function GET(r: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
-  // Number() e' sicuro: gli id sono di nuovo piccoli (sequenze, migrazione del 15/09/2026).
-  // isSafeInteger e non isFinite: isFinite su una STRINGA e' sempre false -> 400 fisso.
   const aziendaId = Number(id);
   if (!Number.isSafeInteger(aziendaId)) return NextResponse.json({ errore: 'id non valido' }, { status: 400 });
 
@@ -24,13 +20,27 @@ export async function GET(_r: Request, contesto: { params: Promise<{ id: string 
   );
   if (!azienda) return NextResponse.json({ errore: 'Azienda non trovata.' }, { status: 404 });
 
-  const esito = await cercaRepoLocale(azienda.nome, azienda.slug);
+  // Controlliamo se nella request è passato ?sito=..., altrimenti leggiamo dal database
+  const urlReq = new URL(r.url);
+  let sitoUrl = urlReq.searchParams.get('sito')?.trim();
+
+  if (!sitoUrl) {
+    const [contattoSito] = await query<{ valore: string }>(
+      `SELECT valore FROM wesion.contatto WHERE azienda_id = $1 AND tipo = 'sito' AND valore != '' LIMIT 1`,
+      [aziendaId]
+    );
+    if (contattoSito?.valore) {
+      sitoUrl = contattoSito.valore.trim();
+    }
+  }
+
+  const esito = await cercaRepoLocale(azienda.nome, azienda.slug, sitoUrl);
 
   if (!esito.disponibile) {
     return NextResponse.json(
       {
         errore:
-          'SITI_LOCAL_PATH non è configurato su questo server: la ricerca nelle cartelle locali funziona solo dal PC di sviluppo.',
+          'Nessun repository trovato né in locale in SITI/ né su GitHub.',
       },
       { status: 400 }
     );

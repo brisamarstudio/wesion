@@ -228,7 +228,9 @@ export function ModuloAzienda({
     setEsitoRepo(null);
     setCercandoRepo(true);
     try {
-      const r = await fetch(`/api/aziende/${azienda?.id}/repo-locale`);
+      const sitoContatto = dati.contatti.find((c) => c.tipo === 'sito')?.valore || '';
+      const queryParam = sitoContatto ? `?sito=${encodeURIComponent(sitoContatto)}` : '';
+      const r = await fetch(`/api/aziende/${azienda?.id}/repo-locale${queryParam}`);
       const e = await r.json().catch(() => ({}));
       if (!r.ok) {
         setEsitoRepo({ tipo: "non_disponibile", messaggio: e?.errore ?? "Ricerca non disponibile." });
