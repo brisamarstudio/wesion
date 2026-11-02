@@ -335,6 +335,28 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     }
   }
 
+  /**
+   * «Prova il collegamento» di Instagram. Non pubblica niente: chiede a Meta
+   * chi e' l'account e quanti post ha usato oggi. Il token lo legge il server
+   * dal database, quindi vale quello SALVATO: se si e' appena incollato un
+   * token nuovo bisogna prima salvare la scheda.
+   */
+  async function provaInstagram() {
+    setMessaggio({ tipo: 'info', testo: 'Chiedo a Meta se il collegamento funziona…' });
+    const r = await fetch(`/api/aziende/${s.id}/instagram`);
+    const e = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non sono riuscito a parlare con Meta.' });
+      return;
+    }
+    setMessaggio({
+      tipo: 'success',
+      testo: `Collegato: @${e.username}${e.follower != null ? `, ${e.follower} follower` : ''}${
+        e.quotaUsata != null ? `. Oggi ha usato ${e.quotaUsata} dei 100 post consentiti` : ''
+      }.`,
+    });
+  }
+
   async function guardaProposta() {
     setMessaggio(null);
     setPrInCorso(true);
@@ -1906,9 +1928,36 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                       <VStack gap={2}>
                         <Banner
                           status="info"
-                          title="I post si pubblicano a mano"
-                          description="Wesion li scrive e li prepara: gancio, formattazione per il telefono e primo commento. In consolle si copiano con un click, si incollano su Facebook o Instagram e si segnano come pubblicati."
+                          title="Facebook a mano, Instagram con un click"
+                          description="Wesion scrive e prepara i post. Su Facebook si copiano in consolle e si incollano a mano. Su Instagram, se qui sotto è collegato l'account, c'è il bottone «Pubblica su Instagram»: esce solo quando lo premi tu."
                         />
+                        <TextInput
+                          label="Id dell'account Instagram"
+                          description="Il numero lungo dell'account professionale (non il nome utente). Si legge da Meta con «Prova il collegamento» dopo averlo incollato."
+                          placeholder="17841406056432356"
+                          value={config('social').instagram_id ?? ''}
+                          onChange={(v) => cambiaServizio('social', { instagram_id: (v ?? '').trim() })}
+                        />
+                        <CampoSegreto
+                          label="Token di Instagram"
+                          description="Da Meta (Graph API Explorer, poi scambiato in uno da 60 giorni). Dura fino alla data qui sotto: va rinnovato prima."
+                          placeholder="EAA…"
+                          value={config('social').instagram_token ?? ''}
+                          onChange={(v) => cambiaServizio('social', { instagram_token: (v ?? '').trim() })}
+                        />
+                        <TextInput
+                          label="Il token scade il"
+                          description="Giorno, anno-mese-giorno. Serve solo a ricordarsi di rinnovarlo."
+                          placeholder="2027-01-01"
+                          value={config('social').instagram_token_scade ?? ''}
+                          onChange={(v) => cambiaServizio('social', { instagram_token_scade: (v ?? '').trim() })}
+                        />
+                        <HStack gap={2}>
+                          <Button label="Prova il collegamento" size="sm" variant="secondary" onClick={provaInstagram} />
+                          <Text type="supporting" color="secondary">
+                            Salva prima la scheda se hai appena cambiato id o token.
+                          </Text>
+                        </HStack>
                         <Selector
                           label="Dove pubblica"
                           description="Su quali canali è presente il cliente."

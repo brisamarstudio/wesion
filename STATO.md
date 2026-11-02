@@ -1493,6 +1493,18 @@ Portato dentro Wesion il sistema operativo social (voce → ideazione → scritt
 - **Piano Editoriale (`src/componenti/PianoEditoriale.tsx` e `src/app/api/aziende/[id]/piano/route.ts`):** Selettore di destinazione (GBP vs Social Media FB/IG), con anteprima e generazione bozze vuote dedicate.
 
 
+### 16.3 Fase 2 — Instagram con un click (02/11/2026)
+
+Il bottone **«Pubblica su Instagram»** in consolle, sulle bozze social di un cliente che ha Instagram collegato. Provato su @mywebby.
+
+- **Come funziona:** `src/lib/instagram.ts` (Meta Graph API v26) + rotta `POST /api/bozze/[id]/instagram`. Due click (il secondo «Sì, pubblica adesso»), `conferma:true` obbligatorio, presa atomica (`pubblicando`), foto convertita in JPEG con `sharp` e ricaricata su media.mywebby.it (proporzioni tagliate nei limiti 4:5 – 1,91:1), esito nella traccia (`bozza_pubblicata_instagram` / `bozza_instagram_fallita`) e indirizzo del post dentro la bozza. Se fallisce la bozza torna com'era e l'errore si legge in consolle.
+- **⚠️ ECCEZIONE ALLA REGOLA «LA DASHBOARD NON PUBBLICA»:** qui la dashboard parla con Meta. Perché: il router su Oracle da qui non si aggiorna, e l'API di Instagram non ha la pubblicazione programmata, quindi la programmazione andrà comunque fatta da Wesion (nel router). Fino ad allora l'unico innesco è il bottone.
+- **Dove sta il token:** nella config del servizio `social` del cliente (`instagram_id`, `instagram_token`, `instagram_token_scade`), campo **Social** della scheda, con «Prova il collegamento». Non in un .env: così non si tocca il server. ⚠️ `leggiScheda` manda al browser la config intera (vedi nota in `CampoSegreto`), quindi il token è nell'HTML della scheda: tollerato finché la scheda la vede solo l'agenzia, **da togliere prima di aprire Wesion a qualcun altro**.
+- **Il token dura 60 giorni** (utente lungo). Scade il 01/01/2027 per MyWebby. Il rinnovo automatico (`fb_exchange_token` con la chiave segreta dell'app) **non c'è ancora**: fino ad allora va rifatto a mano. Il token che non scade (Pagina) richiede il caso d'uso «Gestisci tutto sulla tua Pagina» nell'app Meta: da fare.
+- **App Meta:** «Wesion Social», id `1732506984503617`, modalità sviluppo (basta per gli account di chi ha un ruolo nell'app). Per i **clienti** serve la revisione dell'app (la verifica aziendale del portfolio «My Webby» c'è già).
+- **Il groviglio dei due portfolio** (la causa di 3 ore di tentativi): `@mywebby` è «Di proprietà» del portfolio **MyWebby** (id 189117251692576), l'app sta nel portfolio **My Webby** (id 2850130018542976). Per questo il token «di sistema» uscì sempre vuoto. Si è aggirato con un **token utente** (Graph API Explorer, `instagram_basic` + `instagram_content_publish`), che vede l'account.
+- **Cosa NON fa ancora:** primo commento (serve `instagram_manage_comments`, già nell'elenco ma non richiesto al token), caroselli e reel, programmazione, rinnovo automatico del token.
+
 ## 17. La Plancia e le Impostazioni (16/09/2026)
 
 Detto da chi la usa il 15/09: «avete costruito in AIchese invece che in umanese.

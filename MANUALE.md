@@ -356,6 +356,24 @@ bloccano: segnalano. Decidi tu.
 > hai approvato e dopo trenta secondi non è uscito niente, aspetta ancora un po'
 > prima di preoccuparti.
 
+### Instagram con un click (dal 02/11/2026)
+
+Per i post **social** di un cliente che ha Instagram collegato c'è il bottone
+**«Pubblica su Instagram»**. Qui è l'eccezione alla regola di prima: **non
+c'è il router di mezzo, esce subito**, appena premi il secondo click («Sì,
+pubblica adesso»). Servono testo e **copertina** (senza foto Instagram non
+pubblica). Se non va, l'errore di Meta compare in rosso e la bozza resta com'era.
+
+**Per collegare un cliente:** scheda cliente → **Social** → id dell'account
+Instagram e token, poi salva e premi **«Prova il collegamento»**: deve dirti chi
+è l'account e quanti post ha usato oggi. Il token dura 60 giorni e la scheda
+ricorda la scadenza: **va rinnovato a mano** (per ora). Se Meta risponde che è
+scaduto, il messaggio lo dice in chiaro.
+
+> ⚠️ Facebook resta a mano (copia e incolla). E niente di tutto questo è
+> programmato: se vuoi un post «mercoledì alle 18» al momento non esiste, esce
+> quando premi.
+
 ---
 
 ## 📸 Il menù del giorno su WhatsApp — *quello che fa il titolare*

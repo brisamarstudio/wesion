@@ -29,6 +29,7 @@ import { Layout, LayoutContent, LayoutHeader, LayoutPanel } from '@astryxdesign/
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { Heading } from '@astryxdesign/core/Heading';
+import { Link } from '@astryxdesign/core/Link';
 import { Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
@@ -212,6 +213,9 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
   const [inScrittura, setInScrittura] = useState(false);
   const [copiato, setCopiato] = useState(false);
   const [copiatoCommento, setCopiatoCommento] = useState(false);
+  /** Instagram: il primo click chiede conferma, il secondo pubblica. */
+  const [confermaIg, setConfermaIg] = useState(false);
+  const [pubblicandoIg, setPubblicandoIg] = useState(false);
 
   useEffect(() => {
     if (searchParams?.get('nuovo') === '1') {
@@ -607,6 +611,56 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
     await navigator.clipboard.writeText(commento);
     setCopiatoCommento(true);
     setTimeout(() => setCopiatoCommento(false), 2500);
+  }
+
+  /**
+   * «Pubblica su Instagram». Due click di proposito: il primo non fa niente
+   * se non cambiare il bottone in «Sì, pubblica adesso», perche' su un profilo
+   * vero un post uscito per sbaglio si vede subito e si cancella a mano.
+   *
+   * Se il testo e' stato corretto a mano e non ancora salvato, lo si salva PRIMA
+   * (azione 'nessuna' + testo): il server pubblica quello che trova nel
+   * database, e senza questo uscirebbe il testo vecchio.
+   */
+  async function pubblicaSuInstagram() {
+    if (!selezionata) return;
+    if (!confermaIg) {
+      setConfermaIg(true);
+      return;
+    }
+    setErrore(null);
+    setPubblicandoIg(true);
+    try {
+      if (modificato) {
+        const salva = await fetch(`/api/bozze/${selezionata.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ azione: 'nessuna', testo: testoCorrente }),
+        });
+        if (!salva.ok) {
+          setErrore('Non sono riuscito a salvare il testo corretto: non ho pubblicato.');
+          return;
+        }
+      }
+      const risposta = await fetch(`/api/bozze/${selezionata.id}/instagram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conferma: true }),
+      });
+      const esito = await risposta.json().catch(() => ({}));
+      if (!risposta.ok) {
+        setErrore(esito?.errore ?? 'Non è andata, e non so dire perché.');
+        return;
+      }
+      setCorrezioni((c) => {
+        const { [selezionata.id]: _tolta, ...resto } = c;
+        return resto;
+      });
+      router.refresh();
+    } finally {
+      setConfermaIg(false);
+      setPubblicandoIg(false);
+    }
   }
 
   async function segnaPubblicataAMano() {
@@ -1100,6 +1154,40 @@ export function ConsolleBozze({ bozze: tutte }: { bozze: Bozza[] }) {
                           copiaPrimoCommento(String(selezionata.contenuto.primo_commento))
                         }
                       />
+                    ) : null}
+                    {selezionata.stato !== 'pubblicata' &&
+                    String(selezionata.contenuto.canale ?? 'instagram') === 'instagram' ? (
+                      <Button
+                        label={
+                          pubblicandoIg
+                            ? 'Pubblico su Instagram…'
+                            : confermaIg
+                              ? 'Sì, pubblica adesso su Instagram'
+                              : 'Pubblica su Instagram'
+                        }
+                        variant={confermaIg ? 'primary' : 'secondary'}
+                        isDisabled={!testoCorrente?.trim() || pubblicandoIg}
+                        clickAction={pubblicaSuInstagram}
+                      />
+                    ) : null}
+                    {confermaIg && !pubblicandoIg ? (
+                      <Button label="No, aspetta" variant="secondary" clickAction={() => setConfermaIg(false)} />
+                    ) : null}
+                    {selezionata.stato === 'pubblicata' && selezionata.contenuto.instagram ? (
+                      <Text type="supporting" color="secondary">
+                        Uscito su Instagram
+                        {(selezionata.contenuto.instagram as { permalink?: string }).permalink ? (
+                          <>
+                            {' · '}
+                            <Link
+                              href={(selezionata.contenuto.instagram as { permalink?: string }).permalink ?? ''}
+                              isExternalLink
+                            >
+                              guardalo
+                            </Link>
+                          </>
+                        ) : null}
+                      </Text>
                     ) : null}
                     {selezionata.stato !== 'pubblicata' ? (
                       <Button
