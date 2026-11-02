@@ -64,6 +64,28 @@ export async function POST(_r: Request, contesto: { params: Promise<{ id: string
 
   const [azienda] = await query<{ nome: string }>(`SELECT nome FROM wesion.azienda WHERE id = $1`, [aziendaId]);
 
+  // ⚠️ La guardia sta anche QUI, non solo sul bottone: una proposta che
+  // rimette un file tolto dal sito, o che copre una rotta generata, non si
+  // applica nemmeno chiamando la rotta a mano. Vedi `Vecchiaia` in seo-git.ts.
+  try {
+    const attuale = await leggiPR(url, GITHUB_TOKEN);
+    if (attuale.vecchiaia?.bloccata) {
+      const v = attuale.vecchiaia;
+      return NextResponse.json(
+        {
+          errore:
+            'Questa proposta non si applica: ' +
+            [...v.toltiDalSito.map((f) => `rimetterebbe ${f}, che dal sito è stato tolto`), ...v.coprono].join('; ') +
+            '. Scartala e rifai «Analizza SEO» sul sito di oggi.',
+        },
+        { status: 409 }
+      );
+    }
+  } catch {
+    // Se GitHub non risponde alla lettura, il merge qui sotto fallira' con un
+    // messaggio suo: non si inventa un blocco che non si e' potuto verificare.
+  }
+
   try {
     await applicaPR(url, GITHUB_TOKEN, `SEO/GEO/AEO da Wesion — ${azienda?.nome ?? 'sito cliente'}`);
   } catch (errore: unknown) {

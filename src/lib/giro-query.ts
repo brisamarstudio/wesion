@@ -21,7 +21,13 @@
  */
 import type { RigaRendimento } from './search-console';
 
-export type CategoriaQuery = 'miniera' | 'domanda_scoperta' | 'brand_sano' | 'brand_da_guardare' | 'marginale';
+export type CategoriaQuery =
+  | 'miniera'
+  | 'domanda_scoperta'
+  | 'brand_sano'
+  | 'brand_da_guardare'
+  | 'rumore'
+  | 'marginale';
 
 export interface RigaGiroQuery {
   query: string;
@@ -45,6 +51,43 @@ function paroleNome(nomeAzienda: string): string[] {
     .replace(/[̀-ͯ]/g, '')
     .split(/[^a-z0-9]+/)
     .filter((p) => p.length >= 4);
+}
+
+/**
+ * ⚠️ IL RUMORE (02/11/2026). Su La Fenice il verdetto metteva come «Priorità 2»
+ * le query "restaurants", "salad", "just eat", "best restaurants near me":
+ * prima pagina, zero clic, quindi «manca solo un paragrafo». Ma nessuno che
+ * cerca "salad" vuole una trattoria di Carbonara al Ticino — Google mostra il
+ * locale per vicinanza, e la gente giustamente non clicca. Scriverci una
+ * pagina vuol dire fare lavoro per niente. Stesso difetto fra le query col
+ * nome: "fenice" da sola sono quasi tutte persone che cercano il Teatro La
+ * Fenice, non un CTR da sistemare.
+ *
+ * Si mettono da parte, e il verdetto DICE quante sono e perché: tacerle
+ * sembrerebbe un buco nei dati.
+ */
+const ALTRI_MARCHI =
+  /\b(just ?eat|deliveroo|glovo|uber ?eats|the ?fork|tripadvisor|booking(\.com)?|airbnb|expedia|trivago|google|facebook|instagram|amazon|subito|yelp)\b/i;
+const INGLESE = /\b(restaurants?|near me|best|salad|food|dinner|lunch|cheap|open now|things to do|where to eat)\b/i;
+const PAROLE_VUOTE = new Set(['il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'del', 'della', 'al', 'alla', 'e', 'the', 'a', 'of']);
+
+function parole(query: string): string[] {
+  return query
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((p) => p && !PAROLE_VUOTE.has(p));
+}
+
+/** Perché una query è rumore, o null se non lo è. */
+export function perchéRumore(query: string, conNome: boolean): string | null {
+  const p = parole(query);
+  if (ALTRI_MARCHI.test(query)) return 'col nome di un altro';
+  if (conNome) return p.length === 1 ? 'una parola sola, spesso un omonimo' : null;
+  if (INGLESE.test(query)) return 'generica in inglese';
+  if (p.length <= 1) return 'una parola sola, troppo generica';
+  return null;
 }
 
 interface Riga {
@@ -105,9 +148,31 @@ export function classificaGiroQuery(nomeAzienda: string, righe: RigaRendimento[]
   const clicOrdinati = [...brand.map((r) => r.clic)].sort((a, b) => b - a);
   const clicSoglieAltoValore = clicOrdinati[Math.max(0, Math.ceil(clicOrdinati.length * 0.25) - 1)] ?? Infinity;
 
+  /**
+   * ⚠️ LA STESSA RICERCA SU PIÙ PAGINE (02/11/2026). Search Console dà una riga
+   * per coppia query+pagina: "la fenice carbonara" usciva cinque volte fra i
+   * «brand da guardare» — su dove-siamo, galleria, due articoli — tutte a zero
+   * clic. Ma la stessa ricerca porta 49 clic alla home: Google mostra il sito
+   * con più pagine e la gente sceglie la home. Il sito sta VINCENDO, non c'è
+   * niente da sistemare. Una riga a zero clic di una query che clicca altrove
+   * si mette fra le marginali.
+   */
+  const clicPerQuery = new Map<string, number>();
+  for (const r of grezze) clicPerQuery.set(r.query, (clicPerQuery.get(r.query) ?? 0) + r.clic);
+
   return grezze.map((r) => ({
     ...r,
-    categoria: r.conNome ? classificaBrand(r, ctrBaselineBrand, clicSoglieAltoValore) : classificaNonBrand(r),
+    categoria:
+      r.conNome && r.clic === 0 && (clicPerQuery.get(r.query) ?? 0) > 0
+        ? 'marginale'
+        :
+      // Una query rumorosa che porta clic veri non e' rumore: la si lascia
+      // dov'e'. Si mette da parte solo quella a zero (o quasi) clic.
+      perchéRumore(r.query, r.conNome) && r.clic <= 1
+        ? 'rumore'
+        : r.conNome
+          ? classificaBrand(r, ctrBaselineBrand, clicSoglieAltoValore)
+          : classificaNonBrand(r),
   }));
 }
 
@@ -116,6 +181,8 @@ export interface GruppiGiroQuery {
   domandeScoperte: RigaGiroQuery[];
   brandSano: RigaGiroQuery[];
   brandDaGuardare: RigaGiroQuery[];
+  /** Messe da parte: generiche, in inglese, col nome di altri, omonimi. */
+  rumore: RigaGiroQuery[];
 }
 
 /**
@@ -144,6 +211,10 @@ export function raggruppaGiroQuery(righe: RigaGiroQuery[]): GruppiGiroQuery {
       .slice(0, 10),
     brandDaGuardare: per('brand_da_guardare')
       .sort((a, b) => b.impressioni - a.impressioni || a.ctr - b.ctr)
+      .slice(0, 10),
+    rumore: per('rumore')
+      .filter((r) => r.impressioni >= IMPRESSIONI_MINIME)
+      .sort((a, b) => b.impressioni - a.impressioni)
       .slice(0, 10),
   };
 }
@@ -213,7 +284,7 @@ export function verdettoGiroQuery(gruppi: GruppiGiroQuery): VerdettoGiroQuery {
 
   if (gruppi.brandDaGuardare.length) {
     righe.push(
-      `Da controllare, non da rincorrere: ${gruppi.brandDaGuardare.length} query col nome del cliente hanno un CTR sotto la sua media — guarda come appare lo snippet su Google prima di toccare altro, spesso è un problema di title, non di contenuto.`
+      `Da controllare, non da rincorrere: ${gruppi.brandDaGuardare.length === 1 ? '1 ricerca col nome del cliente ha' : `${gruppi.brandDaGuardare.length} ricerche col nome del cliente hanno`} un CTR sotto la sua media — guarda come appare lo snippet su Google prima di toccare altro, spesso è un problema di title, non di contenuto.`
     );
   }
 
@@ -230,6 +301,16 @@ export function verdettoGiroQuery(gruppi: GruppiGiroQuery): VerdettoGiroQuery {
   if (scoperteLontane.length) {
     righe.push(
       `${scoperteLontane.length} domande scoperte sono lontane (oltre la posizione 20): interessanti in prospettiva, ma non la priorità di oggi — richiedono lavoro di contenuto a lungo termine, non un ritocco.`
+    );
+  }
+
+  if (gruppi.rumore.length) {
+    const esempi = gruppi.rumore
+      .slice(0, 3)
+      .map((r) => `"${r.query}"`)
+      .join(', ');
+    righe.push(
+      `Messe da parte ${gruppi.rumore.length} ricerche che non portano clienti: ${esempi}. Sono generiche, in inglese, col nome di un altro o di un omonimo — Google ti mostra, ma chi cerca quelle cose non cerca te. Non ci si lavora.`
     );
   }
 

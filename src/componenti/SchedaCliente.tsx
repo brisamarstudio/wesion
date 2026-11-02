@@ -178,6 +178,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     domandeScoperte: RigaGiroQuery[];
     brandSano: RigaGiroQuery[];
     brandDaGuardare: RigaGiroQuery[];
+    rumore?: RigaGiroQuery[];
   } | null>(null);
   /**
    * Il verdetto: 2-4 frasi in italiano su "vale la pena o no", non solo i
@@ -269,6 +270,14 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
     url: string;
     stato: 'aperta' | 'applicata' | 'chiusa';
     file: Array<{ percorso: string; aggiunte: number; tolte: number; patch: string | null }>;
+    vecchiaia?: {
+      giorni: number;
+      commitDopo: number;
+      cambiatiDopo: string[];
+      toltiDalSito: string[];
+      coprono: string[];
+      bloccata: boolean;
+    };
   } | null>(null);
   const [prInCorso, setPrInCorso] = useState(false);
   const [confermaApplica, setConfermaApplica] = useState(false);
@@ -1172,6 +1181,37 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                           </Link>
                         </HStack>
 
+                        {/* ⚠️ Il verdetto sulla proposta PRIMA del diff: se è
+                            vecchia o rimette un file tolto, va detto in
+                            italiano sopra, non scoperto leggendo il codice.
+                            Vedi `Vecchiaia` in lib/seo-git.ts (02/11/2026). */}
+                        {pr.stato === 'aperta' && pr.vecchiaia?.bloccata ? (
+                          <Banner
+                            status="error"
+                            title="Non applicarla: è vecchia e romperebbe il sito di oggi"
+                            description={
+                              `È di ${pr.vecchiaia.giorni} giorni fa, e da allora nel sito sono entrate ${pr.vecchiaia.commitDopo} modifiche. ` +
+                              [
+                                ...pr.vecchiaia.toltiDalSito.map((f) => `Rimetterebbe ${f}, che dal sito è stato tolto apposta.`),
+                                ...pr.vecchiaia.coprono.map((c) => `${c}: il file statico vince sul generatore e lo spegne.`),
+                              ].join(' ') +
+                              ' Scartala e premi «Analizza SEO» per una proposta sul sito di oggi.'
+                            }
+                          />
+                        ) : pr.stato === 'aperta' && pr.vecchiaia && (pr.vecchiaia.giorni > 14 || pr.vecchiaia.cambiatiDopo.length) ? (
+                          <Banner
+                            status="warning"
+                            title={`Proposta di ${pr.vecchiaia.giorni} giorni fa`}
+                            description={
+                              `Da allora nel sito sono entrate ${pr.vecchiaia.commitDopo} modifiche` +
+                              (pr.vecchiaia.cambiatiDopo.length
+                                ? `, anche su ${pr.vecchiaia.cambiatiDopo.join(', ')}: applicarla potrebbe disfare un lavoro più recente.`
+                                : '.') +
+                              ' Meglio rifare «Analizza SEO» e decidere su quella nuova.'
+                            }
+                          />
+                        ) : null}
+
                         {pr.file.map((f) => (
                           <VStack key={f.percorso} gap={1}>
                             <HStack gap={2} align="center" wrap="wrap">
@@ -1230,9 +1270,11 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                             <HStack gap={2} align="center" wrap="wrap">
                               <Button
                                 label="Applica al sito"
-                                variant="primary"
+                                variant={pr.vecchiaia?.bloccata ? 'secondary' : 'primary'}
                                 size="sm"
                                 isLoading={prInCorso}
+                                isDisabled={Boolean(pr.vecchiaia?.bloccata)}
+                                tooltip={pr.vecchiaia?.bloccata ? 'Bloccata: vedi il motivo qui sopra.' : undefined}
                                 onClick={() => setConfermaApplica(true)}
                               />
                               {/* Il no sta accanto al sì, non altrove e non
@@ -1352,6 +1394,8 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                           ['scoperte', 'Domande scoperte', 'Google le mostra ma zero clic, senza il nome del locale: manca una pagina che risponda', gruppiGiroQuery.domandeScoperte],
                           ['brand_sano', 'Brand sano', 'query col nome del locale che vanno bene: da proteggere, non da toccare', gruppiGiroQuery.brandSano],
                           ['brand_guardare', 'Brand da guardare', 'CTR sotto la media delle query col nome di questo cliente: guardare title/snippet', gruppiGiroQuery.brandDaGuardare],
+                          // Chiusa di default: e' la lista di cosa NON fare.
+                          ['rumore', 'Rumore', 'generiche, in inglese, col nome di altri o di un omonimo: non ci si lavora', gruppiGiroQuery.rumore ?? []],
                         ] as const;
                         const nonVuote = sezioniGiroQuery.filter(([, , , righe]) => righe.length);
 
@@ -1370,7 +1414,7 @@ export function SchedaCliente({ scheda: iniziale }: { scheda: Scheda }) {
                         }
 
                         return (
-                          <CollapsibleGroup type="multiple" defaultValue={nonVuote.map(([id]) => id)} hasDividers density="compact">
+                          <CollapsibleGroup type="multiple" defaultValue={nonVuote.map(([id]) => id).filter((id) => id !== 'rumore')} hasDividers density="compact">
                             {nonVuote.map(([id, titolo, spiegazione, righeGruppo]) => (
                               <Collapsible
                                 key={id}

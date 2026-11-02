@@ -482,6 +482,82 @@ export interface StatoPR {
   /** `aperta`, `applicata` (merge fatto), `chiusa` (chiusa senza merge). */
   stato: 'aperta' | 'applicata' | 'chiusa';
   file: FileCambiato[];
+  /** Quanto e' vecchia rispetto al sito di oggi. Solo per le aperte. */
+  vecchiaia?: Vecchiaia;
+}
+
+/**
+ * ⚠️ UNA PROPOSTA VECCHIA NON È UNA PROPOSTA (02/11/2026). Sulla scheda di La
+ * Fenice c'era da due mesi la PR #3 «da decidere», con «Applica al sito» bello
+ * pronto. Toccava `public/llms.txt`: il file statico che il 2 settembre era
+ * stato TOLTO apposta dal sito perché copriva il generatore
+ * `src/pages/llms.txt.ts` (vedi AGENTS.md). Applicarla voleva dire rimettere
+ * online quel guasto, con un llms.txt per giunta più povero. Niente in pagina
+ * lo diceva: la proposta sembrava fresca come il giorno in cui era nata.
+ *
+ * Qui si confronta la PR col sito DI OGGI:
+ *  - quanti giorni ha e quanti commit sono entrati nel sito dopo di lei;
+ *  - quali dei suoi file sono stati cambiati nel frattempo (rischio di
+ *    disfare un lavoro più recente);
+ *  - quali dei suoi file nel sito di oggi NON CI SONO PIÙ (qualcuno li ha
+ *    tolti: rimetterli è quasi sempre sbagliato);
+ *  - quali file in `public/` coprirebbero una rotta generata in `src/pages/`.
+ * Gli ultimi due BLOCCANO l'applicazione, anche lato server.
+ */
+export interface Vecchiaia {
+  giorni: number;
+  commitDopo: number;
+  cambiatiDopo: string[];
+  toltiDalSito: string[];
+  coprono: string[];
+  bloccata: boolean;
+}
+
+async function calcolaVecchiaia(
+  p: { owner: string; repo: string },
+  pr: { created_at: string; base: { ref: string; sha: string } },
+  file: string[],
+  intestazioni: Record<string, string>
+): Promise<Vecchiaia> {
+  const api = `https://api.github.com/repos/${p.owner}/${p.repo}`;
+  const giorni = Math.floor((Date.now() - new Date(pr.created_at).getTime()) / 86_400_000);
+
+  let commitDopo = 0;
+  let cambiatiDopo: string[] = [];
+  let toltiDalSito: string[] = [];
+  const rConfronto = await fetch(`${api}/compare/${pr.base.sha}...${pr.base.ref}`, { headers: intestazioni });
+  if (rConfronto.ok) {
+    const c = (await rConfronto.json()) as { ahead_by: number; files?: Array<{ filename: string; status: string }> };
+    commitDopo = c.ahead_by ?? 0;
+    const dopo = new Map((c.files ?? []).map((f) => [f.filename, f.status]));
+    cambiatiDopo = file.filter((f) => dopo.has(f) && dopo.get(f) !== 'removed');
+    toltiDalSito = file.filter((f) => dopo.get(f) === 'removed');
+  }
+
+  // Un file statico in public/ che ha un gemello generato in src/pages/: in
+  // Astro vince lo statico, e il generatore smette di contare in silenzio.
+  const coprono: string[] = [];
+  for (const f of file.filter((x) => x.startsWith('public/'))) {
+    const nome = f.slice('public/'.length);
+    for (const est of ['.ts', '.js', '.astro']) {
+      const r = await fetch(`${api}/contents/src/pages/${nome}${est}?ref=${encodeURIComponent(pr.base.ref)}`, {
+        headers: intestazioni,
+      });
+      if (r.ok) {
+        coprono.push(`${f} coprirebbe src/pages/${nome}${est}`);
+        break;
+      }
+    }
+  }
+
+  return {
+    giorni,
+    commitDopo,
+    cambiatiDopo,
+    toltiDalSito,
+    coprono,
+    bloccata: toltiDalSito.length > 0 || coprono.length > 0,
+  };
 }
 
 /**
@@ -507,7 +583,13 @@ export async function leggiPR(urlPR: string, token: string): Promise<StatoPR> {
   if (!rPR.ok) throw new Error(`GitHub (lettura PR): ${(await rPR.text()).slice(0, 300)}`);
   if (!rFile.ok) throw new Error(`GitHub (file della PR): ${(await rFile.text()).slice(0, 300)}`);
 
-  const pr = (await rPR.json()) as { state: string; merged: boolean; html_url: string };
+  const pr = (await rPR.json()) as {
+    state: string;
+    merged: boolean;
+    html_url: string;
+    created_at: string;
+    base: { ref: string; sha: string };
+  };
   const file = (await rFile.json()) as Array<{
     filename: string;
     additions: number;
@@ -515,10 +597,17 @@ export async function leggiPR(urlPR: string, token: string): Promise<StatoPR> {
     patch?: string;
   }>;
 
+  const stato = pr.merged ? 'applicata' : pr.state === 'open' ? 'aperta' : 'chiusa';
+  const vecchiaia =
+    stato === 'aperta'
+      ? await calcolaVecchiaia(p, pr, file.map((f) => f.filename), intestazioni).catch(() => undefined)
+      : undefined;
+
   return {
     numero: p.numero,
     url: pr.html_url,
-    stato: pr.merged ? 'applicata' : pr.state === 'open' ? 'aperta' : 'chiusa',
+    stato,
+    vecchiaia,
     file: file.map((f) => ({
       percorso: f.filename,
       aggiunte: f.additions,
