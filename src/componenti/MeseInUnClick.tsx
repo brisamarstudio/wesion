@@ -1,0 +1,540 @@
+'use client';
+
+/**
+ * «Il mese» — una card per cliente, un click per prepararlo, uno per approvarlo.
+ *
+ * ⚠️ PERCHE' (02/11/2026): «io vorrei che con un CLICK una volta letto il piano
+ * editoriale del mese e approvato non ci penso più». La pagina di prima
+ * (PianoEditoriale, ora «strumento avanzato») faceva vedere giorni e temi e poi
+ * lasciava l'operatore da solo: bozze vuote, testi da scrivere, immagini da
+ * caricare, diciotto approvazioni. Qui ogni card dice a che punto e' il mese di
+ * quel cliente e qual e' l'UNICO bottone da premere adesso. La logica sta in
+ * src/lib/mese.ts.
+ *
+ * Due livelli, come «Da chiamare»: le card per scegliere, il mese intero per
+ * leggerlo e approvarlo.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
+import { HStack } from '@astryxdesign/core/HStack';
+import { VStack } from '@astryxdesign/core/VStack';
+import { Heading } from '@astryxdesign/core/Heading';
+import { Text } from '@astryxdesign/core/Text';
+import { Button } from '@astryxdesign/core/Button';
+import { Card } from '@astryxdesign/core/Card';
+import { Grid } from '@astryxdesign/core/Grid';
+import { Badge } from '@astryxdesign/core/Badge';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Divider } from '@astryxdesign/core/Divider';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { ProgressBar } from '@astryxdesign/core/ProgressBar';
+import { AspectRatio } from '@astryxdesign/core/AspectRatio';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
+import { ArrowLeft, ArrowRight, Check, RefreshCw, Sparkles, X } from 'lucide-react';
+import type { StatoMese, VoceMese, FaseMese } from '@/lib/mese';
+
+export interface ClienteMese {
+  id: number;
+  nome: string;
+  stato: StatoMese;
+}
+
+const MESI = [
+  'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+];
+
+const FASE: Record<FaseMese, { parola: string; colore: 'success' | 'warning' | 'neutral' | 'accent' | 'error' }> = {
+  non_configurato: { parola: 'Non collegato', colore: 'error' },
+  da_preparare: { parola: 'Da preparare', colore: 'neutral' },
+  in_preparazione: { parola: 'A metà', colore: 'warning' },
+  da_approvare: { parola: 'Da leggere e approvare', colore: 'accent' },
+  approvato: { parola: 'Approvato, esce da solo', colore: 'success' },
+};
+
+function giorno(iso: string): string {
+  return new Date(iso).toLocaleDateString('it-IT', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Europe/Rome',
+  });
+}
+
+function n(x: number, uno: string, tanti: string): string {
+  return `${x} ${x === 1 ? uno : tanti}`;
+}
+
+/** La frase della card: cosa c'e' e cosa fare, in italiano. */
+function fraseStato(s: StatoMese, nomeMese: string): string {
+  switch (s.fase) {
+    case 'non_configurato':
+      return 'Né la scheda Google né il blog sono collegati: non c’è dove pubblicare. Si sistema dalla scheda del cliente, in «Servizi».';
+    case 'da_preparare':
+      if (s.fatti === 0) {
+        return 'Di questo cliente non sappiamo ancora niente: senza fatti veri i post sarebbero inventati. Riempi «Cosa è vero» nella sua scheda, poi torna qui.';
+      }
+      return `${nomeMese[0].toUpperCase()}${nomeMese.slice(1)} non è ancora pronto. Un click prepara tutto: giorni, testi e immagini${s.blogPronto ? ', più gli articoli del sito' : ''}. Ci vogliono un paio di minuti.`;
+    case 'in_preparazione':
+      return `Preparazione a metà: ${s.vuote ? `${n(s.vuote, 'testo', 'testi')} da scrivere` : ''}${s.vuote && s.senzaFoto ? ', ' : ''}${s.senzaFoto ? `${n(s.senzaFoto, 'immagine', 'immagini')} da fare` : ''}. Riprende da dove si era fermata.`;
+    case 'da_approvare':
+      return `Pronto: ${n(s.post, 'post Google', 'post Google')}${s.articoli ? ` e ${n(s.articoli, 'articolo', 'articoli')} del sito` : ''}. Leggilo e approvalo con un click.`;
+    case 'approvato':
+      return `Approvato: esce da solo. ${s.uscite ? `${n(s.uscite, 'già uscito', 'già usciti')}` : 'Non è ancora uscito niente'}${s.prossima ? `, il prossimo ${giorno(s.prossima)}` : ''}.`;
+  }
+}
+
+export function MeseInUnClick({
+  clienti,
+  anno,
+  mese,
+  mesiScelta,
+  clienteAperto,
+}: {
+  clienti: ClienteMese[];
+  anno: number;
+  mese: number;
+  /** I due mesi che si possono scegliere: questo e il prossimo. */
+  mesiScelta: Array<{ valore: string; etichetta: string }>;
+  clienteAperto: number | null;
+}) {
+  const router = useRouter();
+  const nomeMese = MESI[mese - 1];
+  const [lavoro, setLavoro] = useState<Record<number, string>>({});
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const vai = (p: Record<string, string | number | null>) => {
+    const q = new URLSearchParams({ mese: `${anno}-${String(mese).padStart(2, '0')}` });
+    for (const [k, v] of Object.entries(p)) {
+      if (v === null) q.delete(k);
+      else q.set(k, String(v));
+    }
+    router.push(`/piano?${q}`);
+  };
+
+  /** Prepara un cliente: richiama il passo finche' non ha finito o non si blocca. */
+  const prepara = useCallback(
+    async (id: number) => {
+      setErrore(null);
+      for (let giro = 0; giro < 80; giro++) {
+        const r = await fetch(`/api/aziende/${id}/mese/prepara`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ anno, mese }),
+        });
+        const esito = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setErrore(esito?.errore ?? 'La preparazione si è fermata.');
+          break;
+        }
+        const s: StatoMese = esito.stato;
+        setLavoro((w) => ({
+          ...w,
+          [id]: `${esito.fatto}${s?.totale ? ` · ${s.totale - s.vuote}/${s.totale} testi, ${s.totale - s.vuote - s.senzaFoto}/${s.totale} immagini` : ''}`,
+        }));
+        if (esito.errori?.length && !esito.avanzati) {
+          setErrore(esito.errori.join(' · '));
+          break;
+        }
+        if (esito.finito) break;
+      }
+      setLavoro((w) => {
+        const { [id]: _, ...resto } = w;
+        return resto;
+      });
+      router.refresh();
+    },
+    [anno, mese, router]
+  );
+
+  async function preparaTutti() {
+    for (const c of clienti) {
+      if ((c.stato.fase === 'da_preparare' && c.stato.fatti > 0) || c.stato.fase === 'in_preparazione') await prepara(c.id);
+    }
+  }
+
+  const aperto = clienteAperto ? clienti.find((c) => c.id === clienteAperto) ?? null : null;
+  if (aperto) {
+    return (
+      <LetturaMese
+        cliente={aperto}
+        anno={anno}
+        mese={mese}
+        onIndietro={() => vai({ cliente: null })}
+        onPrepara={() => prepara(aperto.id)}
+        inLavoro={lavoro[aperto.id] ?? null}
+      />
+    );
+  }
+
+  const daPreparare = clienti.filter(
+    (c) => (c.stato.fase === 'da_preparare' && c.stato.fatti > 0) || c.stato.fase === 'in_preparazione'
+  );
+  const daApprovare = clienti.filter((c) => c.stato.fase === 'da_approvare');
+
+  return (
+    <Layout
+      height="fill"
+      header={
+        <LayoutHeader hasDivider>
+          <HStack justify="between" align="center" wrap="wrap" gap={3}>
+            <VStack gap={0.5}>
+              <HStack gap={3} align="center" wrap="wrap">
+                <Heading level={2}>Il mese</Heading>
+                <SegmentedControl
+                  label="Mese"
+                  size="sm"
+                  value={`${anno}-${String(mese).padStart(2, '0')}`}
+                  onChange={(v) => router.push(`/piano?mese=${v}`)}
+                >
+                  {mesiScelta.map((m) => (
+                    <SegmentedControlItem key={m.valore} value={m.valore} label={m.etichetta} />
+                  ))}
+                </SegmentedControl>
+              </HStack>
+              <Text type="supporting" color="secondary">
+                {daApprovare.length
+                  ? `${n(daApprovare.length, 'cliente aspetta', 'clienti aspettano')} solo che tu legga e approvi.`
+                  : daPreparare.length
+                    ? `${n(daPreparare.length, 'cliente', 'clienti')} da preparare per ${nomeMese}.`
+                    : `${nomeMese[0].toUpperCase()}${nomeMese.slice(1)} è a posto per tutti.`}
+              </Text>
+            </VStack>
+            <HStack gap={2} align="center" wrap="wrap">
+              <Button
+                label="Strumento avanzato"
+                size="sm"
+                variant="ghost"
+                tooltip="La griglia di prima: giorni e temi, quantità, social."
+                onClick={() => router.push('/piano?vista=avanzata')}
+              />
+              {daPreparare.length > 1 ? (
+                <Button
+                  label={`Prepara tutti (${daPreparare.length})`}
+                  size="sm"
+                  variant="primary"
+                  icon={<Sparkles size={15} />}
+                  clickAction={preparaTutti}
+                />
+              ) : null}
+            </HStack>
+          </HStack>
+        </LayoutHeader>
+      }
+      content={
+        <LayoutContent padding={4}>
+          <VStack gap={4}>
+            {errore ? (
+              <Banner status="error" title={errore} isDismissable onDismiss={() => setErrore(null)} />
+            ) : null}
+            {clienti.length === 0 ? (
+              <EmptyState
+                title="Nessun cliente"
+                description="Il mese si prepara per chi è in stato «cliente». Promuovi un'azienda dalla sua scheda."
+              />
+            ) : (
+              <Grid columns={{ minWidth: 320, max: 3, repeat: 'fill' }} gap={4}>
+                {clienti.map((c) => {
+                  const s = c.stato;
+                  const f = FASE[s.fase];
+                  const occupato = lavoro[c.id];
+                  return (
+                    <Card key={c.id} padding={0}>
+                      <VStack gap={3} padding={4}>
+                        <HStack gap={2} align="center">
+                          <StatusDot variant={f.colore} label={f.parola} isPulsing={Boolean(occupato)} />
+                          <Text type="supporting" weight="medium">
+                            {occupato ? 'Sto preparando…' : f.parola}
+                          </Text>
+                        </HStack>
+                        <Heading level={3}>{c.nome}</Heading>
+                        <Text>{occupato ?? fraseStato(s, nomeMese)}</Text>
+                        {occupato ? <ProgressBar label="Preparazione" isLabelHidden isIndeterminate /> : null}
+                        {s.fatti > 0 && s.fatti < 4 && s.fase === 'da_preparare' ? (
+                          <Text type="supporting" color="secondary">
+                            ⚠️ Di questo cliente sappiamo poco ({n(s.fatti, 'fatto', 'fatti')}): i post rischiano di
+                            ripetersi. Aggiungi qualcosa in «Cosa è vero».
+                          </Text>
+                        ) : null}
+                        {s.bloccate ? (
+                          <Text type="supporting" color="secondary">
+                            {n(s.bloccate, 'uscita non è riuscita', 'uscite non sono riuscite')} dopo due prove: le
+                            trovi nel mese, si sistemano a mano.
+                          </Text>
+                        ) : null}
+                        {s.fase === 'da_approvare' && (s.gravi || s.passate) ? (
+                          <Text type="supporting" color="secondary">
+                            {s.gravi ? `${n(s.gravi, 'post ha', 'post hanno')} un avviso da guardare. ` : ''}
+                            {s.passate ? `${n(s.passate, 'data è', 'date sono')} già ${s.passate === 1 ? 'passata' : 'passate'}.` : ''}
+                          </Text>
+                        ) : null}
+                      </VStack>
+                      <Divider />
+                      <HStack justify="between" align="center" gap={3} padding={3}>
+                        <Text type="supporting" color="secondary">
+                          {[s.gbpPronto ? 'Google ✓' : 'Google —', s.blogPronto ? 'Sito ✓' : 'Sito —'].join(' · ')}
+                        </Text>
+                        {s.fase === 'non_configurato' || (s.fase === 'da_preparare' && s.fatti === 0) ? (
+                          <Button label="Apri la scheda" size="sm" onClick={() => router.push(`/aziende/${c.id}`)} />
+                        ) : s.fase === 'da_preparare' || s.fase === 'in_preparazione' ? (
+                          <Button
+                            label={s.fase === 'da_preparare' ? `Prepara ${nomeMese}` : 'Continua'}
+                            size="sm"
+                            variant="primary"
+                            icon={<Sparkles size={15} />}
+                            isDisabled={Boolean(occupato)}
+                            clickAction={() => prepara(c.id)}
+                          />
+                        ) : (
+                          <Button
+                            label={s.fase === 'da_approvare' ? 'Leggi e approva' : 'Rileggi'}
+                            size="sm"
+                            variant={s.fase === 'da_approvare' ? 'primary' : 'secondary'}
+                            icon={<ArrowRight size={15} />}
+                            onClick={() => vai({ cliente: c.id })}
+                          />
+                        )}
+                      </HStack>
+                    </Card>
+                  );
+                })}
+              </Grid>
+            )}
+          </VStack>
+        </LayoutContent>
+      }
+    />
+  );
+}
+
+// ── Il mese di un cliente, da leggere ────────────────────────────────────────
+
+function LetturaMese({
+  cliente,
+  anno,
+  mese,
+  onIndietro,
+  onPrepara,
+  inLavoro,
+}: {
+  cliente: ClienteMese;
+  anno: number;
+  mese: number;
+  onIndietro: () => void;
+  onPrepara: () => Promise<void>;
+  inLavoro: string | null;
+}) {
+  const router = useRouter();
+  const [voci, setVoci] = useState<VoceMese[] | null>(null);
+  const [stato, setStato] = useState<StatoMese>(cliente.stato);
+  const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
+  const [inCorso, setInCorso] = useState<Record<number, boolean>>({});
+  const nomeMese = MESI[mese - 1];
+
+  const carica = useCallback(async () => {
+    const r = await fetch(`/api/aziende/${cliente.id}/mese?anno=${anno}&mese=${mese}`);
+    const esito = await r.json().catch(() => ({}));
+    if (r.ok) {
+      setVoci(esito.voci);
+      setStato(esito.stato);
+    } else setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Non riesco a leggere il mese.' });
+  }, [cliente.id, anno, mese]);
+
+  useEffect(() => {
+    carica();
+  }, [carica, inLavoro]);
+
+  async function approvaTutto() {
+    setMessaggio(null);
+    const r = await fetch(`/api/aziende/${cliente.id}/mese/approva`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anno, mese }),
+    });
+    const e = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+      return;
+    }
+    const fuori = [
+      e.saltateGravi ? `${n(e.saltateGravi, 'resta fuori', 'restano fuori')} per un avviso da guardare` : '',
+      e.saltatePassate ? `${n(e.saltatePassate, 'ha', 'hanno')} la data già passata` : '',
+    ].filter(Boolean);
+    setMessaggio({
+      tipo: 'success',
+      testo:
+        `Fatto: ${n(e.approvate, 'uscita approvata', 'uscite approvate')}. Escono da sole, ognuna nel suo giorno.` +
+        (fuori.length ? ` ${fuori.join(', ')}.` : ''),
+    });
+    await carica();
+    router.refresh();
+  }
+
+  async function azione(v: VoceMese, cosa: 'togli' | 'immagine') {
+    setInCorso((x) => ({ ...x, [v.id]: true }));
+    const r =
+      cosa === 'togli'
+        ? await fetch(`/api/bozze/${v.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ azione: 'rifiuta' }),
+          })
+        : await fetch(`/api/bozze/${v.id}/immagine-ai`, { method: 'POST' });
+    const e = await r.json().catch(() => ({}));
+    if (!r.ok) setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+    setInCorso((x) => ({ ...x, [v.id]: false }));
+    await carica();
+  }
+
+  const approvabili = (voci ?? []).filter(
+    (v) => v.stato === 'attesa_approvazione' && !v.grave && new Date(v.pubblica_at).getTime() >= Date.now()
+  ).length;
+  const pronto = stato.fase === 'da_approvare' || (stato.fase === 'approvato' && approvabili > 0);
+
+  const bottoneApprova =
+    approvabili > 0 ? (
+      <Button
+        label={`Approva tutto ${nomeMese} (${approvabili})`}
+        variant="primary"
+        icon={<Check size={16} />}
+        isDisabled={!pronto}
+        tooltip={pronto ? 'Escono da sole, ognuna nel suo giorno. Quelle con un avviso grave restano fuori.' : 'Prima finisci di preparare.'}
+        clickAction={approvaTutto}
+      />
+    ) : null;
+
+  return (
+    <Layout
+      height="fill"
+      header={
+        <LayoutHeader hasDivider>
+          <HStack justify="between" align="center" wrap="wrap" gap={3}>
+            <HStack gap={3} align="center" wrap="wrap">
+              <Button label="Tutti i clienti" size="sm" variant="ghost" icon={<ArrowLeft size={15} />} onClick={onIndietro} />
+              <VStack gap={0.5}>
+                <Heading level={2}>
+                  {cliente.nome} · {nomeMese} {anno}
+                </Heading>
+                <Text type="supporting" color="secondary">
+                  {inLavoro ?? fraseStato(stato, nomeMese)}
+                </Text>
+              </VStack>
+            </HStack>
+            <HStack gap={2} align="center">
+              {stato.fase === 'da_preparare' || stato.fase === 'in_preparazione' ? (
+                <Button
+                  label={stato.fase === 'da_preparare' ? `Prepara ${nomeMese}` : 'Continua a preparare'}
+                  variant="primary"
+                  icon={<Sparkles size={15} />}
+                  isDisabled={Boolean(inLavoro)}
+                  clickAction={onPrepara}
+                />
+              ) : null}
+              {bottoneApprova}
+            </HStack>
+          </HStack>
+        </LayoutHeader>
+      }
+      content={
+        <LayoutContent padding={4}>
+          <VStack gap={4}>
+            {messaggio ? (
+              <Banner status={messaggio.tipo} title={messaggio.testo} isDismissable onDismiss={() => setMessaggio(null)} />
+            ) : null}
+            {inLavoro ? <ProgressBar label="Preparazione" isLabelHidden isIndeterminate /> : null}
+
+            {voci === null ? (
+              <ProgressBar label="Carico il mese" isIndeterminate />
+            ) : voci.length === 0 ? (
+              <EmptyState
+                title={`${nomeMese[0].toUpperCase()}${nomeMese.slice(1)} è vuoto`}
+                description="Premi «Prepara» qui sopra: giorni, testi e immagini in un colpo."
+              />
+            ) : (
+              <VStack gap={0}>
+                {voci.map((v, i) => (
+                  <VStack key={v.id} gap={0}>
+                    {i > 0 ? <Divider /> : null}
+                    <HStack gap={4} paddingBlock={4} align="start" wrap="wrap">
+                      <VStack width={220} gap={2}>
+                        {v.foto ? (
+                          <AspectRatio ratio={4 / 3} fit="cover">
+                            <img src={v.foto} alt={v.titolo ?? 'immagine del post'} loading="lazy" />
+                          </AspectRatio>
+                        ) : (
+                          <AspectRatio ratio={4 / 3} fit="center">
+                            <Text type="supporting" color="secondary">
+                              {v.stato === 'vuota' ? 'testo e immagine in arrivo' : 'immagine in arrivo'}
+                            </Text>
+                          </AspectRatio>
+                        )}
+                      </VStack>
+                      <VStack gap={2} width="min(100%, 640px)">
+                        <HStack gap={2} align="center" wrap="wrap">
+                          <Text weight="semibold">{giorno(v.pubblica_at)}</Text>
+                          <Badge variant={v.tipo === 'articolo' ? 'purple' : 'blue'} label={v.tipo === 'articolo' ? 'Sito · articolo' : 'Google'} />
+                          {v.stato === 'approvata' ? <Badge variant="success" label="approvato" /> : null}
+                          {v.stato === 'pubblicata' || v.stato === 'pubblicando' ? <Badge variant="green" label="uscito" /> : null}
+                          {v.grave ? <Badge variant="error" label="da guardare" /> : null}
+                        </HStack>
+                        {v.titolo ? <Text weight="medium">{v.titolo}</Text> : null}
+                        <Text color={v.testo ? 'primary' : 'secondary'} maxLines={v.tipo === 'articolo' ? 6 : 0}>
+                          {v.testo ?? 'Il testo non c’è ancora.'}
+                        </Text>
+                        {v.avvisi.length ? (
+                          <Text type="supporting" color="secondary">
+                            ⚠️ {v.avvisi.join(' · ')}
+                          </Text>
+                        ) : null}
+                        {v.stato === 'attesa_approvazione' || v.stato === 'approvata' ? (
+                          <HStack gap={2}>
+                            <Button
+                              label="Rifai immagine"
+                              size="sm"
+                              variant="ghost"
+                              icon={<RefreshCw size={14} />}
+                              isLoading={inCorso[v.id]}
+                              clickAction={() => azione(v, 'immagine')}
+                            />
+                            {v.stato === 'attesa_approvazione' ? (
+                              <Button
+                                label="Togli dal mese"
+                                size="sm"
+                                variant="ghost"
+                                icon={<X size={14} />}
+                                clickAction={() => azione(v, 'togli')}
+                              />
+                            ) : null}
+                            <Button
+                              label="Correggi il testo"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => router.push(`/bozze?bozza=${v.id}`)}
+                            />
+                          </HStack>
+                        ) : null}
+                      </VStack>
+                    </HStack>
+                  </VStack>
+                ))}
+                {bottoneApprova ? (
+                  <>
+                    <Divider />
+                    <HStack paddingBlock={4} gap={3} align="center" wrap="wrap">
+                      {bottoneApprova}
+                      <Text type="supporting" color="secondary">
+                        Un click e il mese è fatto: ognuno esce nel suo giorno, senza che tu debba tornarci.
+                      </Text>
+                    </HStack>
+                  </>
+                ) : null}
+              </VStack>
+            )}
+          </VStack>
+        </LayoutContent>
+      }
+    />
+  );
+}

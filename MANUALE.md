@@ -268,14 +268,34 @@ nessuna parte è un'informazione, non uno spazio bianco.
 
 ---
 
-## 🗂 Il mese — *il piano, prima di scrivere*
+## 🗂 Il mese — *un click per prepararlo, uno per approvarlo* (dal 02/11/2026)
 
-**A cosa serve:** decidere di cosa si parla questo mese, prima che qualcuno
-scriva una riga. Solo per i **clienti**: costruire un mese di post a un prospect
-non ha senso.
+**A cosa serve:** fare il mese di un cliente e non pensarci più. Una card per
+cliente, e su ogni card c'è **un solo bottone**: quello che tocca adesso.
 
-**Il numero da guardare:** i fatti. Sotto i quattro, il piano esce povero — e
-conviene saperlo prima di guardarlo, non dopo.
+1. **Prepara dicembre** — fa tutto da solo: i giorni (4 post a settimana sulla
+   scheda Google), i testi, un'**immagine AI** per ognuno e, se il cliente ha il
+   blog collegato, **un articolo a settimana** sul sito, nello stesso giorno e
+   sullo stesso tema di un post. Ci vogliono alcuni minuti: la card dice a che
+   punto è. Se chiudi la pagina, «Continua» riprende da dove era.
+2. **Leggi e approva** — si apre il mese intero: giorno, immagine, testo. Qui
+   puoi **Rifare un'immagine**, **Togliere** un'uscita o **Correggere** un testo.
+3. **Approva tutto dicembre** — un click. Ognuno esce nel suo giorno, da solo.
+
+**Cosa NON passa con il click unico:** le uscite con un avviso grave (un numero
+che non torna, un telefono sbagliato) e quelle con la data già passata. La
+pagina dice quante sono; si guardano una per una.
+
+**Il numero da guardare:** i fatti. Con **zero fatti** la card non ti fa
+preparare niente (i post sarebbero inventati) e ti manda alla scheda: riempi
+«Cosa è vero». Sotto i quattro, il mese esce ripetitivo.
+
+**Le immagini** sono d'atmosfera — un dettaglio, un materiale, la luce — e non
+fingono di essere il locale del cliente. Costano circa 4 centesimi l'una. Le
+foto vere del cliente restano sempre meglio: se le hai, mettile dalle bozze.
+
+**Dal 20 del mese** la pagina si apre già sul mese dopo. I **social** e il
+ritocco a mano di giorni e temi stanno in **Strumento avanzato**, in alto.
 
 ---
 

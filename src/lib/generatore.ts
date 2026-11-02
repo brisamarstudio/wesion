@@ -437,6 +437,38 @@ export async function genera(
  * esattamente il guasto silenzioso che ci è già costato sei post su diciotto il
  * 27/08/2026. Meglio chiederlo nel prompt e ripulire qui: funziona su tutti.
  */
+/** Dentro le stringhe JSON: a capo, ritorno e tab grezzi diventano le loro sequenze. */
+function ripulisciControlliNelleStringhe(json: string): string {
+  let fuori = '';
+  let inStringa = false;
+  let escape = false;
+  for (const c of json) {
+    if (inStringa) {
+      if (escape) {
+        escape = false;
+      } else if (c === '\\') {
+        escape = true;
+      } else if (c === '"') {
+        inStringa = false;
+      } else if (c === '\n') {
+        fuori += '\\n';
+        continue;
+      } else if (c === '\r') {
+        continue;
+      } else if (c === '\t') {
+        fuori += '\\t';
+        continue;
+      } else if (c < ' ') {
+        continue;
+      }
+    } else if (c === '"') {
+      inStringa = true;
+    }
+    fuori += c;
+  }
+  return fuori;
+}
+
 export async function generaJson<T>(
   sistema: string,
   utente: string,
@@ -455,10 +487,24 @@ export async function generaJson<T>(
   }
 
   let dato: unknown;
+  const pezzo = grezzo.slice(inizio, fine + 1);
   try {
-    dato = JSON.parse(grezzo.slice(inizio, fine + 1));
+    dato = JSON.parse(pezzo);
   } catch (errore: unknown) {
-    throw new Error(`${esito.modello} ha restituito JSON rotto: ${errore instanceof Error ? errore.message : errore}`);
+    /**
+     * ⚠️ «Bad control character in string literal» (02/11/2026). Gli articoli
+     * sono lunghi e hanno paragrafi: diversi modelli mettono l'a capo VERO
+     * dentro la stringa del corpo invece di `\n`. Il JSON e' sbagliato, il
+     * contenuto no. Preparando dicembre di Artigiano il Conte, i 4 articoli
+     * fallivano tutti cosi', a ogni tentativo, e il mese restava fermo.
+     * Si ripara SOLO dentro le stringhe e si riprova una volta; se non basta,
+     * l'errore e' quello di prima.
+     */
+    try {
+      dato = JSON.parse(ripulisciControlliNelleStringhe(pezzo));
+    } catch {
+      throw new Error(`${esito.modello} ha restituito JSON rotto: ${errore instanceof Error ? errore.message : errore}`);
+    }
   }
 
   if (!valido(dato)) {

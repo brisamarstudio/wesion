@@ -51,7 +51,10 @@ export async function POST(richiesta: Request, contesto: { params: Promise<{ id:
 
   const url = await caricaPubblico(Buffer.from(await file.arrayBuffer()), file.type, {
     cliente: b?.slug,
-    tipo: b?.tipo === 'post_gbp' ? 'gbp' : b?.tipo === 'articolo' ? 'blog' : 'menu',
+    // ⚠️ 'gbp' anche per gli articoli (02/11/2026): il media server conosce
+    // solo i suoi tipi e a 'blog' risponde 400 «Tipo non riconosciuto» — la
+    // copertina di un articolo caricata da qui falliva sempre.
+    tipo: b?.tipo === 'post_gbp' || b?.tipo === 'articolo' ? 'gbp' : 'menu',
   });
   if (!url) {
     return NextResponse.json(
