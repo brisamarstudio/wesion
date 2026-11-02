@@ -291,8 +291,19 @@ preparare niente (i post sarebbero inventati) e ti manda alla scheda: riempi
 «Cosa è vero». Sotto i quattro, il mese esce ripetitivo.
 
 **Le immagini** sono d'atmosfera — un dettaglio, un materiale, la luce — e non
-fingono di essere il locale del cliente. Costano circa 4 centesimi l'una. Le
-foto vere del cliente restano sempre meglio: se le hai, mettile dalle bozze.
+fingono di essere il locale del cliente. Le foto vere del cliente restano sempre
+meglio: se le hai, mettile dalle bozze.
+
+**Chi le fa (dal 02/11/2026):**
+- **il PC dell'ufficio, gratis**, se è acceso con ComfyUI e con la finestra
+  «Wesion - immagini» aperta (doppio click su `lavoratore\avvia-immagini.bat`
+  nella cartella di Wesion). Usa Z-Image Turbo sulla scheda video: pochi
+  secondi a foto. La card del mese dice «le sta facendo il tuo PC»;
+- **OpenRouter, ~4 centesimi l'una**, se il PC è spento da più di 3 minuti:
+  basta premere «Continua» sulla card.
+
+Il PC lavora solo sulle uscite **ancora da approvare**: una foto non arriva mai
+dopo il tuo click.
 
 **Dal 20 del mese** la pagina si apre già sul mese dopo. I **social** e il
 ritocco a mano di giorni e temi stanno in **Strumento avanzato**, in alto.
