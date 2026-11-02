@@ -49,6 +49,26 @@ Provato su Artigiano il Conte, dicembre: 18 post + 4 articoli + 22 immagini, ~6 
 
 ⚠️ Il media server accetta solo i suoi tipi di cartella: 'blog' → 400. Tutto in 'gbp'.
 
+**Foto** (`src/lib/foto.ts`): archivio di foto vere per cliente, riempito da solo con le foto
+della scheda Google (titolare prima, clienti dopo con il nome, deciso da Mariano), descritte da un
+modello che vede e assegnate ai post pesando le parole rare. `wesion.foto` usa una SEQUENZA: con
+BIGSERIAL Cockroach dava id da 19 cifre che JavaScript arrotondava.
+
+**PC immagini** (`lavoratore/immagini.mjs`, `src/lib/lavoratore.ts`): il PC con ComfyUI
+(Z-Image Turbo, RTX 5080) chiede lavoro ogni 20s e riconsegna; token in `wesion.lavoratore` come
+sha256. ⚠️ A Z-Image si manda SOLO la scena in inglese (`scenaPerModelloLocale`): con il prompt in
+italiano pieno di regole stampava il testo nella foto e faceva nudi. Solo bozze del piano ancora da
+approvare.
+
+**Audit SEO**: riceve indirizzo + citta' (le parole del luogo sono LUOGHI: «carbonara» a La Fenice)
+e il verdetto del giro query gia' classificato.
+
+**Sito MyWebby** (www.mywebby.it, repo SITI/SitoMyWebby, Contabo): Turnstile sulla registrazione,
+backend ricostruito il 02/11 con env in `/opt/mywebby/server/.backend.env` (600), blog collegato a
+Wesion; nginx `/blog/` = prima lo statico del prerender, se 404 il backend (`paginaBlog.js`).
+Rollback: immagini `mywebby-backend:rollback-pre-turnstile` e
+`mywebby_frontend_img:rollback-202611021252`, nginx in `/root/mywebby.nginx.bak-202611021310`.
+
 **Hotel** (`src/lib/prenotazioni.ts`): per le strutture ricettive si legge con Chromium headless
 dove porta «Prenota» (motore suo / portale / niente / nessun sito suo). Un fetch non basta:
 RoomCloud entra da script. Chromium e' nell'immagine della dashboard (Dockerfile); se sul server
