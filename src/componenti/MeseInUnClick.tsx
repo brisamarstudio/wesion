@@ -139,7 +139,7 @@ export function MeseInUnClick({
         const s: StatoMese = esito.stato;
         setLavoro((w) => ({
           ...w,
-          [id]: `${esito.fatto}${s?.totale ? ` · ${s.totale - s.vuote}/${s.totale} testi, ${s.totale - s.vuote - s.senzaFoto}/${s.totale} immagini` : ''}`,
+          [id]: `${esito.fatto[0]?.toUpperCase() ?? ''}${esito.fatto.slice(1)}.${s?.totale ? ` Testi ${s.conTesto} su ${s.totale}, immagini ${s.conFoto} su ${s.totale}.` : ''}`,
         }));
         if (esito.errori?.length && !esito.avanzati) {
           setErrore(esito.errori.join(' · '));
@@ -285,6 +285,17 @@ export function MeseInUnClick({
                         </Text>
                         {s.fase === 'non_configurato' || (s.fase === 'da_preparare' && s.fatti === 0) ? (
                           <Button label="Apri la scheda" size="sm" onClick={() => router.push(`/aziende/${c.id}`)} />
+                        ) : occupato ? (
+                          /* Mentre prepara si puo' gia' guardare: i testi
+                             compaiono man mano, e un bottone che gira e basta
+                             lasciava li' a chiedersi «e poi?». */
+                          <Button
+                            label="Guarda mentre prepara"
+                            size="sm"
+                            variant="secondary"
+                            icon={<ArrowRight size={15} />}
+                            onClick={() => vai({ cliente: c.id })}
+                          />
                         ) : s.fase === 'da_preparare' || s.fase === 'in_preparazione' ? (
                           <Button
                             label={s.fase === 'da_preparare' ? `Prepara ${nomeMese}` : 'Continua'}

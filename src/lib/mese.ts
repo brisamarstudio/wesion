@@ -53,6 +53,9 @@ export interface StatoMese {
   daApprovare: number;
   /** Fra quelle da approvare: il controllo automatico ha trovato qualcosa di grave. */
   gravi: number;
+  /** Quante uscite hanno gia' un testo, e quante un'immagine. */
+  conTesto: number;
+  conFoto: number;
   /** Il PC con ComfyUI e' acceso: le immagini arrivano da li'. */
   pcAcceso: boolean;
   /** Bozze su cui la preparazione ha fallito piu' volte: si guardano a mano. */
@@ -236,6 +239,8 @@ export async function statoMese(aziendaId: number, anno: number, mese: number): 
     gbpPronto: servizi.gbp,
     blogPronto: servizi.blog,
     fatti: f?.n ?? 0,
+    conTesto: voci.filter((v) => Boolean(v.testo)).length,
+    conFoto: voci.filter((v) => Boolean(v.foto)).length,
     pcAcceso,
     totale: voci.length,
     post: voci.filter((v) => v.tipo === 'post_gbp').length,

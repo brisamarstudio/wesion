@@ -4,7 +4,7 @@
  * in cima a src/lib/mese.ts. Non approva niente.
  */
 import { NextResponse } from 'next/server';
-import { preparaPasso } from '@/lib/mese';
+import { preparaPasso, statoMese } from '@/lib/mese';
 
 export const maxDuration = 120;
 
@@ -18,7 +18,10 @@ export async function POST(richiesta: Request, contesto: { params: Promise<{ id:
   if (!anno || !mese || mese < 1 || mese > 12) return NextResponse.json({ errore: 'servono anno e mese' }, { status: 400 });
 
   try {
-    return NextResponse.json(await preparaPasso(aziendaId, anno, mese));
+    const esito = await preparaPasso(aziendaId, anno, mese);
+    // Lo stato DOPO il passo, non quello di prima: il contatore in pagina
+    // restava sempre un giro indietro («scritti 2 testi · 0/17»).
+    return NextResponse.json({ ...esito, stato: await statoMese(aziendaId, anno, mese) });
   } catch (errore: unknown) {
     return NextResponse.json({ errore: errore instanceof Error ? errore.message : String(errore) }, { status: 500 });
   }
