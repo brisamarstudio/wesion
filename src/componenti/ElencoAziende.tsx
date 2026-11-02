@@ -49,7 +49,7 @@ import { Divider } from '@astryxdesign/core/Divider';
 import { TabList, Tab } from '@astryxdesign/core/TabList';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { ModuloAzienda, AZIENDA_VUOTA, type AziendaModulo } from './ModuloAzienda';
 import { soloData } from '@/lib/quando';
 
@@ -422,7 +422,10 @@ export function ElencoAziende({
       if (k === 'gruppo' && v === 'campagna') continue; // è il default
       p.set(k, String(v));
     }
-    avvia(() => router.push(`/aziende${p.toString() ? `?${p}` : ''}`));
+    // Senza una ricerca scelta /aziende apre le schede delle ricerche: chi sta
+    // gia' nell'elenco e toglie un filtro deve restare nell'elenco.
+    if (!p.get('campagna')) p.set('vista', 'elenco');
+    avvia(() => router.push(`/aziende?${p}`));
   }
 
   /**
@@ -577,7 +580,17 @@ export function ElencoAziende({
         <LayoutHeader hasDivider>
           <HStack justify="between" align="center" wrap="wrap" gap={3}>
             <HStack gap={3} align="center" wrap="wrap">
-              <Heading level={2}>Da chiamare</Heading>
+              <Button
+                label="Ricerche"
+                size="sm"
+                variant="ghost"
+                icon={<ArrowLeft size={15} />}
+                tooltip="Torna alle schede delle ricerche"
+                onClick={() => router.push('/aziende')}
+              />
+              <Heading level={2}>
+                {opzioni.campagne.find((c) => String(c.id) === vista.campagna)?.nome ?? 'Da chiamare'}
+              </Heading>
               <Badge variant="neutral" label={`${quante} lead`} />
               {totalePagine > 1 ? (
                 <Text type="supporting" color="secondary">

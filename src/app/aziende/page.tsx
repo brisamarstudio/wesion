@@ -27,6 +27,8 @@
 import { query } from '@/lib/db';
 import { Telaio } from '@/componenti/Telaio';
 import { ElencoAziende, type Azienda } from '@/componenti/ElencoAziende';
+import { RicercheDaChiamare } from '@/componenti/RicercheDaChiamare';
+import type { RiassuntoRicerca } from '@/lib/ricerche';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,9 +53,92 @@ export default async function PaginaAziende({
     scheda?: string;
     gruppo?: string;
     pagina?: string;
+    vista?: string;
   }>;
 }) {
   const p = await searchParams;
+
+  /**
+   * ⚠️ LA PRIMA SCHERMATA SONO LE RICERCHE, NON LE AZIENDE (02/11/2026).
+   *
+   * Senza una ricerca scelta, una cerca o «?vista=elenco», la pagina mostra una
+   * scheda per ricerca con il verdetto scritto (vedi RicercheDaChiamare). Il
+   * vecchio elenco unico resta dietro «Tutto in un elenco»: con cinque o sei
+   * ricerche nello stesso mucchio non si leggeva piu'.
+   */
+  const conFiltri = Boolean(
+    p.campagna || p.q || p.categoria || p.citta || p.sito || p.scheda || (p.stato && p.stato !== 'tutti')
+  );
+  if (!conFiltri && p.vista !== 'elenco') {
+    const [ricerche, senza] = await Promise.all([
+      query<RiassuntoRicerca>(`
+        WITH a AS (
+          SELECT a.id, a.nome, a.campagna_id, a.stato,
+                 (a.raw_json->>'totalScore')::numeric AS voto,
+                 (a.raw_json->>'reviewsCount')::int   AS recensioni,
+                 NOT EXISTS (SELECT 1 FROM wesion.contatto c
+                              WHERE c.azienda_id = a.id AND c.tipo = 'sito') AS senza_sito,
+                 (a.raw_json->>'claimThisBusiness') = 'true'                AS scheda_nessuno,
+                 (SELECT x.score FROM wesion.audit x
+                   WHERE x.azienda_id = a.id AND x.esito = 'ok'
+                   ORDER BY x.eseguito_at DESC LIMIT 1)                      AS score
+            FROM wesion.azienda a
+           WHERE a.stato <> 'cliente' AND a.campagna_id IS NOT NULL
+        ),
+        b AS (
+          SELECT a.*,
+                 -- Ordine di chiamata: prima chi ha un problema che si vede in
+                 -- trenta secondi (scheda di nessuno, nessun sito), poi i siti
+                 -- deboli, poi gli altri. A parita' vince chi ha piu' clienti.
+                 CASE WHEN a.scheda_nessuno THEN 0
+                      WHEN a.senza_sito THEN 1
+                      WHEN a.score >= 70 THEN 2
+                      ELSE 3 END AS fascia
+            FROM a
+        )
+        SELECT c.id, c.nome, c.categoria, c.citta, c.creata_at,
+               count(b.id)::int                                                         AS totale,
+               count(b.id) FILTER (WHERE b.stato = 'prospect')::int                     AS da_chiamare,
+               count(b.id) FILTER (WHERE b.stato = 'contattato')::int                   AS contattati,
+               count(b.id) FILTER (WHERE b.stato = 'in_trattativa')::int                AS in_trattativa,
+               count(b.id) FILTER (WHERE b.stato = 'perso')::int                        AS persi,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.senza_sito)::int    AS senza_sito,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.scheda_nessuno)::int AS scheda_nessuno,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.fascia <= 1)::int   AS calde,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.fascia = 2)::int    AS sito_debole,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.fascia = 3
+                                     AND b.score IS NULL)::int                          AS da_controllare,
+               (SELECT json_agg(json_build_object('id', t.id, 'nome', t.nome, 'perche', t.perche))
+                  FROM (SELECT x.id, x.nome,
+                               CASE x.fascia
+                                 WHEN 0 THEN 'scheda Google di nessuno'
+                                 WHEN 1 THEN 'nessun sito'
+                                 WHEN 2 THEN 'sito debole'
+                                 ELSE ''
+                               END
+                               || CASE WHEN x.recensioni >= 50
+                                       THEN ' · ' || x.recensioni || ' recensioni' ELSE '' END AS perche
+                          FROM b x
+                         WHERE x.campagna_id = c.id AND x.stato = 'prospect'
+                         ORDER BY x.fascia, x.recensioni DESC NULLS LAST, x.voto DESC NULLS LAST
+                         LIMIT 3) t)                                                    AS primi
+          FROM wesion.campagna c
+          LEFT JOIN b ON b.campagna_id = c.id
+         GROUP BY c.id
+         ORDER BY c.creata_at DESC
+         LIMIT 50`),
+      query<{ quante: number }>(
+        `SELECT count(*)::int AS quante FROM wesion.azienda
+          WHERE stato <> 'cliente' AND campagna_id IS NULL`
+      ),
+    ]);
+    return (
+      <Telaio attiva="/aziende">
+        <RicercheDaChiamare ricerche={ricerche} senzaRicerca={senza[0].quante} />
+      </Telaio>
+    );
+  }
+
   const cerca = (p.q ?? '').trim();
   const stato = p.stato && p.stato !== 'tutti' ? p.stato : null;
   const categoria = p.categoria || null;
