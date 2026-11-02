@@ -151,7 +151,9 @@ export async function PATCH(richiesta: Request, contesto: { params: Promise<{ id
                                THEN contenuto - 'cta'
                                ELSE contenuto || jsonb_build_object('cta', $2::jsonb) END
         WHERE id = $1 AND stato = ANY($3)`,
-      [idBozza, corpo.cta ? JSON.stringify(corpo.cta) : null, DECIDIBILI]
+      // Anche su un'approvata non ancora uscita, come il testo: cambiare il
+      // pulsante non deve voler dire disapprovare (02/11/2026, dal mese).
+      [idBozza, corpo.cta ? JSON.stringify(corpo.cta) : null, [...DECIDIBILI, 'approvata']]
     );
   }
 

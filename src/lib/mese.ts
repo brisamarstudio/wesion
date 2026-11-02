@@ -83,6 +83,8 @@ export interface VoceMese {
   errori: number;
   /** L'immagine e' generata (AI), non una foto vera. */
   foto_ai: boolean;
+  /** Il pulsante scelto per QUESTO post; null = quello di serie del cliente. */
+  cta: { tipo?: string; url?: string } | null;
   /** Se e' una foto dell'archivio: da dove viene, e chi l'ha scattata. */
   foto_fonte: string | null;
   foto_autore: string | null;
@@ -103,11 +105,15 @@ export interface VoceMese {
 export interface DoveEsce {
   scheda: { nome: string; link: string | null } | null;
   sito: string | null;
+  /** Il pulsante di serie sotto i post (Servizi → scheda Google). */
+  ctaCliente: { tipo: string; url: string | null } | null;
 }
 
 export async function doveEsce(aziendaId: number): Promise<DoveEsce> {
-  const [a] = await query<{ nome: string; maps_url: string | null; sito: string | null }>(
+  const [a] = await query<{ nome: string; maps_url: string | null; sito: string | null; cta_tipo: string | null; cta_url: string | null }>(
     `SELECT a.nome, a.maps_url,
+            (SELECT s.config->>'cta_tipo' FROM wesion.servizio s WHERE s.azienda_id = a.id AND s.tipo = 'post_gbp') AS cta_tipo,
+            (SELECT s.config->>'cta_url' FROM wesion.servizio s WHERE s.azienda_id = a.id AND s.tipo = 'post_gbp') AS cta_url,
             (SELECT c.valore FROM wesion.contatto c
               WHERE c.azienda_id = a.id AND c.tipo = 'sito' ORDER BY c.id LIMIT 1) AS sito
        FROM wesion.azienda a WHERE a.id = $1`,
@@ -117,6 +123,7 @@ export async function doveEsce(aziendaId: number): Promise<DoveEsce> {
   return {
     scheda: servizi.gbp && a ? { nome: a.nome, link: a.maps_url } : null,
     sito: servizi.blog && a?.sito ? (/^https?:/.test(a.sito) ? a.sito : `https://${a.sito}`) : null,
+    ctaCliente: a?.cta_tipo ? { tipo: a.cta_tipo, url: a.cta_url } : null,
   };
 }
 
@@ -169,6 +176,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
     url_uscito: string | null;
     errore_uscita: string | null;
     foto_ai: boolean;
+    cta: { tipo?: string; url?: string } | null;
     foto_fonte: string | null;
     foto_autore: string | null;
   }>(
@@ -180,6 +188,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
             b.contenuto->>'coppia_di' AS coppia_di,
             b.contenuto->>'prepara_errori' AS errori,
             (b.contenuto ? 'foto_ai') AS foto_ai,
+            b.contenuto->'cta' AS cta,
             (SELECT f.fonte FROM wesion.foto f WHERE f.id = (b.contenuto->>'foto_vera')::bigint) AS foto_fonte,
             (SELECT f.autore FROM wesion.foto f WHERE f.id = (b.contenuto->>'foto_vera')::bigint) AS foto_autore,
             (SELECT p.url_risultato FROM wesion.pubblicazione p
@@ -212,6 +221,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
       coppia_di: r.coppia_di ? Number(r.coppia_di) : null,
       errori: Number(r.errori ?? 0),
       foto_ai: Boolean(r.foto_ai),
+      cta: r.cta ?? null,
       foto_fonte: r.foto_fonte,
       foto_autore: r.foto_autore,
       url_uscito: r.url_uscito,

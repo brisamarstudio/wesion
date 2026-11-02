@@ -34,6 +34,9 @@ import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { FileInput } from '@astryxdesign/core/FileInput';
 import { FotoVere } from './FotoVere';
+import { Selector } from '@astryxdesign/core/Selector';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { AZIONI_BOTTONE, VUOLE_URL, type AzioneBottone } from '@/lib/gbp';
 import { Link } from '@astryxdesign/core/Link';
 import { ArrowLeft, ArrowRight, Check, RefreshCw, Send, Sparkles, X } from 'lucide-react';
 import type { StatoMese, VoceMese, FaseMese, DoveEsce } from '@/lib/mese';
@@ -394,6 +397,20 @@ function LetturaMese({
     router.refresh();
   }
 
+  /** Il pulsante di un post, o di tutti i post del mese ancora da far uscire. */
+  async function cambiaPulsante(ids: number[], cta: { tipo: string; url: string } | null) {
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/bozze/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ azione: 'nessuna', cta }),
+        })
+      )
+    );
+    await carica();
+  }
+
   async function azione(v: VoceMese, cosa: 'togli' | 'immagine' | 'subito' | 'domani', file?: File) {
     setInCorso((x) => ({ ...x, [v.id]: true }));
     const patch = (corpo: object) =>
@@ -554,6 +571,27 @@ function LetturaMese({
                           : `approvato: escono da sole.`}
                     {stato.uscite ? ` ${n(stato.uscite, 'già uscito', 'già usciti')}.` : ''}
                   </Text>
+                  <VStack gap={1}>
+                    <Text>
+                      <strong>Pulsante sotto i post:</strong>{' '}
+                      {dove?.ctaCliente
+                        ? `di serie «${AZIONI_BOTTONE[dove.ctaCliente.tipo as AzioneBottone] ?? dove.ctaCliente.tipo}»${dove.ctaCliente.url ? ` → ${dove.ctaCliente.url}` : ''}`
+                        : 'nessuno di serie'}
+                      . Cambialo per tutto il mese qui, o post per post sotto.
+                    </Text>
+                    <PulsantePost
+                      cta={null}
+                      diSerie={dove?.ctaCliente ?? null}
+                      onCambia={(cta) =>
+                        cambiaPulsante(
+                          voci
+                            .filter((x) => x.tipo === 'post_gbp' && (x.stato === 'attesa_approvazione' || x.stato === 'approvata'))
+                            .map((x) => x.id),
+                          cta
+                        )
+                      }
+                    />
+                  </VStack>
                   <Text>
                     <strong>Quando:</strong> dal {giorno(voci[0].pubblica_at)} al {giorno(voci[voci.length - 1].pubblica_at)}, alle 10 di mattina
                     {stato.prossima ? `; il prossimo esce ${giorno(stato.prossima)}` : ''}.
@@ -656,6 +694,14 @@ function LetturaMese({
                             ⚠️ {v.avvisi.join(' · ')}
                           </Text>
                         ) : null}
+                        {v.tipo === 'post_gbp' && (v.stato === 'attesa_approvazione' || v.stato === 'approvata') ? (
+                          <PulsantePost
+                            key={`${v.id}-${v.cta?.tipo ?? ''}-${v.cta?.url ?? ''}`}
+                            cta={v.cta}
+                            diSerie={dove?.ctaCliente ?? null}
+                            onCambia={(cta) => cambiaPulsante([v.id], cta)}
+                          />
+                        ) : null}
                         {v.stato === 'attesa_approvazione' || v.stato === 'approvata' ? (
                           <HStack gap={2} wrap="wrap">
                             {v.stato === 'attesa_approvazione' && new Date(v.pubblica_at).getTime() < Date.now() ? (
@@ -725,5 +771,65 @@ function LetturaMese({
         </LayoutContent>
       }
     />
+  );
+}
+
+// ── Il pulsante sotto il post ────────────────────────────────────────────────
+/**
+ * ⚠️ «È essenziale per veicolare i clienti sul sito» (02/11/2026). Nel mese non
+ * c'era: «Pubblica adesso» usciva col pulsante di serie del cliente, o senza,
+ * senza poterlo scegliere. Stesse voci del pannello di Google; vuoto = quello
+ * di serie del cliente (Servizi → scheda Google), che si vede scritto.
+ */
+function PulsantePost({
+  cta,
+  diSerie,
+  onCambia,
+}: {
+  cta: { tipo?: string; url?: string } | null;
+  diSerie: { tipo: string; url: string | null } | null;
+  onCambia: (cta: { tipo: string; url: string } | null) => Promise<void>;
+}) {
+  const [tipo, setTipo] = useState(cta?.tipo ?? '');
+  const [url, setUrl] = useState(cta?.url ?? '');
+  const salvato = (cta?.url ?? '') === url;
+  const etichettaSerie = diSerie
+    ? `Di serie: ${AZIONI_BOTTONE[diSerie.tipo as AzioneBottone] ?? diSerie.tipo}`
+    : 'Di serie: nessuno';
+
+  return (
+    <HStack gap={2} align="end" wrap="wrap">
+      <Selector
+        label="Pulsante"
+        size="sm"
+        value={tipo}
+        onChange={(v) => {
+          const t = String(v ?? '');
+          setTipo(t);
+          const u = url || diSerie?.url || '';
+          setUrl(u);
+          void onCambia(t ? { tipo: t, url: VUOLE_URL(t) ? u : '' } : null);
+        }}
+        options={[
+          { value: '', label: etichettaSerie },
+          ...Object.entries(AZIONI_BOTTONE).map(([value, label]) => ({ value, label })),
+        ]}
+      />
+      {tipo && VUOLE_URL(tipo) ? (
+        <>
+          <TextInput
+            label="Dove porta"
+            size="sm"
+            value={url}
+            placeholder="https://…"
+            status={url.trim() ? undefined : { type: 'error', message: 'Senza indirizzo il pulsante non esce.' }}
+            onChange={setUrl}
+          />
+          {!salvato && url.trim() ? (
+            <Button label="Salva" size="sm" clickAction={() => onCambia({ tipo, url: url.trim() })} />
+          ) : null}
+        </>
+      ) : null}
+    </HStack>
   );
 }
