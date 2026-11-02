@@ -34,7 +34,7 @@ import { costruisciPiano, salvaPiano } from './piano';
 import { scriviBozza } from './scrivi';
 import { immaginePerPost } from './immagini';
 import { pcImmaginiAcceso } from './lavoratore';
-import { assegnaFotoVere } from './foto';
+import { assegnaFotoVere, importaFotoGoogle, fotoGoogleControllateDaPoco, segnaFotoGoogleControllate } from './foto';
 
 export type FaseMese = 'non_configurato' | 'da_preparare' | 'in_preparazione' | 'da_approvare' | 'approvato';
 
@@ -80,6 +80,9 @@ export interface VoceMese {
   errori: number;
   /** L'immagine e' generata (AI), non una foto vera. */
   foto_ai: boolean;
+  /** Se e' una foto dell'archivio: da dove viene, e chi l'ha scattata. */
+  foto_fonte: string | null;
+  foto_autore: string | null;
   /** Dove si vede, una volta uscito: il link del post su Google o dell'articolo. */
   url_uscito: string | null;
   /** L'ultimo errore di pubblicazione, se il router ci ha provato e non ce l'ha fatta. */
@@ -163,6 +166,8 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
     url_uscito: string | null;
     errore_uscita: string | null;
     foto_ai: boolean;
+    foto_fonte: string | null;
+    foto_autore: string | null;
   }>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at,
             b.contenuto->>'titolo' AS titolo,
@@ -172,6 +177,8 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
             b.contenuto->>'coppia_di' AS coppia_di,
             b.contenuto->>'prepara_errori' AS errori,
             (b.contenuto ? 'foto_ai') AS foto_ai,
+            (SELECT f.fonte FROM wesion.foto f WHERE f.id = (b.contenuto->>'foto_vera')::bigint) AS foto_fonte,
+            (SELECT f.autore FROM wesion.foto f WHERE f.id = (b.contenuto->>'foto_vera')::bigint) AS foto_autore,
             (SELECT p.url_risultato FROM wesion.pubblicazione p
               WHERE p.bozza_id = b.id AND p.esito = 'ok' AND p.url_risultato IS NOT NULL
               ORDER BY p.eseguita_at DESC LIMIT 1) AS url_uscito,
@@ -202,6 +209,8 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
       coppia_di: r.coppia_di ? Number(r.coppia_di) : null,
       errori: Number(r.errori ?? 0),
       foto_ai: Boolean(r.foto_ai),
+      foto_fonte: r.foto_fonte,
+      foto_autore: r.foto_autore,
       url_uscito: r.url_uscito,
       errore_uscita: r.errore_uscita,
     };
@@ -402,6 +411,27 @@ export async function preparaPasso(
   //    OpenRouter, due alla volta (~7 secondi l'una, ~4 centesimi).
   //    Prima di tutto le foto VERE del cliente, se ce n'e' una che c'entra
   //    (src/lib/foto.ts): il PC e OpenRouter riempiono solo quello che resta.
+  //    E prima ancora: le foto nuove dalla scheda Google, a pezzi, al massimo
+  //    una volta ogni 12 ore (src/lib/foto.ts).
+  if (stato.gbpPronto && !(await fotoGoogleControllateDaPoco(aziendaId))) {
+    try {
+      const imp = await importaFotoGoogle(aziendaId, 6);
+      if (imp.restano === 0) await segnaFotoGoogleControllate(aziendaId, imp.importate);
+      if (imp.importate > 0) {
+        return {
+          fatto: `prese ${imp.importate} foto dalla scheda Google${imp.restano ? ` (ne restano ${imp.restano})` : ''}`,
+          avanzati: imp.importate,
+          finito: false,
+          stato,
+          errori,
+        };
+      }
+    } catch (e) {
+      // Google giu' o permesso mancante: si va avanti con quello che c'e'.
+      errori.push(`foto dalla scheda Google: ${e instanceof Error ? e.message : String(e)}`);
+      await segnaFotoGoogleControllate(aziendaId, 0);
+    }
+  }
   {
     const [inizio, fine] = confini(anno, mese);
     const vere = await assegnaFotoVere(aziendaId, inizio, fine);

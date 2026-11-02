@@ -469,16 +469,29 @@ CREATE TABLE IF NOT EXISTS wesion.lavoratore (
 -- Le foto VERE dei clienti (02/11/2026): il mese le usa prima di generarne.
 -- Vedi src/lib/foto.ts. `attiva = false` invece di cancellare: la stessa URL
 -- puo' essere gia' su un post uscito.
+-- ⚠️ SEQUENZA E NON BIGSERIAL: su CockroachDB BIGSERIAL fa unique_rowid(),
+-- numeri da 19 cifre che JavaScript arrotonda. Il 02/11/2026 l'id salvato in
+-- contenuto.foto_vera non era piu' quello della foto (…300 invece di …258).
+CREATE SEQUENCE IF NOT EXISTS wesion.foto_id_seq;
 CREATE TABLE IF NOT EXISTS wesion.foto (
-  id          BIGSERIAL PRIMARY KEY,
+  id          BIGINT PRIMARY KEY DEFAULT nextval('wesion.foto_id_seq'),
   azienda_id  BIGINT NOT NULL REFERENCES wesion.azienda(id) ON DELETE CASCADE,
   url         TEXT NOT NULL,
   descrizione TEXT,
   chiavi      TEXT,
-  fonte       TEXT NOT NULL DEFAULT 'dashboard' CHECK (fonte IN ('dashboard','whatsapp')),
+  fonte       TEXT NOT NULL DEFAULT 'dashboard',
   usata       INTEGER NOT NULL DEFAULT 0,
   usata_at    TIMESTAMPTZ,
   attiva      BOOLEAN NOT NULL DEFAULT true,
   creata_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_foto_azienda ON wesion.foto (azienda_id) WHERE attiva;
+
+-- Le foto prese dalla scheda Google (02/11/2026): del titolare e dei clienti.
+-- `origine_id` e' il nome del media su Google: non si importa due volte.
+ALTER TABLE wesion.foto DROP CONSTRAINT IF EXISTS check_fonte;
+ALTER TABLE wesion.foto ADD CONSTRAINT check_fonte
+  CHECK (fonte IN ('dashboard','whatsapp','gbp_titolare','gbp_cliente'));
+ALTER TABLE wesion.foto ADD COLUMN IF NOT EXISTS origine_id TEXT;
+ALTER TABLE wesion.foto ADD COLUMN IF NOT EXISTS autore TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_foto_origine ON wesion.foto (azienda_id, origine_id) WHERE origine_id IS NOT NULL;

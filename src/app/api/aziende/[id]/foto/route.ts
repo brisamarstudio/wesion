@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { caricaFotoVera, elencoFoto, assegnaFotoVere } from '@/lib/foto';
+import { caricaFotoVera, elencoFoto, assegnaFotoVere, importaFotoGoogle, segnaFotoGoogleControllate } from '@/lib/foto';
 
 export const maxDuration = 300;
 const MAX_BYTE = 8 * 1024 * 1024;
@@ -39,6 +39,18 @@ export async function POST(richiesta: Request, contesto: { params: Promise<{ id:
       true
     );
     return NextResponse.json({ assegnate: n });
+  }
+
+  // ?google=1: prende le foto dalla scheda Google, a pezzi (la pagina richiama
+  // finche' `restano` non e' zero).
+  if (new URL(richiesta.url).searchParams.get('google')) {
+    try {
+      const esito = await importaFotoGoogle(aziendaId, 8);
+      if (esito.restano === 0) await segnaFotoGoogleControllate(aziendaId, esito.importate);
+      return NextResponse.json(esito);
+    } catch (e) {
+      return NextResponse.json({ errore: e instanceof Error ? e.message : String(e) }, { status: 502 });
+    }
   }
 
   const modulo = await richiesta.formData().catch(() => null);

@@ -294,6 +294,14 @@ preparare niente (i post sarebbero inventati) e ti manda alla scheda: riempi
 fingono di essere il locale del cliente. Le foto vere del cliente restano sempre
 meglio: se le hai, mettile dalle bozze.
 
+**Le foto della scheda Google entrano da sole.** Quando prepari il mese,
+Wesion prende le foto nuove dalla scheda Google del cliente (al massimo una
+volta ogni 12 ore): prima quelle del titolare, poi quelle dei clienti, che
+nel mese portano scritto «foto di un cliente (nome)» — guardale prima di
+approvare. Restano fuori video, logo e foto dei menù; le grafiche con scritte
+restano nell'archivio ma non finiscono da sole in un post. C'è anche il
+bottone «Prendi le foto dalla scheda Google».
+
 **Le foto vere vengono prima di tutto.** Nel mese di un cliente c'è
 «Foto vere di …»: trascinaci le sue foto (anche venti insieme). Wesion le
 descrive da solo e, quando prepara il mese, dà a ogni post la foto vera che

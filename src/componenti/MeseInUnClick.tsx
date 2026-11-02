@@ -569,6 +569,19 @@ function LetturaMese({
                             </Text>
                           </AspectRatio>
                         )}
+                        {v.foto ? (
+                          <Text type="supporting" color="secondary">
+                            {v.foto_fonte === 'gbp_cliente'
+                              ? `📷 foto di un cliente${v.foto_autore ? ` (${v.foto_autore})` : ''}, dalla scheda Google`
+                              : v.foto_fonte === 'gbp_titolare'
+                                ? '📷 foto vera, dalla scheda Google'
+                                : v.foto_fonte
+                                  ? '📷 foto vera, caricata da te'
+                                  : v.foto_ai
+                                    ? '✨ immagine generata'
+                                    : '📷 foto messa a mano'}
+                          </Text>
+                        ) : null}
                         {/* La foto VERA vince sempre su quella generata: e' il
                             locale com'e', e chi arriva trova quello che ha visto. */}
                         {v.stato === 'attesa_approvazione' || v.stato === 'approvata' ? (

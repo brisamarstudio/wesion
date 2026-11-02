@@ -25,7 +25,16 @@ interface Foto {
   url: string;
   descrizione: string | null;
   usata: number;
+  fonte: string;
+  autore: string | null;
 }
+
+const DA_DOVE: Record<string, string> = {
+  dashboard: 'caricata da te',
+  whatsapp: 'da WhatsApp',
+  gbp_titolare: 'scheda Google · titolare',
+  gbp_cliente: 'scheda Google · cliente',
+};
 
 export function FotoVere({
   aziendaId,
@@ -77,6 +86,26 @@ export function FotoVere({
     } finally {
       setCaricando(false);
     }
+  }
+
+  /** Dalla scheda Google, a pezzi: si richiama finche' ne restano. */
+  async function daGoogle() {
+    setEsito(null);
+    let totale = 0;
+    for (let giro = 0; giro < 30; giro++) {
+      const r = await fetch(`/api/aziende/${aziendaId}/foto?google=1`, { method: 'POST' });
+      const e = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setEsito(e.errore ?? 'Google non ha risposto.');
+        break;
+      }
+      totale += e.importate ?? 0;
+      setEsito(`Prese ${totale} foto dalla scheda Google${e.restano ? `, ne restano ${e.restano}…` : '.'}`);
+      await carica();
+      if (!e.restano || !e.importate) break;
+    }
+    if (totale === 0) setEsito('Nessuna foto nuova sulla scheda Google.');
+    onCambiate();
   }
 
   async function togli(id: number) {
@@ -133,6 +162,13 @@ export function FotoVere({
           onChange={() => undefined}
           changeAction={aggiungi}
         />
+        <HStack gap={2} align="center" wrap="wrap">
+          <Button label="Prendi le foto dalla scheda Google" size="sm" variant="secondary" clickAction={daGoogle} />
+          <Text type="supporting" color="secondary">
+            Quelle del titolare e quelle dei clienti (che passano dopo e portano il nome di chi le ha scattate).
+            Lo fa anche da solo quando prepari il mese.
+          </Text>
+        </HStack>
         {esito ? <Text type="supporting">{esito}</Text> : null}
         {quante && postConAI ? (
           <HStack gap={2} align="center" wrap="wrap">
@@ -152,6 +188,10 @@ export function FotoVere({
                 <Text type="supporting" color="secondary" maxLines={2}>
                   {f.descrizione ?? 'senza descrizione'}
                 </Text>
+                <Badge
+                  variant={f.fonte === 'gbp_cliente' ? 'orange' : 'neutral'}
+                  label={`${DA_DOVE[f.fonte] ?? f.fonte}${f.autore ? ` · ${f.autore}` : ''}`}
+                />
                 <HStack gap={1} align="center" justify="between">
                   <Text type="supporting" color="secondary">
                     {f.usata ? `usata ${f.usata}×` : 'mai usata'}

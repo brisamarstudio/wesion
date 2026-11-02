@@ -256,7 +256,7 @@ export async function rilevaPrenotazione(sito: string | null): Promise<EsitoPren
     const pagina = await leggi(interna);
     if (pagina) {
       tuttiPrenota = indirizzi(pagina.html, interna);
-      conModulo = /<form/i.test(pagina.html);
+      conModulo = /<form\b/i.test(pagina.html);
       if (pagina.metodo === 'fetch') metodo = 'fetch';
       const motore = cerca(MOTORI, [...tuttiPrenota, pagina.html]);
       if (motore) return { tipo: 'motore', nome: motore.nome, dove: interna, metodo };
