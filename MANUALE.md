@@ -98,6 +98,14 @@ città, quante. Poi **aspetti** e premi «Raccogli».
 **A cosa serve:** è la lista delle telefonate. I lead raccolti, ordinati per
 quanto conviene chiamarli.
 
+**Prima si sceglie la ricerca (dal 02/11/2026).** La pagina apre con una scheda
+per ogni ricerca («Hotel a Vigevano», «Ristrutturazioni a Rozzano»…). Ogni scheda
+dice in italiano se vale la pena (*Vale la pena / Qualcosa c'è / Ancora da
+controllare / Poco da fare / Già lavorata*), da dove partire e i primi tre da
+chiamare. **Apri** porta all'elenco di quella ricerca sola; **← Ricerche** ti
+riporta alle schede. Se cerchi un nome e non sai in che ricerca sta: **Tutto in
+un elenco**.
+
 **Chi ha già firmato non è qui.** Appena metti qualcuno su «cliente», la riga
 sparisce da questo elenco e compare in «Clienti». È voluto: questa pagina serve
 a decidere chi chiamare, e un cliente non è una telefonata da fare.
