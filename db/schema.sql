@@ -448,3 +448,9 @@ ALTER TABLE wesion.bozza DROP CONSTRAINT IF EXISTS check_tipo;
 ALTER TABLE wesion.bozza DROP CONSTRAINT IF EXISTS bozza_tipo_check;
 ALTER TABLE wesion.bozza ADD CONSTRAINT bozza_tipo_check
   CHECK (tipo IN ('menu','post_gbp','articolo','messaggio_lead','social'));
+
+-- Dove va chi vuole prenotare (02/11/2026): solo per le strutture ricettive.
+-- Lo scrive src/lib/prenotazioni.ts leggendo il sito con un browser vero.
+-- Vedi la nota in cima a quel file sul perche' un fetch non basta.
+ALTER TABLE wesion.azienda ADD COLUMN IF NOT EXISTS prenotazione JSONB;
+ALTER TABLE wesion.azienda ADD COLUMN IF NOT EXISTS prenotazione_at TIMESTAMPTZ;

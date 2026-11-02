@@ -90,6 +90,8 @@ export interface Azienda {
   recensioni: number | null;
   /** La scheda Google esiste ma non l'ha rivendicata nessuno — vedi il badge. */
   scheda_da_rivendicare: boolean | null;
+  /** Solo strutture ricettive: dove va chi vuole prenotare (src/lib/prenotazioni.ts). */
+  prenotazione: { tipo: string; nome?: string } | null;
 }
 
 /**
@@ -997,6 +999,17 @@ export function ElencoAziende({
                                   oggi è impossibile da comprare. */}
                               {a.scheda_da_rivendicare ? (
                                 <Badge variant="warning" label="scheda di nessuno" />
+                              ) : null}
+                              {/* Per gli hotel: il fatto che decide la telefonata.
+                                  «ha RoomCloud» vuol dire NON vendergli il motore. */}
+                              {a.prenotazione?.tipo === 'motore' ? (
+                                <Badge variant="neutral" label={`ha ${a.prenotazione.nome ?? 'un motore'}`} />
+                              ) : a.prenotazione?.tipo === 'manda_a_portale' ? (
+                                <Badge variant="error" label={`Prenota → ${a.prenotazione.nome ?? 'portale'}`} />
+                              ) : a.prenotazione?.tipo === 'portale' ? (
+                                <Badge variant="error" label="nessun sito suo" />
+                              ) : a.prenotazione?.tipo === 'nessun_motore' ? (
+                                <Badge variant="warning" label="niente prenotazione online" />
                               ) : null}
                               <Text type="supporting">{a.telefono ?? ''}</Text>
                             </HStack>

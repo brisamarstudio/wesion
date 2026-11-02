@@ -54,7 +54,13 @@ ENV HOSTNAME=0.0.0.0
 # L'audit SEO clona il repo di un sito cliente per leggerlo e proporre le
 # correzioni (vedi lib/seo-git.ts): senza `git` nell'immagine, quella chiamata
 # fallisce con "spawn git ENOENT" — un errore che non dice cosa manca davvero.
-RUN apk add --no-cache git
+#
+# Chromium (02/11/2026): per gli hotel bisogna sapere dove va chi preme
+# «Prenota», e i motori di prenotazione (RoomCloud, Kross…) entrano quasi
+# sempre da uno script DOPO il caricamento — un fetch dell'HTML non li vede.
+# Vedi src/lib/prenotazioni.ts. Senza questo pacchetto quel controllo
+# risponde «da verificare» per tutti, non «nessun motore»: si nota, non mente.
+RUN apk add --no-cache git chromium
 
 # `standalone` è un server già assemblato con dentro solo i moduli che usa.
 COPY --from=costruzione /app/.next/standalone ./

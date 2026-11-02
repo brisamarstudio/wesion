@@ -29,6 +29,7 @@ import { Telaio } from '@/componenti/Telaio';
 import { ElencoAziende, type Azienda } from '@/componenti/ElencoAziende';
 import { RicercheDaChiamare } from '@/componenti/RicercheDaChiamare';
 import type { RiassuntoRicerca } from '@/lib/ricerche';
+import { RICETTIVA } from '@/lib/prenotazioni';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,9 @@ export default async function PaginaAziende({
       query<RiassuntoRicerca>(`
         WITH a AS (
           SELECT a.id, a.nome, a.campagna_id, a.stato,
+                 COALESCE(a.categoria, '') ~* $1                      AS ricettiva,
+                 a.prenotazione->>'tipo'                              AS pren,
+                 a.prenotazione->>'nome'                              AS pren_nome,
                  (a.raw_json->>'totalScore')::numeric AS voto,
                  (a.raw_json->>'reviewsCount')::int   AS recensioni,
                  NOT EXISTS (SELECT 1 FROM wesion.contatto c
@@ -90,7 +94,19 @@ export default async function PaginaAziende({
                  -- Ordine di chiamata: prima chi ha un problema che si vede in
                  -- trenta secondi (scheda di nessuno, nessun sito), poi i siti
                  -- deboli, poi gli altri. A parita' vince chi ha piu' clienti.
-                 CASE WHEN a.scheda_nessuno THEN 0
+                 --
+                 -- Per le strutture ricettive conta un'altra cosa: dove va chi
+                 -- vuole prenotare (vedi src/lib/prenotazioni.ts). Chi ha gia'
+                 -- un motore suo va in fondo, non in cima.
+                 CASE WHEN a.ricettiva THEN
+                        CASE a.pren
+                          WHEN 'manda_a_portale' THEN 0
+                          WHEN 'portale'         THEN 1
+                          WHEN 'senza_sito'      THEN 1
+                          WHEN 'nessun_motore'   THEN 2
+                          WHEN 'motore'          THEN 4
+                          ELSE 3 END
+                      WHEN a.scheda_nessuno THEN 0
                       WHEN a.senza_sito THEN 1
                       WHEN a.score >= 70 THEN 2
                       ELSE 3 END AS fascia
@@ -108,12 +124,35 @@ export default async function PaginaAziende({
                count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.fascia = 2)::int    AS sito_debole,
                count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.fascia = 3
                                      AND b.score IS NULL)::int                          AS da_controllare,
+               count(b.id) FILTER (WHERE b.ricettiva)::int                              AS ricettive,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.ricettiva
+                                     AND b.pren = 'manda_a_portale')::int               AS pren_a_portale,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.ricettiva
+                                     AND b.pren IN ('portale','senza_sito'))::int       AS pren_solo_portali,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.ricettiva
+                                     AND b.pren = 'nessun_motore')::int                 AS pren_nessun_motore,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.ricettiva
+                                     AND b.pren = 'motore')::int                        AS pren_motore,
+               count(b.id) FILTER (WHERE b.stato = 'prospect' AND b.ricettiva
+                                     AND (b.pren IS NULL OR b.pren = 'non_letto'))::int AS pren_da_verificare,
+               (SELECT string_agg(DISTINCT x.pren_nome, ', ') FROM b x
+                 WHERE x.campagna_id = c.id AND x.pren = 'motore'
+                   AND x.pren_nome NOT LIKE 'motore su %')                              AS pren_motori,
                (SELECT json_agg(json_build_object('id', t.id, 'nome', t.nome, 'perche', t.perche))
                   FROM (SELECT x.id, x.nome,
-                               CASE x.fascia
-                                 WHEN 0 THEN 'scheda Google di nessuno'
-                                 WHEN 1 THEN 'nessun sito'
-                                 WHEN 2 THEN 'sito debole'
+                               CASE
+                                 WHEN x.ricettiva THEN
+                                   CASE x.pren
+                                     WHEN 'manda_a_portale' THEN 'Prenota porta a ' || COALESCE(x.pren_nome, 'un portale')
+                                     WHEN 'portale'         THEN 'nessun sito suo: ' || COALESCE(x.pren_nome, 'un portale')
+                                     WHEN 'senza_sito'      THEN 'nessun sito'
+                                     WHEN 'nessun_motore'   THEN 'nessuna prenotazione online'
+                                     WHEN 'motore'          THEN 'ha già ' || COALESCE(x.pren_nome, 'un motore')
+                                     ELSE 'da verificare'
+                                   END
+                                 WHEN x.fascia = 0 THEN 'scheda Google di nessuno'
+                                 WHEN x.fascia = 1 THEN 'nessun sito'
+                                 WHEN x.fascia = 2 THEN 'sito debole'
                                  ELSE ''
                                END
                                || CASE WHEN x.recensioni >= 50
@@ -126,7 +165,7 @@ export default async function PaginaAziende({
           LEFT JOIN b ON b.campagna_id = c.id
          GROUP BY c.id
          ORDER BY c.creata_at DESC
-         LIMIT 50`),
+         LIMIT 50`, [RICETTIVA.source]),
       query<{ quante: number }>(
         `SELECT count(*)::int AS quante FROM wesion.azienda
           WHERE stato <> 'cliente' AND campagna_id IS NULL`
@@ -268,7 +307,8 @@ export default async function PaginaAziende({
         * cliente ha imparato a tollerare, la scheda di nessuno e' un problema
         * che non sa di avere e che gli dimostri in trenta secondi.
         */
-       (a.raw_json->>'claimThisBusiness') = 'true' AS scheda_da_rivendicare
+       (a.raw_json->>'claimThisBusiness') = 'true' AS scheda_da_rivendicare,
+       a.prenotazione
      FROM wesion.azienda a
      LEFT JOIN wesion.campagna camp ON camp.id = a.campagna_id
      LEFT JOIN wesion.sito sito ON sito.azienda_id = a.id

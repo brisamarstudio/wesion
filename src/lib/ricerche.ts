@@ -34,6 +34,20 @@ export interface RiassuntoRicerca {
   sito_debole: number;
   /** Fra quelle da chiamare: mai passate dall'audit. */
   da_controllare: number;
+  /** Quante sono strutture ricettive (hotel, B&B…): se sono la maggioranza, il verdetto cambia. */
+  ricettive: number;
+  /** Fra le ricettive da chiamare: hanno un sito, ma «Prenota» porta a Booking/Airbnb. */
+  pren_a_portale: number;
+  /** Fra le ricettive da chiamare: nessun sito, o il sito e' la pagina di un portale. */
+  pren_solo_portali: number;
+  /** Fra le ricettive da chiamare: sito senza prenotazione online. */
+  pren_nessun_motore: number;
+  /** Fra le ricettive da chiamare: hanno gia' un motore loro. */
+  pren_motore: number;
+  /** Fra le ricettive da chiamare: non ancora controllate (o non lette). */
+  pren_da_verificare: number;
+  /** I nomi dei motori trovati, separati da virgola. */
+  pren_motori: string | null;
   /** I primi tre da chiamare, gia' ordinati. */
   primi: { id: string | number; nome: string; perche: string }[] | null;
 }
@@ -52,6 +66,69 @@ function maiuscola(s: string): string {
 
 function n(x: number, uno: string, tanti: string): string {
   return `${x} ${x === 1 ? uno : tanti}`;
+}
+
+/** Una ricerca di hotel e B&B: la domanda giusta e' dove si prenota, non il sito. */
+export function eRicercaRicettiva(r: RiassuntoRicerca): boolean {
+  return r.totale > 0 && r.ricettive * 2 >= r.totale;
+}
+
+/**
+ * ⚠️ IL VERDETTO DEGLI HOTEL (02/11/2026). Con un hotel non si vende «un sito»,
+ * si vende il 18% che smette di dare a Booking. Quindi le fasce sono quelle di
+ * src/lib/prenotazioni.ts, e chi ha gia' un motore suo (all'Hotel del Parco
+ * c'e' RoomCloud) va detto chiaramente, o lo si chiama per vendergli quello che
+ * ha.
+ */
+function verdettoRicettive(r: RiassuntoRicerca): { tono: Tono; frasi: string[] } {
+  const frasi: string[] = [];
+  const controllate = r.da_chiamare - r.pren_da_verificare;
+  if (controllate === 0) {
+    return {
+      tono: 'da_vedere',
+      frasi: [
+        'Non sappiamo ancora dove prenotano. Premi «Controlla le prenotazioni»: apre il sito di ognuna come farebbe un cliente.',
+      ],
+    };
+  }
+
+  if (r.pren_solo_portali) {
+    frasi.push(
+      `${r.pren_solo_portali === 1 ? '1 esiste' : `${r.pren_solo_portali} esistono`} solo sui portali (niente sito, o il sito è la pagina di una guida): ` +
+        'ogni prenotazione passa da Booking o Airbnb. È il pacchetto completo.'
+    );
+  }
+  if (r.pren_a_portale) {
+    frasi.push(
+      `${r.pren_a_portale === 1 ? '1 ha' : `${r.pren_a_portale} hanno`} un sito, ma «Prenota» porta a Booking: ` +
+        'pagano la commissione anche su chi li cerca per nome.'
+    );
+  }
+  if (r.pren_nessun_motore) {
+    frasi.push(
+      `${r.pren_nessun_motore === 1 ? '1 ha' : `${r.pren_nessun_motore} hanno`} un sito senza prenotazione online, al massimo un modulo di richiesta: ` +
+        'chi vuole prenotare la sera torna su Booking.'
+    );
+  }
+  if (r.pren_motore) {
+    frasi.push(
+      `${r.pren_motore === 1 ? '1 ha' : `${r.pren_motore} hanno`} già un motore suo${r.pren_motori ? ` (${r.pren_motori})` : ''}: ` +
+        `${r.pren_motore === 1 ? 'chiamalo per ultimo' : 'chiamali per ultimi'}, al massimo per il widget.`
+    );
+  }
+  if (r.pren_da_verificare) {
+    frasi.push(`${r.pren_da_verificare} ancora da verificare: premi «Controlla le prenotazioni».`);
+  }
+
+  const calde = r.pren_solo_portali + r.pren_a_portale + r.pren_nessun_motore;
+  if (calde > 0) {
+    frasi.unshift(`Parti da ${calde === 1 ? 'una' : calde}: ${calde === 1 ? 'oggi paga' : 'oggi pagano'} a Booking anche quello che potrebbe essere ${calde === 1 ? 'suo' : 'loro'}.`);
+  } else {
+    frasi.unshift('Poco da vendere qui: chi abbiamo controllato ha già un motore di prenotazione.');
+  }
+  const tono: Tono =
+    calde === 0 ? 'magra' : calde >= 5 || calde / Math.max(1, controllate) >= 0.3 ? 'buona' : 'media';
+  return { tono, frasi };
 }
 
 export type Tono = 'buona' | 'media' | 'da_vedere' | 'magra' | 'finita' | 'vuota';
@@ -78,6 +155,8 @@ export function verdettoRicerca(r: RiassuntoRicerca): { tono: Tono; frasi: strin
       ],
     };
   }
+
+  if (eRicercaRicettiva(r)) return verdettoRicettive(r);
 
   const frasi: string[] = [];
   const caldeVere = r.calde;

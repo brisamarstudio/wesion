@@ -28,6 +28,7 @@ import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Plus, List as IconaElenco, ArrowRight } from 'lucide-react';
 import {
   verdettoRicerca,
+  eRicercaRicettiva,
   titoloRicerca,
   ETICHETTA_TONO,
   type RiassuntoRicerca,
@@ -53,6 +54,15 @@ export function RicercheDaChiamare({
   senzaRicerca: number;
 }) {
   const router = useRouter();
+
+  async function controllaPrenotazioni(campagna: string | number) {
+    await fetch('/api/aziende/prenotazioni', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campagna }),
+    }).catch(() => null);
+    router.refresh();
+  }
 
   // Prima quelle su cui c'e' lavoro, poi le finite e le vuote: la prima
   // scheda in alto a sinistra e' quella da aprire oggi.
@@ -163,13 +173,24 @@ export function RicercheDaChiamare({
                           .filter(Boolean)
                           .join(' · ')}
                       </Text>
-                      <Button
-                        label="Apri"
-                        size="sm"
-                        variant={v.tono === 'buona' ? 'primary' : 'secondary'}
-                        icon={<ArrowRight size={15} />}
-                        onClick={() => router.push(`/aziende?campagna=${r.id}`)}
-                      />
+                      <HStack gap={2} align="center">
+                        {eRicercaRicettiva(r) && r.pren_da_verificare > 0 ? (
+                          <Button
+                            label={`Controlla le prenotazioni (${r.pren_da_verificare})`}
+                            size="sm"
+                            variant={v.tono === 'da_vedere' ? 'primary' : 'ghost'}
+                            tooltip="Apre il sito di ognuna con un browser vero e guarda dove va chi preme «Prenota». Un paio di minuti."
+                            clickAction={() => controllaPrenotazioni(r.id)}
+                          />
+                        ) : null}
+                        <Button
+                          label="Apri"
+                          size="sm"
+                          variant={v.tono === 'buona' ? 'primary' : 'secondary'}
+                          icon={<ArrowRight size={15} />}
+                          onClick={() => router.push(`/aziende?campagna=${r.id}`)}
+                        />
+                      </HStack>
                     </HStack>
                   </Card>
                 ))}

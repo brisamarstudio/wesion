@@ -26,6 +26,7 @@ import { query } from './db';
 import { generaJson } from './generatore';
 import { estraiRecapiti, paginaContatti } from './leggiSito';
 import { normalizzaTelefono } from './normalizza';
+import { salvaPrenotazione } from './prenotazioni';
 
 export interface EsitoAudit {
   score: number | null;
@@ -433,6 +434,14 @@ export async function analizzaAzienda(aziendaId: string | number): Promise<Esito
    */
   const recapiti = await raccogliRecapiti(aziendaId, scansionato.html, scansionato.url);
   if (recapiti) console.log(`[audit] azienda ${aziendaId}: ${recapiti} recapiti presi dal sito`);
+
+  // Per gli hotel: dove va chi vuole prenotare. Niente AI, non costa niente, e
+  // se fallisce l'audit va avanti lo stesso.
+  try {
+    await salvaPrenotazione(aziendaId);
+  } catch (errore) {
+    console.error(`[audit] azienda ${aziendaId}: prenotazione non letta`, errore);
+  }
 
   // `html` vuoto = non l'abbiamo letto, per qualunque ragione.
   const esito = await chiediGiudizio(azienda, scansionato.nota, Boolean(scansionato.html));

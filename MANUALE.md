@@ -106,6 +106,21 @@ chiamare. **Apri** porta all'elenco di quella ricerca sola; **← Ricerche** ti
 riporta alle schede. Se cerchi un nome e non sai in che ricerca sta: **Tutto in
 un elenco**.
 
+**Hotel, B&B e strutture ricettive: conta dove si prenota.** Per queste
+ricerche la scheda non parla di siti belli o brutti: dice dove va chi preme
+«Prenota». **Controlla le prenotazioni** apre il sito di ognuna con un browser
+vero (ci vuole un paio di minuti) e sulla riga compare il fatto:
+
+| sulla riga | cosa vuol dire | cosa fai |
+|---|---|---|
+| **nessun sito suo** (rosso) | Niente sito, o il «sito» è la pagina di una guida o di un portale | Pacchetto completo da 200 € |
+| **Prenota → Booking.com** (rosso) | Ha un sito, ma la prenotazione la manda a Booking | Il discorso del 18% calza perfetto |
+| **niente prenotazione online** (giallo) | Sito con al massimo un modulo di richiesta | Chi prenota la sera torna su Booking |
+| **ha RoomCloud** / **ha Kross Booking**… (grigio) | Ha già un motore suo | Non vendergli il motore: per ultimo, al massimo il widget |
+
+Se una struttura resta «da verificare» non vuol dire che non abbia il motore:
+vuol dire che non siamo riusciti ad aprire il sito. Va guardata a mano.
+
 **Chi ha già firmato non è qui.** Appena metti qualcuno su «cliente», la riga
 sparisce da questo elenco e compare in «Clienti». È voluto: questa pagina serve
 a decidere chi chiamare, e un cliente non è una telefonata da fare.
