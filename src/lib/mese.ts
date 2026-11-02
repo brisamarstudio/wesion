@@ -77,6 +77,38 @@ export interface VoceMese {
   coppia_di: number | null;
   /** Quante volte la preparazione ha fallito su questa bozza: da 2 in su si salta. */
   errori: number;
+  /** Dove si vede, una volta uscito: il link del post su Google o dell'articolo. */
+  url_uscito: string | null;
+  /** L'ultimo errore di pubblicazione, se il router ci ha provato e non ce l'ha fatta. */
+  errore_uscita: string | null;
+}
+
+/**
+ * Dove escono DAVVERO le cose di questo cliente, detto in chiaro.
+ *
+ * ⚠️ NASCE DA UNA DOMANDA (02/11/2026): «un recap di cosa sta facendo e dove
+ * pubblica realmente». La pagina diceva «Google» su ogni riga, ma non QUALE
+ * scheda, ne' su quale sito andassero gli articoli. Chi approva un mese intero
+ * deve vedere il posto vero, con un link per andarci.
+ */
+export interface DoveEsce {
+  scheda: { nome: string; link: string | null } | null;
+  sito: string | null;
+}
+
+export async function doveEsce(aziendaId: number): Promise<DoveEsce> {
+  const [a] = await query<{ nome: string; maps_url: string | null; sito: string | null }>(
+    `SELECT a.nome, a.maps_url,
+            (SELECT c.valore FROM wesion.contatto c
+              WHERE c.azienda_id = a.id AND c.tipo = 'sito' ORDER BY c.id LIMIT 1) AS sito
+       FROM wesion.azienda a WHERE a.id = $1`,
+    [aziendaId]
+  );
+  const servizi = await serviziPronti(aziendaId);
+  return {
+    scheda: servizi.gbp && a ? { nome: a.nome, link: a.maps_url } : null,
+    sito: servizi.blog && a?.sito ? (/^https?:/.test(a.sito) ? a.sito : `https://${a.sito}`) : null,
+  };
 }
 
 /** Dopo quanti fallimenti una bozza si lascia stare e si segnala. */
@@ -125,6 +157,8 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
     avvisi: Array<{ gravita?: string; testo?: string; messaggio?: string }> | null;
     coppia_di: string | null;
     errori: string | null;
+    url_uscito: string | null;
+    errore_uscita: string | null;
   }>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at,
             b.contenuto->>'titolo' AS titolo,
@@ -132,7 +166,14 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
             b.contenuto->>'foto'   AS foto,
             b.avvisi,
             b.contenuto->>'coppia_di' AS coppia_di,
-            b.contenuto->>'prepara_errori' AS errori
+            b.contenuto->>'prepara_errori' AS errori,
+            (SELECT p.url_risultato FROM wesion.pubblicazione p
+              WHERE p.bozza_id = b.id AND p.esito = 'ok' AND p.url_risultato IS NOT NULL
+              ORDER BY p.eseguita_at DESC LIMIT 1) AS url_uscito,
+            (SELECT p.errore FROM wesion.pubblicazione p
+              WHERE p.bozza_id = b.id AND p.esito = 'errore'
+                AND NOT EXISTS (SELECT 1 FROM wesion.pubblicazione q WHERE q.bozza_id = b.id AND q.esito = 'ok')
+              ORDER BY p.eseguita_at DESC LIMIT 1) AS errore_uscita
        FROM wesion.bozza b
       WHERE b.azienda_id = $1 AND b.origine = 'piano'
         AND b.tipo IN ('post_gbp', 'articolo')
@@ -155,6 +196,8 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
       avvisi: avvisi.map((a) => String(a.messaggio ?? a.testo ?? '')).filter(Boolean),
       coppia_di: r.coppia_di ? Number(r.coppia_di) : null,
       errori: Number(r.errori ?? 0),
+      url_uscito: r.url_uscito,
+      errore_uscita: r.errore_uscita,
     };
   });
 }
@@ -286,6 +329,49 @@ export async function preparaPasso(
       }
     }
     return { fatto: `piano creato: ${creati} uscite`, avanzati: creati, finito: false, stato, errori };
+  }
+
+  // 1-bis. Mese gia' pianificato col vecchio strumento (solo Google), blog
+  //    collegato, nessun articolo: si aggiungono, abbinati ai post che ci sono.
+  //    ⚠️ Visto su Chumphon il 02/11/2026: 15 post e zero articoli, perche' il
+  //    piano era nato prima di questa pagina e il passo 1 qui sopra guarda
+  //    solo i mesi vuoti.
+  if (stato.blogPronto && stato.articoli === 0 && stato.post > 0) {
+    const [inizio, fine] = confini(anno, mese);
+    const posts = await query<{ id: number; pubblica_at: string; fatto_id: number | null; contenuto: Record<string, unknown> }>(
+      `SELECT id, pubblica_at, fatto_id, contenuto FROM wesion.bozza
+        WHERE azienda_id = $1 AND origine = 'piano' AND tipo = 'post_gbp' AND stato <> 'rifiutata'
+          AND pubblica_at >= $2 AND pubblica_at < $3 AND pubblica_at > now()
+        ORDER BY pubblica_at`,
+      [aziendaId, inizio, fine]
+    );
+    const quanti = Math.min(ARTICOLI_AL_MESE, posts.length);
+    if (quanti > 0) {
+      const passo = posts.length / quanti;
+      for (let i = 0; i < quanti; i++) {
+        const p = posts[Math.floor(i * passo)];
+        const c = p.contenuto;
+        await query(
+          `INSERT INTO wesion.bozza (azienda_id, tipo, origine, fatto_id, contenuto, stato, pubblica_at)
+           VALUES ($1, 'articolo', 'piano', $2, $3::jsonb, 'vuota', $4)`,
+          [
+            aziendaId,
+            p.fatto_id,
+            JSON.stringify({
+              titolo: c.titolo ?? null,
+              fatto: c.fatto ?? null,
+              fonte: c.fonte ?? null,
+              angolo:
+                `${c.angolo ?? 'Racconta questo fatto in modo concreto.'} Sviluppalo per chi cerca su Google o chiede a un assistente AI: ` +
+                'rispondi a una domanda concreta che un cliente si fa davvero, con i fatti veri.',
+              coppia_di: p.id,
+            }),
+            p.pubblica_at,
+          ]
+        );
+      }
+      return { fatto: `aggiunti ${quanti} articoli del sito`, avanzati: quanti, finito: false, stato, errori };
+    }
   }
 
   // 2. I testi, due alla volta.

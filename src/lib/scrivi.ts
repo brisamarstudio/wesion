@@ -107,7 +107,36 @@ function zonaDelPost(bozza: BozzaDaScrivere, m: Materia): string {
   return m.zone[i]?.valore ?? '';
 }
 
-export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
+/**
+ * ⚠️ AL MASSIMO DUE COSE DI CONTORNO, A GIRO (02/11/2026).
+ *
+ * Fino a oggi qui entravano TUTTI i fatti del cliente sotto «altre cose vere
+ * che puoi usare, se servono». Il modello li usava tutti, ogni volta: i
+ * quattordici post di novembre di Chumphon chiudevano quasi tutti con
+ * «parcheggio gratuito davanti allo studio, accessibile in sedia a rotelle,
+ * abiti comodi, lettino professionale». Uno alla volta andavano bene; in fila,
+ * per chi segue la scheda erano lo stesso post quattordici volte.
+ *
+ * Ora: il fatto del giorno, piu' due di contorno scelti a rotazione con l'id
+ * della bozza (stabile: lo stesso post riscritto pesca gli stessi due).
+ */
+function contornoDelPost(bozza: BozzaDaScrivere, m: Materia): string[] {
+  const principale = String(bozza.contenuto.fatto ?? '').trim();
+  const tutti = [
+    ...m.offerta.map((v) => v.valore),
+    ...m.materiali.map((v) => v.valore),
+    ...m.punti_forza.map((v) => v.valore),
+  ]
+    .map((v) => String(v).trim())
+    .filter((v) => v && v !== principale);
+  if (tutti.length <= 2) return tutti;
+  const n = Math.abs(Number(bozza.id)) || 0;
+  const primo = n % tutti.length;
+  const secondo = (primo + 1 + (Math.floor(n / tutti.length) % (tutti.length - 1))) % tutti.length;
+  return [tutti[primo], tutti[secondo === primo ? (primo + 1) % tutti.length : secondo]];
+}
+
+export function prompt(bozza: BozzaDaScrivere, m: Materia, vicini: string[] = []): string {
   const c = bozza.contenuto;
   const dove = bozza.citta ? `, a ${bozza.citta}` : '';
   const zona = zonaDelPost(bozza, m);
@@ -120,11 +149,18 @@ export function prompt(bozza: BozzaDaScrivere, m: Materia): string {
     `\nIL COMPITO: ${c.angolo ?? 'Racconta questo fatto in modo concreto.'}`,
     c.titolo ? `(tema di lavorazione: ${c.titolo})` : '',
 
-    elenco('\nALTRE COSE VERE che puoi usare, se servono al discorso:', [
-      ...m.offerta.map((v) => v.valore),
-      ...m.materiali.map((v) => v.valore),
-      ...m.punti_forza.map((v) => v.valore),
-    ]),
+    elenco(
+      '\nAL MASSIMO UNA di queste cose vere puoi aggiungere, solo se serve davvero al discorso (altrimenti nessuna):',
+      contornoDelPost(bozza, m)
+    ),
+    /**
+     * I post vicini nel calendario. Chi segue la scheda li legge in fila: se
+     * questo ripete quello di due giorni fa, se ne accorge.
+     */
+    vicini.length
+      ? `\n\nI POST VICINI A QUESTO parlano gia' di: ${vicini.map((v) => `"${v}"`).join('; ')}. Non ripetere i loro argomenti ne' le loro frasi.`
+      : '',
+    `\n\nPARLA DI UNA COSA SOLA: il fatto qui sopra. Niente elenco finale di servizi o comodita' (parcheggio, accessibilita', orari, abiti...): chi legge la scheda vede un post ogni due giorni e un finale sempre uguale lo fa smettere di leggere.`,
     /**
      * Il posto, quando c'è.
      *
@@ -312,7 +348,24 @@ export async function scriviBozza(
     };
   }
 
-  const esito = await genera(SISTEMA_COPYWRITER, prompt(bozza, materia));
+  // Di cosa parlano i post dello stesso cliente nei giorni intorno.
+  const vicini = (
+    await query<{ fatto: string | null; titolo: string | null }>(
+      `SELECT b.contenuto->>'fatto' AS fatto, b.contenuto->>'titolo' AS titolo
+         FROM wesion.bozza b, wesion.bozza q
+        WHERE q.id = $1 AND b.azienda_id = q.azienda_id AND b.id <> q.id
+          AND b.tipo = 'post_gbp' AND b.stato <> 'rifiutata'
+          AND b.pubblica_at IS NOT NULL AND q.pubblica_at IS NOT NULL
+          AND b.pubblica_at BETWEEN q.pubblica_at - interval '8 days' AND q.pubblica_at + interval '8 days'
+        ORDER BY b.pubblica_at
+        LIMIT 8`,
+      [bozzaId]
+    )
+  )
+    .map((v) => String(v.fatto || v.titolo || '').trim())
+    .filter((v) => v && v !== String(bozza.contenuto.fatto ?? '').trim());
+
+  const esito = await genera(SISTEMA_COPYWRITER, prompt(bozza, materia, [...new Set(vicini)].slice(0, 5)));
 
   /**
    * Riletto subito, ma sapendo cosa e' stato verificato.

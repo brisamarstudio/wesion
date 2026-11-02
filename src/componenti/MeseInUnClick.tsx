@@ -32,8 +32,11 @@ import { ProgressBar } from '@astryxdesign/core/ProgressBar';
 import { AspectRatio } from '@astryxdesign/core/AspectRatio';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
-import { ArrowLeft, ArrowRight, Check, RefreshCw, Sparkles, X } from 'lucide-react';
-import type { StatoMese, VoceMese, FaseMese } from '@/lib/mese';
+import { FileInput } from '@astryxdesign/core/FileInput';
+import { Link } from '@astryxdesign/core/Link';
+import { ArrowLeft, ArrowRight, Check, RefreshCw, Send, Sparkles, X } from 'lucide-react';
+import type { StatoMese, VoceMese, FaseMese, DoveEsce } from '@/lib/mese';
+import { giornoRoma } from '@/lib/quando';
 
 export interface ClienteMese {
   id: number;
@@ -334,6 +337,9 @@ function LetturaMese({
   const [stato, setStato] = useState<StatoMese>(cliente.stato);
   const [messaggio, setMessaggio] = useState<{ tipo: 'success' | 'error' | 'info'; testo: string } | null>(null);
   const [inCorso, setInCorso] = useState<Record<number, boolean>>({});
+  const [dove, setDove] = useState<DoveEsce | null>(null);
+  /** «Pubblica adesso» chiede conferma col secondo click, non con un popup. */
+  const [confermaSubito, setConfermaSubito] = useState<number | null>(null);
   const nomeMese = MESI[mese - 1];
 
   const carica = useCallback(async () => {
@@ -342,6 +348,7 @@ function LetturaMese({
     if (r.ok) {
       setVoci(esito.voci);
       setStato(esito.stato);
+      setDove(esito.dove ?? null);
     } else setMessaggio({ tipo: 'error', testo: esito?.errore ?? 'Non riesco a leggere il mese.' });
   }, [cliente.id, anno, mese]);
 
@@ -375,19 +382,34 @@ function LetturaMese({
     router.refresh();
   }
 
-  async function azione(v: VoceMese, cosa: 'togli' | 'immagine') {
+  async function azione(v: VoceMese, cosa: 'togli' | 'immagine' | 'subito' | 'domani', file?: File) {
     setInCorso((x) => ({ ...x, [v.id]: true }));
-    const r =
-      cosa === 'togli'
-        ? await fetch(`/api/bozze/${v.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ azione: 'rifiuta' }),
-          })
-        : await fetch(`/api/bozze/${v.id}/immagine-ai`, { method: 'POST' });
+    const patch = (corpo: object) =>
+      fetch(`/api/bozze/${v.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo),
+      });
+    let r: Response;
+    if (cosa === 'togli') r = await patch({ azione: 'rifiuta' });
+    // «Pubblica adesso» = approva e togli la data: lo stesso gesto delle Bozze.
+    else if (cosa === 'subito') r = await patch({ azione: 'approva', pubblica_at: null });
+    // Una data passata: domani alle 10, ora di Roma (il fuso lo mette il server).
+    else if (cosa === 'domani') {
+      const domani = giornoRoma(new Date(Date.now() + 86_400_000));
+      r = await patch({ pubblica_at: `${domani}T10:00` });
+    } else if (file) {
+      const modulo = new FormData();
+      modulo.append('file', file);
+      r = await fetch(`/api/bozze/${v.id}/immagine`, { method: 'POST', body: modulo });
+    } else r = await fetch(`/api/bozze/${v.id}/immagine-ai`, { method: 'POST' });
     const e = await r.json().catch(() => ({}));
     if (!r.ok) setMessaggio({ tipo: 'error', testo: e?.errore ?? 'Non è andata.' });
+    else if (cosa === 'subito') {
+      setMessaggio({ tipo: 'success', testo: 'Approvato senza data: il router lo pubblica al prossimo giro, entro un minuto.' });
+    }
     setInCorso((x) => ({ ...x, [v.id]: false }));
+    setConfermaSubito(null);
     await carica();
   }
 
@@ -448,6 +470,70 @@ function LetturaMese({
             ) : null}
             {inLavoro ? <ProgressBar label="Preparazione" isLabelHidden isIndeterminate /> : null}
 
+            {/* ── DOVE ESCE, DAVVERO ─────────────────────────────────────
+                Chiesto il 02/11/2026: «un recap di cosa sta facendo e dove
+                pubblica realmente». Il posto vero con il link per andarci,
+                cosa e' in corso adesso, e il calendario in una riga. */}
+            {voci && voci.length ? (
+              <Banner
+                status="info"
+                title="Cosa succede questo mese"
+                defaultIsExpanded
+                description={undefined}
+              >
+                <VStack gap={1.5}>
+                  <Text>
+                    <strong>Dove esce:</strong>{' '}
+                    {dove?.scheda ? (
+                      <>
+                        {n(stato.post, 'post', 'post')} sulla scheda Google <strong>{dove.scheda.nome}</strong>
+                        {dove.scheda.link ? (
+                          <>
+                            {' '}
+                            (<Link href={dove.scheda.link} isExternalLink>
+                              apri la scheda
+                            </Link>
+                            )
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      'la scheda Google non è collegata'
+                    )}
+                    {stato.articoli ? (
+                      <>
+                        {' · '}
+                        {n(stato.articoli, 'articolo', 'articoli')} sul blog di{' '}
+                        {dove?.sito ? (
+                          <Link href={dove.sito} isExternalLink>
+                            {dove.sito.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                          </Link>
+                        ) : (
+                          'questo cliente'
+                        )}
+                      </>
+                    ) : null}
+                    .
+                  </Text>
+                  <Text>
+                    <strong>Adesso:</strong>{' '}
+                    {stato.vuote
+                      ? `${n(stato.vuote, 'testo', 'testi')} ancora da scrivere.`
+                      : stato.senzaFoto
+                        ? `testi pronti, ${n(stato.senzaFoto, 'immagine', 'immagini')} da fare${stato.pcAcceso ? ' (le fa il tuo PC con ComfyUI)' : ' (il PC è spento: «Continua» le fa fare a OpenRouter)'}.`
+                        : stato.daApprovare
+                          ? `tutto pronto, aspetta solo il tuo «Approva».`
+                          : `approvato: escono da sole.`}
+                    {stato.uscite ? ` ${n(stato.uscite, 'già uscito', 'già usciti')}.` : ''}
+                  </Text>
+                  <Text>
+                    <strong>Quando:</strong> dal {giorno(voci[0].pubblica_at)} al {giorno(voci[voci.length - 1].pubblica_at)}, alle 10 di mattina
+                    {stato.prossima ? `; il prossimo esce ${giorno(stato.prossima)}` : ''}.
+                  </Text>
+                </VStack>
+              </Banner>
+            ) : null}
+
             {voci === null ? (
               <ProgressBar label="Carico il mese" isIndeterminate />
             ) : voci.length === 0 ? (
@@ -473,6 +559,22 @@ function LetturaMese({
                             </Text>
                           </AspectRatio>
                         )}
+                        {/* La foto VERA vince sempre su quella generata: e' il
+                            locale com'e', e chi arriva trova quello che ha visto. */}
+                        {v.stato === 'attesa_approvazione' || v.stato === 'approvata' ? (
+                          <FileInput
+                            label="Metti una foto vera"
+                            isLabelHidden
+                            placeholder={inCorso[v.id] ? 'Carico…' : 'Metti una foto vera'}
+                            accept="image/*"
+                            maxSize={8 * 1024 * 1024}
+                            value={null}
+                            onChange={() => undefined}
+                            changeAction={async (f) => {
+                              if (f && !Array.isArray(f)) await azione(v, 'immagine', f);
+                            }}
+                          />
+                        ) : null}
                       </VStack>
                       <VStack gap={2} width="min(100%, 640px)">
                         <HStack gap={2} align="center" wrap="wrap">
@@ -481,7 +583,20 @@ function LetturaMese({
                           {v.stato === 'approvata' ? <Badge variant="success" label="approvato" /> : null}
                           {v.stato === 'pubblicata' || v.stato === 'pubblicando' ? <Badge variant="green" label="uscito" /> : null}
                           {v.grave ? <Badge variant="error" label="da guardare" /> : null}
+                          {v.stato === 'attesa_approvazione' && new Date(v.pubblica_at).getTime() < Date.now() ? (
+                            <Badge variant="red" label="data passata: non esce" />
+                          ) : null}
+                          {v.url_uscito ? (
+                            <Link href={v.url_uscito} isExternalLink>
+                              guardalo dov’è uscito
+                            </Link>
+                          ) : null}
                         </HStack>
+                        {v.errore_uscita ? (
+                          <Text type="supporting" color="secondary">
+                            ⚠️ Non è riuscito a uscire: {v.errore_uscita}
+                          </Text>
+                        ) : null}
                         {v.titolo ? <Text weight="medium">{v.titolo}</Text> : null}
                         <Text color={v.testo ? 'primary' : 'secondary'} maxLines={v.tipo === 'articolo' ? 6 : 0}>
                           {v.testo ?? 'Il testo non c’è ancora.'}
@@ -492,7 +607,28 @@ function LetturaMese({
                           </Text>
                         ) : null}
                         {v.stato === 'attesa_approvazione' || v.stato === 'approvata' ? (
-                          <HStack gap={2}>
+                          <HStack gap={2} wrap="wrap">
+                            {v.stato === 'attesa_approvazione' && new Date(v.pubblica_at).getTime() < Date.now() ? (
+                              <Button
+                                label="Spostalo a domani"
+                                size="sm"
+                                variant="secondary"
+                                clickAction={() => azione(v, 'domani')}
+                              />
+                            ) : null}
+                            {v.testo ? (
+                              <Button
+                                label={confermaSubito === v.id ? 'Sicuro? Esce subito su Google' : 'Pubblica adesso'}
+                                size="sm"
+                                variant={confermaSubito === v.id ? 'primary' : 'ghost'}
+                                icon={<Send size={14} />}
+                                tooltip="Lo approva senza data: esce al prossimo giro del router, entro un minuto."
+                                clickAction={async () => {
+                                  if (confermaSubito !== v.id) setConfermaSubito(v.id);
+                                  else await azione(v, 'subito');
+                                }}
+                              />
+                            ) : null}
                             <Button
                               label="Rifai immagine"
                               size="sm"

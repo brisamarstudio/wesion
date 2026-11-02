@@ -3,7 +3,7 @@
  * approvarlo. Sola lettura. Vedi src/lib/mese.ts.
  */
 import { NextResponse } from 'next/server';
-import { statoMese, vociMese } from '@/lib/mese';
+import { statoMese, vociMese, doveEsce } from '@/lib/mese';
 
 export async function GET(richiesta: Request, contesto: { params: Promise<{ id: string }> }) {
   const { id } = await contesto.params;
@@ -14,6 +14,10 @@ export async function GET(richiesta: Request, contesto: { params: Promise<{ id: 
   const mese = Number(p.get('mese'));
   if (!anno || !mese || mese < 1 || mese > 12) return NextResponse.json({ errore: 'servono anno e mese' }, { status: 400 });
 
-  const [stato, voci] = await Promise.all([statoMese(aziendaId, anno, mese), vociMese(aziendaId, anno, mese)]);
-  return NextResponse.json({ stato, voci });
+  const [stato, voci, dove] = await Promise.all([
+    statoMese(aziendaId, anno, mese),
+    vociMese(aziendaId, anno, mese),
+    doveEsce(aziendaId),
+  ]);
+  return NextResponse.json({ stato, voci, dove });
 }
