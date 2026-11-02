@@ -35,6 +35,26 @@ npm run cliente  ->  prepara un cliente da riga di comando
 npm run utente   ->  crea un accesso alla dashboard
 ```
 
+## 0.6 Il mese in un click, e gli hotel (02/11/2026)
+
+**Il mese** (`/piano`, `src/lib/mese.ts`): una card per cliente, un bottone per volta.
+*Prepara* = piano Google + un articolo a settimana sul sito (bozza separata, `contenuto.coppia_di`
+→ il post dello stesso giorno, perche' `bozza.tipo` resta esclusivo) + testi + immagini AI
+(`src/lib/immagini.ts`, OpenRouter `google/gemini-2.5-flash-image`, ~0,04 $ l'una: la
+GEMINI_API_KEY e' free tier e li' le immagini hanno quota zero). *Approva tutto* approva in un
+colpo, tranne avvisi gravi e date passate. Una bozza che fallisce 2 volte si salta
+(`contenuto.prepara_errori`). Il vecchio PianoEditoriale e' su `?vista=avanzata` e per i social.
+Deciso da Mariano: «con un CLICK, una volta letto e approvato, non ci penso più».
+Provato su Artigiano il Conte, dicembre: 18 post + 4 articoli + 22 immagini, ~6 minuti.
+
+⚠️ Il media server accetta solo i suoi tipi di cartella: 'blog' → 400. Tutto in 'gbp'.
+
+**Hotel** (`src/lib/prenotazioni.ts`): per le strutture ricettive si legge con Chromium headless
+dove porta «Prenota» (motore suo / portale / niente / nessun sito suo). Un fetch non basta:
+RoomCloud entra da script. Chromium e' nell'immagine della dashboard (Dockerfile); se sul server
+non parte, tutto risulta «da verificare», mai «nessun motore». Prezzi hotel: vedi
+`booking-engine/PREZZI.md` (120 €/mese fino a 10 camere, deciso il 02/11).
+
 ## 0.5 Router vecchio spento: il menu via WhatsApp passa SOLO da Wesion (26/09/2026)
 
 **Cosa è successo.** Maria (Trattoria La Fenice) ha mandato la foto del menu al bot
