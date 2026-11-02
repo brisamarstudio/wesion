@@ -326,6 +326,22 @@ ritocco a mano di giorni e temi stanno in **Strumento avanzato**, in alto.
 
 ---
 
+## ✉️ Riepilogo del mese — *il lavoro che fai, fatto vedere al cliente* (dal 02/11/2026)
+
+**A cosa serve:** una volta al mese dire a ogni cliente cosa è successo: post
+usciti, articoli, quante persone sono arrivate sul sito da Google (con il
+confronto sul mese prima) e con quali ricerche lo trovano. È il motivo per cui
+il canone non è «il sito», è il lavoro.
+
+**Come si usa:** si apre sul mese appena finito. Una card per cliente con il
+messaggio pronto: lo leggi, lo correggi se vuoi, e **«Apri WhatsApp col
+messaggio»** apre il tuo WhatsApp con il testo già scritto: premi Invio tu.
+La card poi dice «Mandato il …».
+
+**Cosa non ci finisce mai:** zeri (se Search Console non è collegata la riga
+non c'è), ricerche generiche o in inglese, e ricerche impresentabili (sesso,
+offese). Se un cliente non ha un numero del titolare, c'è «Copia».
+
 ## ✍️ Da approvare — *la coda di quello che sta per uscire*
 
 **A cosa serve:** tutto quello che è scritto e aspetta un sì. Post per Google,
