@@ -393,8 +393,24 @@ function LetturaMese({
       });
     let r: Response;
     if (cosa === 'togli') r = await patch({ azione: 'rifiuta' });
-    // «Pubblica adesso» = approva e togli la data: lo stesso gesto delle Bozze.
-    else if (cosa === 'subito') r = await patch({ azione: 'approva', pubblica_at: null });
+    // «Pubblica adesso» = approva con la data di ADESSO.
+    // ⚠️ Non `null` come nelle Bozze (02/11/2026): il mese elenca i post per
+    // data, e un post senza data spariva dalla lista appena pubblicato —
+    // niente «uscito», niente link al post vero. Con l'ora di adesso il
+    // router lo prende lo stesso al primo giro, e il post resta nel suo mese.
+    else if (cosa === 'subito') {
+      const ora = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Rome',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+        .format(new Date())
+        .replace(' ', 'T');
+      r = await patch({ azione: 'approva', pubblica_at: ora });
+    }
     // Una data passata: domani alle 10, ora di Roma (il fuso lo mette il server).
     else if (cosa === 'domani') {
       const domani = giornoRoma(new Date(Date.now() + 86_400_000));
