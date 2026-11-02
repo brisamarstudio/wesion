@@ -47,7 +47,7 @@ import { SideNav, SideNavHeading, SideNavItem } from '@astryxdesign/core/SideNav
 import { Button } from '@astryxdesign/core/Button';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Icon } from '@astryxdesign/core/Icon';
-import { MapPin, Share2, Globe, Users, Megaphone, Siren, TrendingUp, LogOut, BookOpen } from 'lucide-react';
+import { MapPin, Share2, Globe, Users, Megaphone, Siren, TrendingUp, LogOut, BookOpen, Mail } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PRODOTTI } from '@/lib/prodotti';
 
@@ -114,6 +114,15 @@ const GRUPPI: Gruppo[] = [
     label: 'Clienti',
     href: '/clienti',
     icona: Users,
+    viste: [],
+  },
+  {
+    // Il riepilogo del mese per ogni cliente (src/lib/riepilogo.ts): si
+    // legge e si manda con un click su WhatsApp.
+    id: 'riepiloghi',
+    label: 'Riepilogo del mese',
+    href: '/riepiloghi',
+    icona: Mail,
     viste: [],
   },
   {
