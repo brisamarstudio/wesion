@@ -13,7 +13,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { leggiCookie, NOME_COOKIE } from '@/lib/sessione';
 
-const APERTE = ['/entra', '/api/entra'];
+// '/api/lavoratore': il PC delle immagini non ha il cookie di login, si
+// presenta col suo token, che la rotta controlla da se' (src/lib/lavoratore.ts).
+const APERTE = ['/entra', '/api/entra', '/api/lavoratore'];
 
 export async function middleware(richiesta: NextRequest) {
   const { pathname } = richiesta.nextUrl;

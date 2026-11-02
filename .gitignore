@@ -17,3 +17,6 @@ wesion-admin-credenziali.txt
 *credenziali*.txt
 .env.bak*
 geo/risultati-*.json
+
+# Token del PC che fa le immagini (vedi lavoratore/immagini.mjs)
+lavoratore/.env.lavoratore

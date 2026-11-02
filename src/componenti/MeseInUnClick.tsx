@@ -78,6 +78,9 @@ function fraseStato(s: StatoMese, nomeMese: string): string {
       }
       return `${nomeMese[0].toUpperCase()}${nomeMese.slice(1)} non è ancora pronto. Un click prepara tutto: giorni, testi e immagini${s.blogPronto ? ', più gli articoli del sito' : ''}. Ci vogliono un paio di minuti.`;
     case 'in_preparazione':
+      if (!s.vuote && s.senzaFoto && s.pcAcceso) {
+        return `Testi pronti. Le ${n(s.senzaFoto, 'immagine', 'immagini')} le sta facendo il tuo PC con ComfyUI: ricarica fra qualche minuto.`;
+      }
       return `Preparazione a metà: ${s.vuote ? `${n(s.vuote, 'testo', 'testi')} da scrivere` : ''}${s.vuote && s.senzaFoto ? ', ' : ''}${s.senzaFoto ? `${n(s.senzaFoto, 'immagine', 'immagini')} da fare` : ''}. Riprende da dove si era fermata.`;
     case 'da_approvare':
       return `Pronto: ${n(s.post, 'post Google', 'post Google')}${s.articoli ? ` e ${n(s.articoli, 'articolo', 'articoli')} del sito` : ''}. Leggilo e approvalo con un click.`;

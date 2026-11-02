@@ -454,3 +454,14 @@ ALTER TABLE wesion.bozza ADD CONSTRAINT bozza_tipo_check
 -- Vedi la nota in cima a quel file sul perche' un fetch non basta.
 ALTER TABLE wesion.azienda ADD COLUMN IF NOT EXISTS prenotazione JSONB;
 ALTER TABLE wesion.azienda ADD COLUMN IF NOT EXISTS prenotazione_at TIMESTAMPTZ;
+
+-- I programmi che lavorano per Wesion da fuori (02/11/2026): oggi solo il PC
+-- di Mariano che fa le immagini con ComfyUI. Il token non si salva, solo la
+-- sua impronta sha256. Vedi src/lib/lavoratore.ts.
+CREATE TABLE IF NOT EXISTS wesion.lavoratore (
+  nome          TEXT PRIMARY KEY,
+  token_hash    TEXT NOT NULL UNIQUE,
+  visto_at      TIMESTAMPTZ,
+  ultimo_errore TEXT,
+  creato_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);

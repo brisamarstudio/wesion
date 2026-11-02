@@ -33,6 +33,7 @@ import { leggiMateria } from './materia';
 import { costruisciPiano, salvaPiano } from './piano';
 import { scriviBozza } from './scrivi';
 import { immaginePerPost } from './immagini';
+import { pcImmaginiAcceso } from './lavoratore';
 
 export type FaseMese = 'non_configurato' | 'da_preparare' | 'in_preparazione' | 'da_approvare' | 'approvato';
 
@@ -51,6 +52,8 @@ export interface StatoMese {
   daApprovare: number;
   /** Fra quelle da approvare: il controllo automatico ha trovato qualcosa di grave. */
   gravi: number;
+  /** Il PC con ComfyUI e' acceso: le immagini arrivano da li'. */
+  pcAcceso: boolean;
   /** Bozze su cui la preparazione ha fallito piu' volte: si guardano a mano. */
   bloccate: number;
   /** Fra quelle da approvare: la data e' gia' passata. */
@@ -157,7 +160,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
 }
 
 export async function statoMese(aziendaId: number, anno: number, mese: number): Promise<StatoMese> {
-  const [servizi, voci, [f]] = await Promise.all([
+  const [servizi, voci, [f], pcAcceso] = await Promise.all([
     serviziPronti(aziendaId),
     vociMese(aziendaId, anno, mese),
     query<{ n: number }>(
@@ -165,6 +168,7 @@ export async function statoMese(aziendaId: number, anno: number, mese: number): 
         WHERE azienda_id = $1 AND attivo AND (scade_at IS NULL OR scade_at > now())`,
       [aziendaId]
     ),
+    pcImmaginiAcceso(),
   ]);
   const adesso = Date.now();
   const daApprovare = voci.filter((v) => v.stato === 'attesa_approvazione');
@@ -174,6 +178,7 @@ export async function statoMese(aziendaId: number, anno: number, mese: number): 
     gbpPronto: servizi.gbp,
     blogPronto: servizi.blog,
     fatti: f?.n ?? 0,
+    pcAcceso,
     totale: voci.length,
     post: voci.filter((v) => v.tipo === 'post_gbp').length,
     articoli: voci.filter((v) => v.tipo === 'articolo').length,
@@ -300,7 +305,12 @@ export async function preparaPasso(
     return { fatto: `scritti ${fatti} testi`, avanzati: fatti, finito: false, stato, errori };
   }
 
-  // 3. Le immagini, due alla volta (~7 secondi l'una).
+  // 3. Le immagini. Se il PC con ComfyUI e' acceso le fa lui, gratis (vedi
+  //    src/lib/lavoratore.ts): qui ci si ferma e si lascia fare. Se e' spento,
+  //    OpenRouter, due alla volta (~7 secondi l'una, ~4 centesimi).
+  if (voci.some((v) => v.stato === 'attesa_approvazione' && !v.foto) && (await pcImmaginiAcceso())) {
+    return { fatto: 'le immagini le sta facendo il tuo PC', avanzati: 0, finito: true, stato, errori };
+  }
   const senza = voci
     .filter((v) => v.stato === 'attesa_approvazione' && !v.foto && v.errori < TENTATIVI)
     .slice(0, 2);
@@ -340,7 +350,8 @@ async function segnaErrore(bozzaId: number): Promise<void> {
  * Genera (o rifà) l'immagine di una bozza e la scrive in `contenuto.foto`,
  * che e' il campo che il router manda a Google e al blog.
  */
-export async function mettiImmagine(bozzaId: number): Promise<string> {
+/** Cosa serve per fare l'immagine di una bozza: il soggetto e la cartella del cliente. */
+export async function soggettoBozza(bozzaId: number) {
   const [b] = await query<{
     tipo: string;
     stato: string;
@@ -357,6 +368,11 @@ export async function mettiImmagine(bozzaId: number): Promise<string> {
       WHERE b.id = $1`,
     [bozzaId]
   );
+  return b ?? null;
+}
+
+export async function mettiImmagine(bozzaId: number): Promise<string> {
+  const b = await soggettoBozza(bozzaId);
   if (!b) throw new Error('bozza inesistente');
   if (!['vuota', 'generata', 'attesa_approvazione', 'approvata'].includes(b.stato)) {
     throw new Error(`è «${b.stato}»: l'immagine di un post già partito non si cambia da qui`);
