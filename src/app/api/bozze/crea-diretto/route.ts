@@ -27,7 +27,7 @@ export async function POST(richiesta: Request) {
   try {
     const corpo = (await richiesta.json().catch(() => ({}))) as {
       aziendaId?: number;
-      tipo?: 'post_gbp' | 'articolo';
+      tipo?: 'post_gbp' | 'articolo' | 'social';
       titolo?: string;
       testo?: string;
       immagini?: string[];
@@ -46,7 +46,15 @@ export async function POST(richiesta: Request) {
       return NextResponse.json({ errore: 'Il testo del post è obbligatorio' }, { status: 400 });
     }
 
-    const tipo = corpo.tipo === 'articolo' ? 'articolo' : 'post_gbp';
+    const tipo = corpo.tipo === 'articolo' ? 'articolo' : corpo.tipo === 'social' ? 'social' : 'post_gbp';
+    // Un post Instagram non si approva ne' si programma da qui: nasce in bozza, e a farlo uscire
+    // e' il bottone «Pubblica su Instagram» in consolle (vedi lib/instagram.ts). Il router non
+    // legge i post social, quindi `approvata` + una data non porterebbero a niente: solo a un
+    // post che sembra in coda e non esce.
+    if (tipo === 'social') {
+      corpo.approvaSubito = false;
+      corpo.pubblicaAt = undefined;
+    }
     const immagini = Array.isArray(corpo.immagini) ? corpo.immagini.filter((u) => typeof u === 'string' && u.trim()) : [];
     const foto = immagini[0] || null;
 
@@ -77,6 +85,7 @@ export async function POST(richiesta: Request) {
     const contenuto: Record<string, unknown> = {
       testo,
       ...(corpo.titolo?.trim() ? { titolo: corpo.titolo.trim() } : {}),
+      ...(tipo === 'social' ? { canale: 'instagram', formato: 'post', ganci: [testo.split(/\r?\n/)[0].slice(0, 54)], gancio_scelto: 0 } : {}),
       ...(foto ? { foto } : {}),
       ...(immagini.length > 0 ? { immagini } : {}),
       ...(corpo.cta?.tipo ? { cta: { tipo: corpo.cta.tipo, url: corpo.cta.url || null } } : {}),

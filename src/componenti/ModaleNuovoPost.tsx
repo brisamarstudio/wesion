@@ -56,7 +56,7 @@ export function ModaleNuovoPost({
   const [aziendaId, setAziendaId] = useState<string>(
     aziendaIdPreselezionata ? String(aziendaIdPreselezionata) : ''
   );
-  const [tipo, setTipo] = useState<'post_gbp' | 'articolo'>('post_gbp');
+  const [tipo, setTipo] = useState<'post_gbp' | 'articolo' | 'social'>('post_gbp');
   const [titolo, setTitolo] = useState<string>('');
   const [testo, setTesto] = useState<string>('');
   const [immagini, setImmagini] = useState<string[]>([]);
@@ -347,10 +347,11 @@ export function ModaleNuovoPost({
         <Selector
           label="Dove inserirlo"
           value={tipo}
-          onChange={(v) => setTipo(v as 'post_gbp' | 'articolo')}
+          onChange={(v) => setTipo(v as 'post_gbp' | 'articolo' | 'social')}
           options={[
             { value: 'post_gbp', label: 'Post per Scheda Google (GBP)' },
             { value: 'articolo', label: 'Articolo del Blog' },
+            { value: 'social', label: 'Post Instagram' },
           ]}
         />
 
@@ -488,19 +489,27 @@ export function ModaleNuovoPost({
           </VStack>
         ) : null}
 
+        {tipo === 'social' ? (
+          <Text type="supporting">
+            Il post Instagram nasce in bozza. Lo trovi in Social → Da copiare e lo fai uscire col bottone «Pubblica su Instagram»: non parte da solo e non si programma.
+          </Text>
+        ) : null}
+
         {/* Data e Ora Uscita */}
         {/* Giorno E ora: il campo pubblica_at a database e' un timestamp, l'ora
             la regge da sempre. Con la sola data un post del menu' del venerdi'
             usciva alle 10:00 fisse, che per una cena non e' l'orario giusto. */}
-        <DateTimeInput
-          label="Quando deve uscire"
-          description="Lascia vuoto per farlo uscire subito, al prossimo giro del router (30 secondi)."
-          value={(quando || undefined) as ISODateTimeString | undefined}
-          min={new Date().toISOString() as ISODateTimeString}
-          hourFormat="24h"
-          timeIncrement={15}
-          onChange={(v) => setQuando(v ?? '')}
-        />
+        {tipo !== 'social' ? (
+          <DateTimeInput
+            label="Quando deve uscire"
+            description="Lascia vuoto per farlo uscire subito, al prossimo giro del router (30 secondi)."
+            value={(quando || undefined) as ISODateTimeString | undefined}
+            min={new Date().toISOString() as ISODateTimeString}
+            hourFormat="24h"
+            timeIncrement={15}
+            onChange={(v) => setQuando(v ?? '')}
+          />
+        ) : null}
             </VStack>
           </LayoutContent>
         }
@@ -526,13 +535,15 @@ export function ModaleNuovoPost({
                     isDisabled={inInvio || !testo.trim()}
                     clickAction={() => salvaPost(false)}
                   />
-                  <Button
-                    label="Approva & Pubblica Subito"
-                    variant="primary"
-                    isLoading={inInvio}
-                    isDisabled={inInvio || !testo.trim()}
-                    clickAction={() => salvaPost(true)}
-                  />
+                  {tipo !== 'social' ? (
+                    <Button
+                      label="Approva & Pubblica Subito"
+                      variant="primary"
+                      isLoading={inInvio}
+                      isDisabled={inInvio || !testo.trim()}
+                      clickAction={() => salvaPost(true)}
+                    />
+                  ) : null}
                 </>
               )}
             </HStack>
