@@ -49,6 +49,63 @@ export function promptImmagine(s: SoggettoImmagine): string {
     .join('\n');
 }
 
+/**
+ * La scena per i modelli LOCALI (Z-Image su ComfyUI), che non sono Gemini.
+ *
+ * ⚠️ PERCHÉ UN PROMPT DIVERSO (02/11/2026). Le prime due foto fatte dal PC per
+ * Chumphon avevano STAMPATO SOPRA il testo del prompt («Terapisa di Magasi
+ * thaimdesi a Binasco, in Itally») e una persona a seno nudo sul lettino.
+ * Z-Image disegna le parole che trova nel prompt e non capisce i divieti:
+ * «nessun testo» lo spinge a scrivere, e senza dire «vestita» un massaggio
+ * diventa un corpo nudo. Gemini quelle regole le capisce, Z-Image no.
+ *
+ * Quindi al PC non si manda il prompt con le regole: si manda SOLO la scena,
+ * descritta in inglese da un modello di testo economico, senza parole tra
+ * virgolette, senza nomi di luoghi da scrivere, senza persone (o solo mani e
+ * persone vestite viste di spalle).
+ */
+const MODELLO_SCENA = process.env.IMMAGINI_MODELLO_SCENA || 'google/gemini-3.5-flash-lite';
+
+export async function scenaPerModelloLocale(s: SoggettoImmagine): Promise<string> {
+  const chiave = process.env.OPENROUTER_API_KEY;
+  const ripiego =
+    'Professional photograph of a calm, warm interior detail related to a small local business in Italy, ' +
+    'natural window light, soft depth of field, realistic colors, no people.';
+  if (!chiave) return ripiego;
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: AbortSignal.timeout(30_000),
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${chiave}` },
+      body: JSON.stringify({
+        model: MODELLO_SCENA,
+        messages: [
+          {
+            role: 'user',
+            content:
+              `A local business (${s.categoria || 'local business'}) needs a photo for a social post.\n` +
+              `Post topic: ${s.titolo ?? ''}. About: ${s.fatto ?? ''}.\n\n` +
+              'Write ONE English prompt (45-70 words) for a photorealistic image generator, describing only what is visible: ' +
+              'objects, materials, light, setting, camera angle. Rules: prefer scenes with NO people (still life, details, ' +
+              'empty rooms, food, tools); if hands or a person are essential, they are fully clothed and seen from behind or ' +
+              'cropped, never bare skin beyond hands and forearms. Do not mention any text, sign, logo, brand, place name, ' +
+              'city or words to write; do not use quotes; do not write negative instructions. ' +
+              'End with: natural light, shallow depth of field, realistic photography. Reply with the prompt only.',
+          },
+        ],
+      }),
+    });
+    const j = (await r.json().catch(() => ({}))) as { choices?: Array<{ message?: { content?: string } }> };
+    const t = String(j.choices?.[0]?.message?.content ?? '')
+      .replace(/["“”«»]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return t.length > 40 ? t.slice(0, 700) : ripiego;
+  } catch {
+    return ripiego;
+  }
+}
+
 /** Genera l'immagine e torna i byte. Lancia se il modello non ne restituisce una. */
 export async function generaImmagine(prompt: string): Promise<{ dati: Buffer; mime: string; modello: string }> {
   const chiave = process.env.OPENROUTER_API_KEY;

@@ -8,7 +8,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { verificaLavoratore } from '@/lib/lavoratore';
-import { promptImmagine } from '@/lib/immagini';
+import { scenaPerModelloLocale } from '@/lib/immagini';
 
 export async function GET(richiesta: Request) {
   const nome = await verificaLavoratore(richiesta);
@@ -63,7 +63,10 @@ export async function GET(richiesta: Request) {
     [prese.map((p) => p.id)]
   );
 
-  return NextResponse.json({
-    lavori: righe.map((r) => ({ id: Number(r.id), prompt: promptImmagine(r) })),
-  });
+  // ⚠️ Al PC va la SCENA in inglese, non il prompt con le regole: vedi
+  // scenaPerModelloLocale in lib/immagini.ts (testo stampato e nudo, 02/11/2026).
+  const lavori = await Promise.all(
+    righe.map(async (r) => ({ id: Number(r.id), prompt: await scenaPerModelloLocale(r) }))
+  );
+  return NextResponse.json({ lavori });
 }
