@@ -64,7 +64,9 @@ export async function POST(richiesta: Request, contesto: { params: Promise<{ id:
   }
 
   await query(
-    `UPDATE wesion.bozza SET contenuto = contenuto || jsonb_build_object('foto', $2::text) WHERE id = $1`,
+    // Via 'foto_ai': questa l'ha messa una persona, e niente di automatico
+    // (ne' le foto vere dell'archivio ne' il PC) deve poterla coprire.
+    `UPDATE wesion.bozza SET contenuto = (contenuto - 'foto_ai') || jsonb_build_object('foto', $2::text) WHERE id = $1`,
     [bozzaId, url]
   );
 

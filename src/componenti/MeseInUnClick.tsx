@@ -33,6 +33,7 @@ import { AspectRatio } from '@astryxdesign/core/AspectRatio';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { FileInput } from '@astryxdesign/core/FileInput';
+import { FotoVere } from './FotoVere';
 import { Link } from '@astryxdesign/core/Link';
 import { ArrowLeft, ArrowRight, Check, RefreshCw, Send, Sparkles, X } from 'lucide-react';
 import type { StatoMese, VoceMese, FaseMese, DoveEsce } from '@/lib/mese';
@@ -533,6 +534,15 @@ function LetturaMese({
                 </VStack>
               </Banner>
             ) : null}
+
+            <FotoVere
+              aziendaId={cliente.id}
+              nome={cliente.nome}
+              anno={anno}
+              mese={mese}
+              postConAI={(voci ?? []).filter((v) => v.stato === 'attesa_approvazione' && v.foto_ai).length}
+              onCambiate={carica}
+            />
 
             {voci === null ? (
               <ProgressBar label="Carico il mese" isIndeterminate />

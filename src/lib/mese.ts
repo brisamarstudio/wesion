@@ -34,6 +34,7 @@ import { costruisciPiano, salvaPiano } from './piano';
 import { scriviBozza } from './scrivi';
 import { immaginePerPost } from './immagini';
 import { pcImmaginiAcceso } from './lavoratore';
+import { assegnaFotoVere } from './foto';
 
 export type FaseMese = 'non_configurato' | 'da_preparare' | 'in_preparazione' | 'da_approvare' | 'approvato';
 
@@ -77,6 +78,8 @@ export interface VoceMese {
   coppia_di: number | null;
   /** Quante volte la preparazione ha fallito su questa bozza: da 2 in su si salta. */
   errori: number;
+  /** L'immagine e' generata (AI), non una foto vera. */
+  foto_ai: boolean;
   /** Dove si vede, una volta uscito: il link del post su Google o dell'articolo. */
   url_uscito: string | null;
   /** L'ultimo errore di pubblicazione, se il router ci ha provato e non ce l'ha fatta. */
@@ -159,6 +162,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
     errori: string | null;
     url_uscito: string | null;
     errore_uscita: string | null;
+    foto_ai: boolean;
   }>(
     `SELECT b.id, b.tipo, b.stato, b.pubblica_at,
             b.contenuto->>'titolo' AS titolo,
@@ -167,6 +171,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
             b.avvisi,
             b.contenuto->>'coppia_di' AS coppia_di,
             b.contenuto->>'prepara_errori' AS errori,
+            (b.contenuto ? 'foto_ai') AS foto_ai,
             (SELECT p.url_risultato FROM wesion.pubblicazione p
               WHERE p.bozza_id = b.id AND p.esito = 'ok' AND p.url_risultato IS NOT NULL
               ORDER BY p.eseguita_at DESC LIMIT 1) AS url_uscito,
@@ -196,6 +201,7 @@ export async function vociMese(aziendaId: number, anno: number, mese: number): P
       avvisi: avvisi.map((a) => String(a.messaggio ?? a.testo ?? '')).filter(Boolean),
       coppia_di: r.coppia_di ? Number(r.coppia_di) : null,
       errori: Number(r.errori ?? 0),
+      foto_ai: Boolean(r.foto_ai),
       url_uscito: r.url_uscito,
       errore_uscita: r.errore_uscita,
     };
@@ -394,6 +400,15 @@ export async function preparaPasso(
   // 3. Le immagini. Se il PC con ComfyUI e' acceso le fa lui, gratis (vedi
   //    src/lib/lavoratore.ts): qui ci si ferma e si lascia fare. Se e' spento,
   //    OpenRouter, due alla volta (~7 secondi l'una, ~4 centesimi).
+  //    Prima di tutto le foto VERE del cliente, se ce n'e' una che c'entra
+  //    (src/lib/foto.ts): il PC e OpenRouter riempiono solo quello che resta.
+  {
+    const [inizio, fine] = confini(anno, mese);
+    const vere = await assegnaFotoVere(aziendaId, inizio, fine);
+    if (vere > 0) {
+      return { fatto: `messe ${vere} foto vere del cliente`, avanzati: vere, finito: false, stato, errori };
+    }
+  }
   if (voci.some((v) => v.stato === 'attesa_approvazione' && !v.foto) && (await pcImmaginiAcceso())) {
     return { fatto: 'le immagini le sta facendo il tuo PC', avanzati: 0, finito: true, stato, errori };
   }

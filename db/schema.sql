@@ -465,3 +465,20 @@ CREATE TABLE IF NOT EXISTS wesion.lavoratore (
   ultimo_errore TEXT,
   creato_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Le foto VERE dei clienti (02/11/2026): il mese le usa prima di generarne.
+-- Vedi src/lib/foto.ts. `attiva = false` invece di cancellare: la stessa URL
+-- puo' essere gia' su un post uscito.
+CREATE TABLE IF NOT EXISTS wesion.foto (
+  id          BIGSERIAL PRIMARY KEY,
+  azienda_id  BIGINT NOT NULL REFERENCES wesion.azienda(id) ON DELETE CASCADE,
+  url         TEXT NOT NULL,
+  descrizione TEXT,
+  chiavi      TEXT,
+  fonte       TEXT NOT NULL DEFAULT 'dashboard' CHECK (fonte IN ('dashboard','whatsapp')),
+  usata       INTEGER NOT NULL DEFAULT 0,
+  usata_at    TIMESTAMPTZ,
+  attiva      BOOLEAN NOT NULL DEFAULT true,
+  creata_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_foto_azienda ON wesion.foto (azienda_id) WHERE attiva;

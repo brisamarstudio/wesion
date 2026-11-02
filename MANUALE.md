@@ -294,6 +294,14 @@ preparare niente (i post sarebbero inventati) e ti manda alla scheda: riempi
 fingono di essere il locale del cliente. Le foto vere del cliente restano sempre
 meglio: se le hai, mettile dalle bozze.
 
+**Le foto vere vengono prima di tutto.** Nel mese di un cliente c'è
+«Foto vere di …»: trascinaci le sue foto (anche venti insieme). Wesion le
+descrive da solo e, quando prepara il mese, dà a ogni post la foto vera che
+c'entra, senza ripeterla nello stesso mese. Le generate riempiono solo quello
+che resta. Se le carichi a mese già preparato: «Usa le foto vere al posto di
+quelle generate». Su un singolo post: «Metti una foto vera». Una foto messa a
+mano non viene mai coperta da niente di automatico.
+
 **Chi le fa (dal 02/11/2026):**
 - **il PC dell'ufficio, gratis**, se è acceso con ComfyUI e con la finestra
   «Wesion - immagini» aperta (doppio click su `lavoratore\avvia-immagini.bat`
