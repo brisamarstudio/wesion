@@ -20,3 +20,6 @@ geo/risultati-*.json
 
 # Token del PC che fa le immagini (vedi lavoratore/immagini.mjs)
 lavoratore/.env.lavoratore
+
+# Token Instagram di prova (app Meta "Wesion Social"), solo finche' Wesion non ha il campo in scheda
+.env.instagram
