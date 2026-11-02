@@ -10,7 +10,8 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { genera } from '@/lib/generatore';
-import { rendimento, riassumiRendimento } from '@/lib/search-console';
+import { rendimento, riassumiRendimento, rendimentoDettagliato } from '@/lib/search-console';
+import { classificaGiroQuery, raggruppaGiroQuery, verdettoGiroQuery, riassumiGiroQuery } from '@/lib/giro-query';
 import { salvaSnapshotRendimento, leggiUltimoSnapshot, confrontaRendimento, segnalaCandidatiTitle } from '@/lib/rendimento-storico';
 import { controllaIndicizzazione, riassumiIndicizzazione } from '@/lib/indicizzazione';
 import { clonaRepo, leggiMateriale, applicaModifiche, apriPR, pulisci } from '@/lib/seo-git';
@@ -60,8 +61,8 @@ export async function POST(_richiesta: Request, contesto: { params: Promise<{ id
     return NextResponse.json({ errore: 'GITHUB_TOKEN non configurato: senza, non si può aprire nessuna PR.' }, { status: 500 });
   }
 
-  const [azienda] = await query<{ nome: string; categoria: string | null; citta: string | null }>(
-    `SELECT nome, categoria, citta FROM wesion.azienda WHERE id = $1`,
+  const [azienda] = await query<{ nome: string; categoria: string | null; citta: string | null; indirizzo: string | null }>(
+    `SELECT nome, categoria, citta, indirizzo FROM wesion.azienda WHERE id = $1`,
     [aziendaId]
   );
   if (!azienda) return NextResponse.json({ errore: 'azienda inesistente' }, { status: 404 });
@@ -89,6 +90,29 @@ export async function POST(_richiesta: Request, contesto: { params: Promise<{ id
      * lo legge chi decide se e cosa toccare sui testi.
      */
     let notaRendimentoUmano = '';
+    /**
+     * ⚠️ IL GIRO SULLE QUERY ENTRA NELL'AUDIT (02/11/2026). Prima l'audit
+     * ricalcolava i numeri per conto suo e li leggeva male: su La Fenice ha
+     * scritto che la carbonara era il «piatto che genera il 70% dei clic»,
+     * mentre erano ricerche del paese, Carbonara al Ticino. Il giro (lib/
+     * giro-query.ts) ha gia' separato brand, domande scoperte e rumore: si
+     * passa quello, col verdetto, e l'audit lavora sulle stesse priorita'
+     * che l'operatore vede in scheda.
+     */
+    let giroTesto = '';
+    if (sito.gsc_proprieta) {
+      try {
+        const righeGiro = await rendimentoDettagliato(sito.gsc_proprieta, 90, ['query', 'page']);
+        const classificate = classificaGiroQuery(azienda.nome, righeGiro);
+        const verdetto = verdettoGiroQuery(raggruppaGiroQuery(classificate));
+        giroTesto =
+          `GIRO SULLE QUERY (90 giorni, gia' classificate — usa QUESTE priorita', non ricalcolarle):\n` +
+          verdetto.righe.map((r) => `- ${r}`).join('\n') +
+          `\n\n${riassumiGiroQuery(classificate)}`;
+      } catch {
+        giroTesto = '';
+      }
+    }
     if (sito.gsc_proprieta) {
       try {
         const [perQuery, perPagina] = await Promise.all([
@@ -188,9 +212,20 @@ Regole del formato:
   identici a come sono.
 - Se non c'è niente di sensato da proporre, scrivi solo la riga ${MARCA.riepilogo} e nessun blocco.`;
 
+    /**
+     * ⚠️ DOVE SI TROVA DAVVERO, E CHE QUELLE PAROLE SONO LUOGHI (02/11/2026).
+     * L'anagrafica di La Fenice dice «Pavia», ma il locale e' a Carbonara al
+     * Ticino: lo dice l'indirizzo. Senza saperlo, «la fenice carbonara» per un
+     * modello e' una ricerca sulla pasta. Non e' colpa sua: e' quello che gli
+     * mettevamo davanti (AGENTS.md).
+     */
+    const luogo = [azienda.indirizzo, azienda.citta].filter(Boolean).join(' — ');
     const utente = `Cliente: ${azienda.nome} (${azienda.categoria ?? 'categoria sconosciuta'}, ${azienda.citta ?? 'città sconosciuta'}).
+${luogo ? `Dove si trova: ${luogo}. ATTENZIONE: nelle ricerche, le parole del nome del paese, della frazione o della via (anche se coincidono con un piatto o un oggetto) sono NOMI DI LUOGO, non prodotti o piatti.` : ''}
 
 ${rendimentoTesto}
+
+${giroTesto}
 
 ${descriviTestuale('llms.txt', materiale.llmsPercorso, materiale.llmsTxt, materiale.llmsGeneratore)}
 
